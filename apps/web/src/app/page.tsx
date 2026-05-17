@@ -10,6 +10,31 @@ import { LiveFeedWidget } from '@/components/home/LiveFeedWidget';
 import { CTASection } from '@/components/home/CTASection';
 import { TopAgentsSkeleton } from '@/components/ui/skeletons';
 
+function LiveFeedSkeleton() {
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <span className="font-mono text-xs uppercase tracking-[0.12em] text-fg-dim">
+          //live_feed
+        </span>
+        <span className="live-pulse opacity-40 [&::after]:!hidden" aria-hidden />
+        <span className="font-mono text-[11px] tracking-[0.1em] text-accent">
+          LIVE
+        </span>
+      </div>
+      <div className="border border-border rounded-xl bg-bg-elev divide-y divide-border">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="px-4 py-3 flex items-center gap-3">
+            <div className="h-3 w-20 rounded bg-bg-elev-2 animate-pulse" />
+            <div className="h-4 w-14 rounded bg-bg-elev-2 animate-pulse" />
+            <div className="h-3 flex-1 rounded bg-bg-elev-2 animate-pulse" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const HERO_RESOURCES = [
   {
     href: 'https://github.com/huicom/arc_translation_agent',
@@ -93,7 +118,9 @@ export default function HomePage() {
         <Suspense fallback={<TopAgentsSkeleton />}>
           <TopAgents />
         </Suspense>
-        <LiveFeedWidget />
+        <Suspense fallback={<LiveFeedSkeleton />}>
+          <LiveFeedWidget />
+        </Suspense>
       </section>
 
       {/* === Build on Arc (restructured in slice 6) === */}

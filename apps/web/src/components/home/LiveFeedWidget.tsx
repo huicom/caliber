@@ -1,133 +1,53 @@
-'use client';
+import { db } from '@/lib/db';
+import { sql } from 'drizzle-orm';
+import { LiveFeedClient, type SeedEvent } from './LiveFeedClient';
 
-import { useEffect, useState } from 'react';
+async function fetchSeed(): Promise<SeedEvent[]> {
+  try {
+    // Direct DB query (server-side pattern used elsewhere in this codebase).
+    // Mirrors /api/feed but limits to the 3 most-recent rows.
+    const rows = await db.execute(sql`
+      SELECT * FROM (
+        SELECT 'agent_registered' AS kind, agent_id::text AS ref_id,
+               owner_address AS actor, registered_at_block AS block,
+               name AS extra
+        FROM agents
+        ORDER BY registered_at_block DESC
+        LIMIT 5
+      ) a
+      UNION ALL
+      SELECT * FROM (
+        SELECT 'feedback_given' AS kind, agent_id::text,
+               validator_address, block_number, score::text
+        FROM feedback_events
+        ORDER BY block_number DESC
+        LIMIT 5
+      ) b
+      UNION ALL
+      SELECT * FROM (
+        SELECT event_type AS kind, job_id::text,
+               actor_address, block_number, NULL AS extra
+        FROM job_events
+        ORDER BY block_number DESC
+        LIMIT 5
+      ) c
+      ORDER BY block DESC
+      LIMIT 3
+    `);
 
-interface LiveEvent {
-  kind: string;
-  blockNumber: string;
-  timestamp: number;
-  agentId?: string;
-  jobId?: string;
-  eventCount?: number;
-  eventKinds?: string[];
-  [key: string]: unknown;
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      kind: String(r.kind ?? ''),
+      ref_id: r.ref_id != null ? String(r.ref_id) : null,
+      actor: r.actor != null ? String(r.actor) : null,
+      block: r.block != null ? Number(r.block) : null,
+      extra: r.extra != null ? String(r.extra) : null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
-const ICONS: Record<string, string> = {
-  AgentRegistered: '🤖',
-  FeedbackGiven: '⭐',
-  JobCreated: '💼',
-  JobCompleted: '💸',
-  JobSubmitted: '📦',
-  JobFunded: '🔒',
-  BudgetSet: '💰',
-  __compact__: '📡',
-};
-
-const LABELS: Record<string, string> = {
-  AgentRegistered: 'New agent registered',
-  FeedbackGiven: 'Reputation feedback recorded',
-  JobCreated: 'New job posted',
-  JobCompleted: 'Job completed, USDC released',
-  JobSubmitted: 'Deliverable submitted',
-  JobFunded: 'Job escrow funded',
-  BudgetSet: 'Budget set',
-};
-
-export function LiveFeedWidget() {
-  const [events, setEvents] = useState<LiveEvent[]>([]);
-
-  useEffect(() => {
-    const es = new EventSource('/api/live');
-
-    es.addEventListener('arc_event', (e) => {
-      try {
-        const payload = JSON.parse((e as MessageEvent).data);
-        let newItems: LiveEvent[];
-
-        if (Array.isArray(payload.events)) {
-          newItems = payload.events.map(
-            (ev: Record<string, unknown>) => ({
-              ...ev,
-              kind: String(ev.kind ?? ev.type ?? 'unknown'),
-              blockNumber: payload.blockNumber,
-              timestamp: payload.timestamp,
-            }),
-          );
-        } else {
-          newItems = [
-            {
-              kind: '__compact__',
-              blockNumber: payload.blockNumber,
-              timestamp: payload.timestamp,
-              eventCount: payload.eventCount as number,
-              eventKinds: payload.eventKinds as string[],
-            },
-          ];
-        }
-
-        setEvents((prev) => [...newItems, ...prev].slice(0, 8));
-      } catch {
-        // ignore parse errors
-      }
-    });
-
-    es.onerror = () => {
-      // SSE auto-reconnects
-    };
-
-    return () => es.close();
-  }, []);
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Live Activity</h2>
-        <div className="flex items-center gap-1.5 text-xs text-success">
-          <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          Live
-        </div>
-      </div>
-      <div className="border border-border rounded-lg">
-        {events.length === 0 ? (
-          <div className="p-4 text-text-dim text-sm">
-            Waiting for next event...
-          </div>
-        ) : (
-          <ul className="divide-y divide-border">
-            {events.map((ev, i) => {
-              const isCompact = ev.kind === '__compact__';
-              return (
-                <li
-                  key={`${ev.blockNumber}-${i}`}
-                  className="px-4 py-3 text-sm flex items-start gap-3"
-                >
-                  <span>{ICONS[ev.kind] ?? '⚡'}</span>
-                  <div className="flex-1 min-w-0">
-                    <p>
-                      {isCompact
-                        ? `${ev.eventCount} events in block ${ev.blockNumber}`
-                        : (LABELS[ev.kind] ?? ev.kind)}
-                    </p>
-                    <p className="text-xs text-text-dim">
-                      Block {ev.blockNumber}
-                      {isCompact && ev.eventKinds
-                        ? ` · ${ev.eventKinds.join(', ')}`
-                        : ''}
-                    </p>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      <a
-        href="/live"
-        className="text-brand text-sm mt-3 inline-block hover:underline"
-      >
-        Watch live feed →
-      </a>
-    </div>
-  );
+export async function LiveFeedWidget() {
+  const seed = await fetchSeed();
+  return <LiveFeedClient seed={seed} />;
 }
