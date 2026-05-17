@@ -128,18 +128,28 @@ export function Footer() {
             >
               {'{architect_built}'}
             </span>
-            <span className="text-fg-dim">
-              A{' '}
-              <a
-                href="https://poko.blue"
-                target="_blank"
-                rel="noreferrer"
-                className="text-fg-mute hover:text-accent transition-colors underline-offset-4 hover:underline"
-              >
-                PokoBlue
-              </a>{' '}
-              project
-            </span>
+            <a
+              href="https://poko.blue"
+              target="_blank"
+              rel="noreferrer"
+              className="group flex items-center gap-2 text-fg-dim hover:text-fg transition-colors"
+            >
+              <img
+                src="https://i2c.seadn.io/ethereum/0x1a92f7381b9f03921564a437210bb9396471050c/55947f0e9aeeb4b3c2a2848c92a34c5b.png?w=1000"
+                alt="PokoBlue"
+                width={20}
+                height={20}
+                loading="lazy"
+                className="rounded-full ring-1 ring-border-hi group-hover:ring-accent transition-colors"
+              />
+              <span>
+                A{' '}
+                <span className="text-fg-mute group-hover:text-accent transition-colors underline-offset-4 group-hover:underline">
+                  PokoBlue
+                </span>{' '}
+                project
+              </span>
+            </a>
           </div>
           <p className="text-[12px] text-fg-dim md:text-right">
             Not affiliated with Circle or the Arc team.

@@ -131,13 +131,32 @@ export default async function Image() {
               ${formatUsdc(t.usdcVolume)}
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginLeft: 'auto' }}>
-            <span style={{ fontSize: 14, letterSpacing: 2, color: '#6B6B75' }}>
-              A POKOBLUE PROJECT
-            </span>
-            <span style={{ fontSize: 22, color: '#A0A0AA' }}>
-              poko.blue
-            </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 18,
+              marginLeft: 'auto',
+            }}
+          >
+            <img
+              src="https://i2c.seadn.io/ethereum/0x1a92f7381b9f03921564a437210bb9396471050c/55947f0e9aeeb4b3c2a2848c92a34c5b.png?w=1000"
+              alt="PokoBlue"
+              width={64}
+              height={64}
+              style={{
+                borderRadius: 32,
+                border: '2px solid #26262C',
+              }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: 14, letterSpacing: 2, color: '#6B6B75' }}>
+                A POKOBLUE PROJECT
+              </span>
+              <span style={{ fontSize: 22, color: '#A0A0AA' }}>
+                poko.blue
+              </span>
+            </div>
           </div>
         </div>
       </div>
