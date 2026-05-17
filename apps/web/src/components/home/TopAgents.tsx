@@ -1,18 +1,43 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { api } from '@/lib/api';
+import { db, agents } from '@/lib/db';
+import { desc, sql as drizzleSql } from 'drizzle-orm';
 import { AgentAvatar } from '@/components/ui/AgentAvatar';
 import { ReputationStars } from '@/components/ui/ReputationStars';
 
-export async function TopAgents() {
-  let data;
+interface TopAgent {
+  agentId: string;
+  name: string | null;
+  reputationScore: string | null;
+  feedbackCount: number | null;
+}
+
+async function fetchTopAgents(): Promise<TopAgent[] | null> {
   try {
-    data = await api.stats();
+    const rows = await db
+      .select({
+        agentId: agents.agentId,
+        name: agents.name,
+        reputationScore: agents.reputationScore,
+        feedbackCount: agents.feedbackCount,
+      })
+      .from(agents)
+      .where(drizzleSql`reputation_score IS NOT NULL`)
+      .orderBy(desc(agents.reputationScore))
+      .limit(10);
+    return rows.map((r) => ({
+      agentId: String(r.agentId),
+      name: r.name,
+      reputationScore: r.reputationScore == null ? null : String(r.reputationScore),
+      feedbackCount: r.feedbackCount == null ? null : Number(r.feedbackCount),
+    }));
   } catch {
     return null;
   }
+}
 
-  const agents = data.topAgents.byReputation;
+export async function TopAgents() {
+  const list = await fetchTopAgents();
 
   return (
     <div>
@@ -28,18 +53,20 @@ export async function TopAgents() {
         </Link>
       </div>
 
-      {agents.length === 0 ? (
+      {!list || list.length === 0 ? (
         <div className="border border-border rounded-xl bg-bg-elev px-6 py-10 text-center">
           <p className="font-mono text-xs uppercase tracking-[0.1em] text-fg-dim mb-2">
-            no reputation data yet
+            {list === null ? 'top agents unavailable' : 'no reputation data yet'}
           </p>
           <p className="text-sm text-fg-mute">
-            Reputation populates as feedback events land on-chain.
+            {list === null
+              ? 'Database query failed.'
+              : 'Reputation populates as feedback events land on-chain.'}
           </p>
         </div>
       ) : (
         <ul className="border border-border rounded-xl bg-bg-elev overflow-hidden divide-y divide-border">
-          {agents.map((a, i) => (
+          {list.map((a, i) => (
             <li key={a.agentId}>
               <Link
                 href={`/agents/${a.agentId}`}
