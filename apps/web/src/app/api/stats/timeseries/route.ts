@@ -7,22 +7,49 @@ export const dynamic = 'force-dynamic';
 
 async function computeTimeseries() {
   const result = await db.execute(sql`
-    WITH days AS (
-      SELECT generate_series(NOW()::date - INTERVAL '29 days', NOW()::date, INTERVAL '1 day')::date AS day
+    WITH latest AS (
+      SELECT value::bigint AS block FROM indexer_state WHERE key = 'last_indexed_block'
+    ),
+    oldest AS (
+      SELECT MIN(registered_at_block) AS min_blk FROM agents WHERE registered_at_block > 0
+    ),
+    range AS (
+      SELECT
+        GREATEST(
+          (NOW() - ((SELECT block FROM latest) - COALESCE((SELECT min_blk FROM oldest), (SELECT block FROM latest))) * INTERVAL '1 second')::date,
+          NOW()::date - INTERVAL '179 days'
+        ) AS start_date,
+        NOW()::date AS end_date
+    ),
+    days AS (
+      SELECT generate_series(
+        (SELECT start_date FROM range),
+        (SELECT end_date FROM range),
+        INTERVAL '1 day'
+      )::date AS day
     ),
     agent_counts AS (
-      SELECT registered_at::date AS day, COUNT(*) AS count
-      FROM agents WHERE registered_at >= NOW() - INTERVAL '30 days'
+      SELECT
+        (NOW() - ((SELECT block FROM latest) - registered_at_block) * INTERVAL '1 second')::date AS day,
+        COUNT(*) AS count
+      FROM agents
+      WHERE registered_at_block > 0
       GROUP BY 1
     ),
     job_counts AS (
-      SELECT created_at::date AS day, COUNT(*) AS count
-      FROM jobs WHERE created_at >= NOW() - INTERVAL '30 days'
+      SELECT
+        (NOW() - ((SELECT block FROM latest) - created_at_block) * INTERVAL '1 second')::date AS day,
+        COUNT(*) AS count
+      FROM jobs
+      WHERE created_at_block > 0
       GROUP BY 1
     ),
     usdc_volume AS (
-      SELECT created_at::date AS day, SUM(budget_usdc) AS volume
-      FROM jobs WHERE status = 'Completed' AND created_at >= NOW() - INTERVAL '30 days'
+      SELECT
+        (NOW() - ((SELECT block FROM latest) - created_at_block) * INTERVAL '1 second')::date AS day,
+        SUM(budget_usdc) AS volume
+      FROM jobs
+      WHERE status = 'Completed' AND created_at_block > 0
       GROUP BY 1
     )
     SELECT
