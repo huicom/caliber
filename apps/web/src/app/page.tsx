@@ -71,8 +71,7 @@ export default function HomePage() {
         </p>
 
         <p className="mt-3 font-mono text-xs text-fg-dim uppercase tracking-[0.1em]">
-          Live-streamed from a Bangkok-based Arc node
-          <span aria-hidden> · 🇹🇭</span>
+          Live-streamed from PokoBlue&apos;s self-hosted Arc node
         </p>
 
         {/* === Stat strip === */}
