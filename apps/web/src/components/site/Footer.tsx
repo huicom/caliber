@@ -129,7 +129,16 @@ export function Footer() {
               {'{architect_built}'}
             </span>
             <span className="text-fg-dim">
-              Built solo from Bangkok <span aria-label="Thailand">🇹🇭</span>
+              A{' '}
+              <a
+                href="https://poko.blue"
+                target="_blank"
+                rel="noreferrer"
+                className="text-fg-mute hover:text-accent transition-colors underline-offset-4 hover:underline"
+              >
+                PokoBlue
+              </a>{' '}
+              project
             </span>
           </div>
           <p className="text-[12px] text-fg-dim md:text-right">
