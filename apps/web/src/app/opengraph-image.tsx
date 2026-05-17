@@ -140,7 +140,7 @@ export default async function Image() {
             }}
           >
             <img
-              src="https://i2c.seadn.io/ethereum/0x1a92f7381b9f03921564a437210bb9396471050c/55947f0e9aeeb4b3c2a2848c92a34c5b.png?w=1000"
+              src="https://ipfs.io/ipfs/QmRQ6SnphN8Bepmve8VSSsdqSuEgFNbSorRhWpD824Rskh"
               alt="PokoBlue"
               width={64}
               height={64}
