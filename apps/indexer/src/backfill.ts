@@ -20,8 +20,13 @@ async function main() {
   logger.info('🔄 Starting Arc backfill indexer');
   logger.info(`RPC: ${config.ARC_RPC_URL}`);
 
-  const head = await publicClient.getBlockNumber();
-  logger.info(`Current head block: ${head}`);
+  const chainHead = await publicClient.getBlockNumber();
+  // Optional cap — set MAX_BLOCK in the env to stop the backfill early.
+  // Used for hybrid runs where a slower archive RPC handles old blocks and
+  // a fast local node handles the rest.
+  const maxBlockEnv = process.env.MAX_BLOCK;
+  const head = maxBlockEnv ? BigInt(maxBlockEnv) : chainHead;
+  logger.info(`Chain head: ${chainHead}${maxBlockEnv ? ` | capped to: ${head}` : ''}`);
 
   let lastIndexed = await getLastIndexedBlock(config.DEPLOYMENT_BLOCK);
   logger.info(`Resuming from block: ${lastIndexed}`);
@@ -84,8 +89,14 @@ async function main() {
     }
   }
 
-  logger.info('📦 Backfilling missing IPFS metadata...');
-  await backfillMissingMetadata();
+  // Skip the IPFS metadata sweep on capped runs — it should only fire once
+  // at the end of the final leg.
+  if (!maxBlockEnv) {
+    logger.info('📦 Backfilling missing IPFS metadata...');
+    await backfillMissingMetadata();
+  } else {
+    logger.info(`⏭️  Skipping IPFS metadata sweep (MAX_BLOCK=${maxBlockEnv})`);
+  }
 
   logger.info('🎉 Backfill complete');
   process.exit(0);

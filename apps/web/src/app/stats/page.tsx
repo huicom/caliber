@@ -47,13 +47,15 @@ export default function StatsPage() {
     );
   }
 
+  // API returns counts as strings (bigint serialization) — recharts treats
+  // strings as categorical and won't autoscale the Y-axis, so coerce here.
   const chartData = timeseries.map((row) => ({
     day: new Date(row.day + 'T00:00:00').toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     }),
-    agents: row.agents,
-    jobs: row.jobs,
+    agents: Number(row.agents) || 0,
+    jobs: Number(row.jobs) || 0,
     usdc: parseFloat(row.usdc.toString()) || 0,
   }));
 

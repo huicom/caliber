@@ -29,6 +29,21 @@ export async function applyEvents(events: ParsedEvent[]): Promise<void> {
           break;
 
         case 'FeedbackGiven':
+          // Backfill safety net: if the agent was registered before our
+          // backfill window we won't have its Registered event. Insert a
+          // placeholder row so the FK on feedback_events passes. ON CONFLICT
+          // DO NOTHING means a real Registered event landing later (or a
+          // pre-existing real row) wins.
+          await tx
+            .insert(agents)
+            .values({
+              agentId: e.agentId,
+              ownerAddress: '',
+              registeredAtBlock: 0n,
+              registeredTxHash: '',
+            })
+            .onConflictDoNothing();
+
           await tx
             .insert(feedbackEvents)
             .values({
@@ -54,6 +69,17 @@ export async function applyEvents(events: ParsedEvent[]): Promise<void> {
           break;
 
         case 'ValidationRequested':
+          // Same placeholder safety net — agent may be pre-window.
+          await tx
+            .insert(agents)
+            .values({
+              agentId: e.agentId,
+              ownerAddress: '',
+              registeredAtBlock: 0n,
+              registeredTxHash: '',
+            })
+            .onConflictDoNothing();
+
           await tx
             .insert(validations)
             .values({

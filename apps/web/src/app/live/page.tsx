@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
+import { Pause, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Pause, Play, Radio } from 'lucide-react';
+import { Eyebrow } from '@/components/ui/Eyebrow';
+import { formatRelative, useNowTick } from '@/components/live/LiveContext';
+import { cn } from '@/lib/utils';
 
 interface LiveEvent {
   kind: string;
@@ -17,61 +19,154 @@ interface LiveEvent {
   [key: string]: unknown;
 }
 
-const ICONS: Record<string, string> = {
-  AgentRegistered: '🤖',
-  FeedbackGiven: '⭐',
-  JobCreated: '💼',
-  JobCompleted: '💸',
-  JobSubmitted: '📦',
-  JobFunded: '🔒',
-  BudgetSet: '💰',
-  ValidationRequested: '✅',
-  ValidationResponded: '📋',
-  __compact__: '📡',
+type FilterKey = 'all' | 'agents' | 'jobs' | 'feedback' | 'validations';
+
+const PILL_STYLE: Record<string, string> = {
+  AgentRegistered: 'bg-accent/15 text-accent border-accent/30',
+  FeedbackGiven: 'bg-warn/15 text-warn border-warn/30',
+  JobCreated: 'bg-accent-2/15 text-accent-2 border-accent-2/30',
+  JobCompleted: 'bg-accent/15 text-accent border-accent/30',
+  JobSubmitted: 'bg-fg-mute/10 text-fg-mute border-border-hi',
+  JobFunded: 'bg-fg-mute/10 text-fg-mute border-border-hi',
+  JobRejected: 'bg-danger/15 text-danger border-danger/30',
+  BudgetSet: 'bg-fg-mute/10 text-fg-mute border-border-hi',
+  ValidationRequested: 'bg-accent-2/15 text-accent-2 border-accent-2/30',
+  ValidationResponded: 'bg-accent/15 text-accent border-accent/30',
+  __compact__: 'bg-fg-mute/10 text-fg-mute border-border-hi',
 };
 
-const LABELS: Record<string, string> = {
-  AgentRegistered: 'New agent registered',
-  FeedbackGiven: 'Reputation feedback recorded',
-  JobCreated: 'New job posted',
-  JobCompleted: 'Job completed, USDC released',
-  JobSubmitted: 'Deliverable submitted',
-  JobFunded: 'Job escrow funded',
-  BudgetSet: 'Budget set',
-  ValidationRequested: 'Validation requested',
-  ValidationResponded: 'Validation response received',
+const PILL_LABEL: Record<string, string> = {
+  AgentRegistered: 'AGENT',
+  FeedbackGiven: 'FEEDBACK',
+  JobCreated: 'JOB',
+  JobCompleted: 'PAID',
+  JobSubmitted: 'DELIVERY',
+  JobFunded: 'ESCROW',
+  JobRejected: 'REJECTED',
+  BudgetSet: 'BUDGET',
+  ValidationRequested: 'VALIDATE',
+  ValidationResponded: 'VERIFIED',
+  __compact__: 'BLOCK',
 };
 
-function getDetailLink(event: LiveEvent): string | null {
-  if (event.kind === '__compact__') return null;
-  if (event.kind === 'AgentRegistered' && event.agentId)
-    return `/agents/${event.agentId}`;
-  if (
+const FILTER_MATCHES: Record<FilterKey, (kind: string) => boolean> = {
+  all: () => true,
+  agents: (k) => k === 'AgentRegistered',
+  jobs: (k) =>
     [
       'JobCreated',
-      'JobCompleted',
-      'JobSubmitted',
-      'JobFunded',
       'BudgetSet',
-    ].includes(event.kind) &&
-    event.jobId
+      'JobFunded',
+      'JobSubmitted',
+      'JobCompleted',
+      'JobRejected',
+    ].includes(k),
+  feedback: (k) => k === 'FeedbackGiven',
+  validations: (k) => k === 'ValidationRequested' || k === 'ValidationResponded',
+};
+
+function eventLink(ev: LiveEvent): string | null {
+  if (ev.kind === '__compact__') return null;
+  if (ev.kind === 'AgentRegistered' && ev.agentId) return `/agents/${ev.agentId}`;
+  if (
+    (ev.kind === 'FeedbackGiven' ||
+      ev.kind === 'ValidationRequested' ||
+      ev.kind === 'ValidationResponded') &&
+    ev.agentId
   )
-    return `/jobs/${event.jobId}`;
+    return `/agents/${ev.agentId}`;
+  if (ev.jobId) return `/jobs/${ev.jobId}`;
   return null;
+}
+
+function actionText(ev: LiveEvent): React.ReactNode {
+  if (ev.kind === '__compact__') {
+    return (
+      <span className="text-fg-mute">
+        batched block · {ev.eventCount ?? 0} events
+        {ev.eventKinds?.length ? ` · ${ev.eventKinds.join(', ')}` : ''}
+      </span>
+    );
+  }
+  const agentRef = ev.agentId ? `Agent #${ev.agentId}` : null;
+  const jobRef = ev.jobId ? `Job #${ev.jobId}` : null;
+  const subject = agentRef ?? jobRef ?? '—';
+  const action: Record<string, string> = {
+    AgentRegistered: 'registered',
+    FeedbackGiven: 'received feedback',
+    JobCreated: 'created',
+    JobCompleted: 'completed · USDC released',
+    JobSubmitted: 'deliverable submitted',
+    JobFunded: 'escrow funded',
+    JobRejected: 'rejected',
+    BudgetSet: 'budget set',
+    ValidationRequested: 'validation requested',
+    ValidationResponded: 'validation answered',
+  };
+  return (
+    <>
+      <span className="text-fg">{subject}</span>
+      <span className="text-fg-dim mx-2">→</span>
+      <span className="text-fg-mute">
+        {action[ev.kind] ?? ev.kind.toLowerCase()}
+      </span>
+    </>
+  );
+}
+
+function EventPill({ kind }: { kind: string }) {
+  const style = PILL_STYLE[kind] ?? 'bg-fg-mute/10 text-fg-mute border-border-hi';
+  const label = PILL_LABEL[kind] ?? kind.toUpperCase().slice(0, 8);
+  return (
+    <span
+      className={cn(
+        'font-mono text-[10px] tracking-[0.1em] px-2 py-0.5 rounded border',
+        'shrink-0 whitespace-nowrap',
+        style,
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+function EventRow({ ev, isFirst }: { ev: LiveEvent; isFirst: boolean }) {
+  useNowTick(1000);
+  const ago = formatRelative(ev.timestamp) ?? 'just now';
+  const blockLabel = `#${Number(ev.blockNumber).toLocaleString()}`;
+  const link = eventLink(ev);
+  const body = (
+    <div
+      className={cn(
+        'group flex items-center gap-4 px-5 py-3.5 text-sm',
+        'transition-colors',
+        link && 'hover:bg-bg-elev-2 cursor-pointer',
+        isFirst && 'row-enter',
+      )}
+    >
+      <div className="font-mono text-[11px] w-24 shrink-0 leading-tight">
+        <div className="text-fg">{ago}</div>
+        <div className="text-fg-dim text-[10px]">{blockLabel}</div>
+      </div>
+      <EventPill kind={ev.kind} />
+      <div className="flex-1 min-w-0 truncate">{actionText(ev)}</div>
+    </div>
+  );
+  return link ? <Link href={link}>{body}</Link> : body;
 }
 
 export default function LivePage() {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<FilterKey>('all');
   const totalRef = useRef(0);
   const pausedRef = useRef(false);
   const pausedQueue = useRef<LiveEvent[]>([]);
+  const lastSeenKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const es = new EventSource('/api/live');
-
     es.addEventListener('connected', () => setConnected(true));
     es.addEventListener('ping', () => setConnected(true));
 
@@ -81,20 +176,18 @@ export default function LivePage() {
         let newItems: LiveEvent[];
 
         if (Array.isArray(payload.events)) {
-          newItems = payload.events.map(
-            (ev: Record<string, unknown>) => ({
-              ...ev,
-              kind: String(ev.kind ?? ev.type ?? 'unknown'),
-              blockNumber: payload.blockNumber,
-              timestamp: payload.timestamp,
-            }),
-          );
+          newItems = payload.events.map((ev: Record<string, unknown>) => ({
+            ...ev,
+            kind: String(ev.kind ?? ev.type ?? 'unknown'),
+            blockNumber: String(payload.blockNumber),
+            timestamp: Number(payload.timestamp),
+          }));
         } else {
           newItems = [
             {
               kind: '__compact__',
-              blockNumber: payload.blockNumber,
-              timestamp: payload.timestamp,
+              blockNumber: String(payload.blockNumber),
+              timestamp: Number(payload.timestamp),
               eventCount: payload.eventCount as number,
               eventKinds: payload.eventKinds as string[],
             },
@@ -104,29 +197,24 @@ export default function LivePage() {
         totalRef.current += newItems.length;
 
         if (pausedRef.current) {
-          pausedQueue.current = [
-            ...pausedQueue.current,
-            ...newItems,
-          ];
+          pausedQueue.current = [...pausedQueue.current, ...newItems];
         } else {
-          setEvents((prev) =>
-            [...newItems, ...prev].slice(0, 200),
-          );
+          setEvents((prev) => [...newItems, ...prev].slice(0, 200));
+          if (newItems[0]) {
+            lastSeenKeyRef.current = `${newItems[0].blockNumber}-${newItems[0].kind}`;
+          }
         }
       } catch {
-        // ignore parse errors
+        // ignore
       }
     });
 
-    es.onerror = () => {
-      setConnected(false);
-    };
-
+    es.onerror = () => setConnected(false);
     return () => es.close();
   }, []);
 
   const togglePause = () => {
-    if (pausedRef.current) {
+    if (pausedRef.current && pausedQueue.current.length > 0) {
       setEvents((prev) =>
         [...pausedQueue.current, ...prev].slice(0, 200),
       );
@@ -136,120 +224,163 @@ export default function LivePage() {
     setPaused((p) => !p);
   };
 
-  const display = (() => {
-    let list = events;
-    if (filter === 'agents')
-      list = list.filter((e) => e.kind === 'AgentRegistered');
-    else if (filter === 'jobs')
-      list = list.filter((e) =>
-        [
-          'JobCreated',
-          'JobSubmitted',
-          'JobCompleted',
-          'JobFunded',
-          'BudgetSet',
-        ].includes(e.kind),
-      );
-    else if (filter === 'feedback')
-      list = list.filter((e) => e.kind === 'FeedbackGiven');
-    return list.slice(0, 200);
-  })();
+  const display = useMemo(
+    () => events.filter((e) => FILTER_MATCHES[filter](e.kind)).slice(0, 200),
+    [events, filter],
+  );
+
+  const filters: Array<{ key: FilterKey; label: string }> = [
+    { key: 'all', label: 'All' },
+    { key: 'agents', label: 'Agents' },
+    { key: 'jobs', label: 'Jobs' },
+    { key: 'feedback', label: 'Feedback' },
+    { key: 'validations', label: 'Validations' },
+  ];
 
   return (
-    <main className="mx-auto max-w-7xl px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <main className="mx-auto max-w-[1200px] px-6 md:px-12 pt-12 pb-24">
+      {/* === Header === */}
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-10">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Radio className="w-6 h-6 text-brand" />
-            Live Feed
+          <Eyebrow variant="curly" className="mb-5">
+            live_feed
+          </Eyebrow>
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-fg">
+            Every event,{' '}
+            <span className="text-accent">as it lands.</span>
           </h1>
-          <p className="text-text-muted mt-1">
-            {totalRef.current} events streamed this session
+          <p className="mt-3 text-fg-mute text-sm md:text-base max-w-xl">
+            Real-time stream of ERC-8004 registry events from our Bangkok-based
+            Arc node. New rows slide in at the top.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
+
+        {/* === Status + pause === */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            className={cn(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg border',
+              'font-mono text-[11px] tracking-[0.1em] uppercase',
+              connected
+                ? 'border-accent/30 text-accent bg-accent/5'
+                : 'border-danger/30 text-danger bg-danger/5',
+            )}
+          >
             <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                connected ? 'bg-success animate-pulse' : 'bg-danger'
-              }`}
+              className={cn(
+                connected ? 'live-pulse' : '',
+                'w-2 h-2 rounded-full',
+                !connected && 'bg-danger',
+              )}
+              aria-hidden
             />
-            <span className="text-sm text-text-dim">
-              {connected ? 'Connected' : 'Disconnected'}
-            </span>
+            {connected ? 'connected' : 'disconnected'}
           </div>
-          <Button variant="outline" size="sm" onClick={togglePause}>
+          <Button variant="ghost" size="sm" onClick={togglePause}>
             {paused ? (
               <>
-                <Play className="w-3 h-3" /> Resume
+                <Play /> resume
+                {pausedQueue.current.length > 0 && (
+                  <span className="ml-1 text-fg-dim">
+                    +{pausedQueue.current.length}
+                  </span>
+                )}
               </>
             ) : (
               <>
-                <Pause className="w-3 h-3" /> Pause
+                <Pause /> pause
               </>
             )}
           </Button>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        {['all', 'agents', 'jobs', 'feedback'].map((f) => (
-          <Badge
-            key={f}
-            variant={filter === f ? 'default' : 'outline'}
-            className="cursor-pointer"
-            onClick={() => setFilter(f)}
-          >
-            {f.charAt(0).toUpperCase() + f.slice(1)}
-          </Badge>
-        ))}
+      {/* === Meta strip === */}
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 mb-6 font-mono text-xs">
+        <span className="text-fg-dim">
+          <span className="text-fg-dim">//</span>
+          <span className="text-fg-mute uppercase tracking-[0.1em]">streamed</span>
+          <span className="ml-2 text-fg tabular-nums">
+            {totalRef.current.toLocaleString()}
+          </span>
+          <span className="ml-1 text-fg-dim">this session</span>
+        </span>
+        <span className="text-fg-dim">
+          <span className="text-fg-dim">//</span>
+          <span className="text-fg-mute uppercase tracking-[0.1em]">buffer</span>
+          <span className="ml-2 text-fg tabular-nums">
+            {events.length}
+          </span>
+          <span className="ml-1 text-fg-dim">rows</span>
+        </span>
+        {paused && pausedQueue.current.length > 0 && (
+          <span className="text-warn">
+            <span className="text-fg-dim">//</span>
+            <span className="uppercase tracking-[0.1em]">queued</span>
+            <span className="ml-2 tabular-nums">
+              {pausedQueue.current.length}
+            </span>
+          </span>
+        )}
       </div>
 
-      {display.length === 0 && !paused ? (
-        <div className="text-center py-16 text-text-dim">
-          <div className="text-4xl mb-4">🤖</div>
-          <p className="text-lg">Waiting for first event...</p>
-          <p className="text-sm mt-2">
-            Events appear here in real time as the indexer processes blocks.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {display.map((ev, i) => {
-            const link = getDetailLink(ev);
-            const isCompact = ev.kind === '__compact__';
-            const content = (
-              <div className="flex items-start gap-4 border-l-2 border-brand pl-4 py-3 hover:bg-bg-muted/50 transition-colors rounded-r-lg cursor-pointer">
-                <span className="text-xl mt-0.5">
-                  {ICONS[ev.kind] ?? '⚡'}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">
-                    {isCompact
-                      ? `${ev.eventCount} events in block ${ev.blockNumber}`
-                      : (LABELS[ev.kind] ?? ev.kind)}
-                  </p>
-                  <p className="text-xs text-text-dim">
-                    Block {ev.blockNumber}
-                    {' · '}
-                    {new Date(ev.timestamp).toLocaleTimeString()}
-                    {isCompact && ev.eventKinds
-                      ? ` · ${ev.eventKinds.join(', ')}`
-                      : ''}
-                  </p>
-                </div>
-              </div>
-            );
-            return link ? (
-              <Link key={`${ev.blockNumber}-${i}`} href={link}>
-                {content}
-              </Link>
-            ) : (
-              <div key={`${ev.blockNumber}-${i}`}>{content}</div>
-            );
-          })}
-        </div>
-      )}
+      {/* === Filters === */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        {filters.map((f) => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                'font-mono text-[11px] uppercase tracking-[0.1em] px-3 py-1.5 rounded border transition-colors',
+                active
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border bg-bg-elev text-fg-mute hover:text-fg hover:border-border-hi',
+              )}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* === Event list === */}
+      <div className="border border-border rounded-xl bg-bg-elev overflow-hidden">
+        {display.length === 0 ? (
+          <div className="px-8 py-16 text-center">
+            <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.1em] text-fg-dim">
+              <span
+                className={cn(
+                  connected ? 'live-pulse' : '',
+                  'w-2 h-2 rounded-full',
+                  !connected && 'bg-danger',
+                )}
+                aria-hidden
+              />
+              {connected ? 'awaiting next event' : 'reconnecting'}
+            </div>
+            <p className="mt-2 text-sm text-fg-mute">
+              {filter === 'all'
+                ? 'Events appear here in real time as the indexer processes blocks.'
+                : `No ${filter} events received this session yet — try another filter or wait.`}
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {display.map((ev, i) => (
+              <li key={`${ev.blockNumber}-${ev.kind}-${ev.agentId ?? ev.jobId ?? i}`}>
+                <EventRow ev={ev} isFirst={i === 0} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <p className="mt-6 font-mono text-[11px] tracking-[0.05em] text-fg-dim">
+        // showing latest {display.length} of {events.length} buffered ·
+        max 200 rows in memory · auto-reconnects on network drop
+      </p>
     </main>
   );
 }
