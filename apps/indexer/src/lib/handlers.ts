@@ -21,6 +21,7 @@ export async function applyEvents(events: ParsedEvent[]): Promise<void> {
             .values({
               agentId: e.agentId,
               ownerAddress: e.owner.toLowerCase(),
+              metadataUri: e.metadataUri,
               registeredAtBlock: e.blockNumber,
               registeredTxHash: e.txHash,
             })
