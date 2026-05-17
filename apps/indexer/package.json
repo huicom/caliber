@@ -6,13 +6,15 @@
     "backfill": "tsx --env-file=../../.env src/backfill.ts",
     "live": "tsx --env-file=../../.env src/live.ts",
     "build": "tsc",
-    "start:live": "node dist/live.js",
+    "start:live": "tsx dist/live.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@arc-agents/db": "workspace:*",
     "dotenv": "^16.5.0",
-    "viem": "^2.27.3"
+    "drizzle-orm": "^0.42.0",
+    "viem": "^2.27.3",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",

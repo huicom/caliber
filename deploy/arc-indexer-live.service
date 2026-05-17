@@ -1,0 +1,25 @@
+[Unit]
+Description=ArcAgents Live Indexer
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStart=/home/huicom/.npm-global/bin/pnpm start:indexer:live
+
+Restart=always
+RestartSec=5
+
+StandardOutput=append:/var/log/arc-indexer.log
+StandardError=append:/var/log/arc-indexer-err.log
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

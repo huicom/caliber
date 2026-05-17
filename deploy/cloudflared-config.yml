@@ -1,0 +1,7 @@
+tunnel: 980afb78-474d-476b-a506-6a95cd8ded2a
+credentials-file: /home/huicom/.cloudflared/980afb78-474d-476b-a506-6a95cd8ded2a.json
+
+ingress:
+  - hostname: arcagents.poko.blue
+    service: http://localhost:3000
+  - service: http_status:404
