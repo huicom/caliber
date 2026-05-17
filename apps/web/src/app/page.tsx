@@ -1,5 +1,9 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
+
+// Stats change every block — never serve a cached snapshot of this page.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Eyebrow } from '@/components/ui/Eyebrow';
