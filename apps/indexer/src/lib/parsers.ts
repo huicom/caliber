@@ -1,4 +1,5 @@
 import type { Log } from 'viem';
+import { decodeEventLog } from 'viem';
 import {
   IDENTITY_ABI,
   REPUTATION_ABI,
@@ -7,13 +8,13 @@ import {
   EVENT_TOPICS,
 } from './abis';
 import { config } from './config';
-import { decodeEventLog } from 'viem';
 
 export type ParsedEvent =
   | {
       kind: 'AgentRegistered';
       agentId: bigint;
       owner: `0x${string}`;
+      metadataUri: string | null;
       blockNumber: bigint;
       txHash: string;
       logIndex: number;
@@ -22,7 +23,9 @@ export type ParsedEvent =
       kind: 'FeedbackGiven';
       agentId: bigint;
       validator: `0x${string}`;
-      score: bigint;
+      /** Normalized to value / 10^valueDecimals, stored as numeric(10,2). */
+      score: string;
+      /** Kept for back-compat with the existing score_type column. */
       scoreType: number;
       tag: string;
       feedbackHash: string;
@@ -58,6 +61,7 @@ export type ParsedEvent =
       provider: `0x${string}`;
       evaluator: `0x${string}`;
       expiredAt: bigint;
+      /** Real event doesn't carry the description; fetched lazily via getJob() if needed. */
       description: string;
       blockNumber: bigint;
       txHash: string;
@@ -108,42 +112,68 @@ const REP_LOWER = config.REPUTATION_REGISTRY.toLowerCase();
 const VAL_LOWER = config.VALIDATION_REGISTRY.toLowerCase();
 const COMM_LOWER = config.AGENTIC_COMMERCE.toLowerCase();
 
-function decodeTransfer(log: Log): ParsedEvent | null {
-  const decoded = decodeEventLog({ abi: IDENTITY_ABI, data: log.data, topics: log.topics });
-  if (decoded.eventName !== 'Transfer') return null;
-  const args = decoded.args as { from: `0x${string}`; to: `0x${string}`; tokenId: bigint };
-  if (args.from !== '0x0000000000000000000000000000000000000000') return null;
+/** Normalize an (int128 value, uint8 decimals) score pair to a fixed-point
+ *  decimal string suitable for the numeric(10,2) reputation column.
+ *  e.g. (95, 0) → "95.00";  (9500, 2) → "95.00";  (-50, 0) → "-50.00".
+ */
+function normalizeScore(value: bigint, decimals: number): string {
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  const scaled = decimals === 0 ? Number(abs) : Number(abs) / 10 ** decimals;
+  const fixed = scaled.toFixed(2);
+  return negative ? `-${fixed}` : fixed;
+}
+
+function decodeRegistered(log: Log): ParsedEvent | null {
+  const decoded = decodeEventLog({
+    abi: IDENTITY_ABI,
+    data: log.data,
+    topics: log.topics,
+  });
+  if (decoded.eventName !== 'Registered') return null;
+  const args = decoded.args as {
+    agentId: bigint;
+    agentURI: string;
+    owner: `0x${string}`;
+  };
   return {
     kind: 'AgentRegistered',
-    agentId: args.tokenId,
-    owner: args.to,
+    agentId: args.agentId,
+    owner: args.owner,
+    metadataUri: args.agentURI || null,
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
     logIndex: log.logIndex!,
   };
 }
 
-function decodeFeedbackGiven(log: Log): ParsedEvent | null {
-  const decoded = decodeEventLog({ abi: REPUTATION_ABI, data: log.data, topics: log.topics });
-  if (decoded.eventName !== 'FeedbackGiven') return null;
+function decodeNewFeedback(log: Log): ParsedEvent | null {
+  const decoded = decodeEventLog({
+    abi: REPUTATION_ABI,
+    data: log.data,
+    topics: log.topics,
+  });
+  if (decoded.eventName !== 'NewFeedback') return null;
   const args = decoded.args as {
     agentId: bigint;
-    validator: `0x${string}`;
-    score: bigint;
-    scoreType: number;
-    tag: string;
-    filename: string;
-    fileURL: string;
-    fileType: string;
+    clientAddress: `0x${string}`;
+    feedbackIndex: bigint;
+    value: bigint;
+    valueDecimals: number;
+    tag1: string;
+    tag2: string;
+    endpoint: string;
+    feedbackURI: string;
     feedbackHash: `0x${string}`;
   };
   return {
     kind: 'FeedbackGiven',
     agentId: args.agentId,
-    validator: args.validator,
-    score: args.score,
-    scoreType: args.scoreType,
-    tag: args.tag,
+    // The on-chain "validator" of feedback is the client who left it.
+    validator: args.clientAddress,
+    score: normalizeScore(args.value, args.valueDecimals),
+    scoreType: Number(args.valueDecimals),
+    tag: args.tag1 || args.tag2 || '',
     feedbackHash: args.feedbackHash,
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
@@ -151,23 +181,23 @@ function decodeFeedbackGiven(log: Log): ParsedEvent | null {
   };
 }
 
-function decodeValidationRequested(log: Log): ParsedEvent | null {
+function decodeValidationRequest(log: Log): ParsedEvent | null {
   const decoded = decodeEventLog({
     abi: VALIDATION_ABI,
     data: log.data,
     topics: log.topics,
   });
-  if (decoded.eventName !== 'ValidationRequested') return null;
+  if (decoded.eventName !== 'ValidationRequest') return null;
   const args = decoded.args as {
-    requestHash: `0x${string}`;
-    validator: `0x${string}`;
+    validatorAddress: `0x${string}`;
     agentId: bigint;
     requestURI: string;
+    requestHash: `0x${string}`;
   };
   return {
     kind: 'ValidationRequested',
     requestHash: args.requestHash,
-    validator: args.validator,
+    validator: args.validatorAddress,
     agentId: args.agentId,
     requestUri: args.requestURI,
     blockNumber: log.blockNumber!,
@@ -176,14 +206,16 @@ function decodeValidationRequested(log: Log): ParsedEvent | null {
   };
 }
 
-function decodeValidationResponded(log: Log): ParsedEvent | null {
+function decodeValidationResponse(log: Log): ParsedEvent | null {
   const decoded = decodeEventLog({
     abi: VALIDATION_ABI,
     data: log.data,
     topics: log.topics,
   });
-  if (decoded.eventName !== 'ValidationResponded') return null;
+  if (decoded.eventName !== 'ValidationResponse') return null;
   const args = decoded.args as {
+    validatorAddress: `0x${string}`;
+    agentId: bigint;
     requestHash: `0x${string}`;
     response: number;
     responseURI: string;
@@ -216,7 +248,7 @@ function decodeJobCreated(log: Log): ParsedEvent | null {
     provider: `0x${string}`;
     evaluator: `0x${string}`;
     expiredAt: bigint;
-    description: string;
+    hook: `0x${string}`;
   };
   return {
     kind: 'JobCreated',
@@ -225,7 +257,8 @@ function decodeJobCreated(log: Log): ParsedEvent | null {
     provider: args.provider,
     evaluator: args.evaluator,
     expiredAt: args.expiredAt,
-    description: args.description,
+    // Description is no longer in the event; could be fetched via getJob().
+    description: '',
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
     logIndex: log.logIndex!,
@@ -274,11 +307,11 @@ function decodeJobSubmitted(log: Log): ParsedEvent | null {
     topics: log.topics,
   });
   if (decoded.eventName !== 'JobSubmitted') return null;
-  const args = decoded.args as { jobId: bigint; deliverableHash: `0x${string}` };
+  const args = decoded.args as { jobId: bigint; deliverable: `0x${string}` };
   return {
     kind: 'JobSubmitted',
     jobId: args.jobId,
-    deliverableHash: args.deliverableHash,
+    deliverableHash: args.deliverable,
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
     logIndex: log.logIndex!,
@@ -292,11 +325,11 @@ function decodeJobCompleted(log: Log): ParsedEvent | null {
     topics: log.topics,
   });
   if (decoded.eventName !== 'JobCompleted') return null;
-  const args = decoded.args as { jobId: bigint; reasonHash: `0x${string}` };
+  const args = decoded.args as { jobId: bigint; reason: `0x${string}` };
   return {
     kind: 'JobCompleted',
     jobId: args.jobId,
-    reasonHash: args.reasonHash,
+    reasonHash: args.reason,
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
     logIndex: log.logIndex!,
@@ -310,45 +343,52 @@ function decodeJobRejected(log: Log): ParsedEvent | null {
     topics: log.topics,
   });
   if (decoded.eventName !== 'JobRejected') return null;
-  const args = decoded.args as { jobId: bigint; reasonHash: `0x${string}` };
+  const args = decoded.args as { jobId: bigint; reason: `0x${string}` };
   return {
     kind: 'JobRejected',
     jobId: args.jobId,
-    reasonHash: args.reasonHash,
+    reasonHash: args.reason,
     blockNumber: log.blockNumber!,
     txHash: log.transactionHash!,
     logIndex: log.logIndex!,
   };
 }
 
-const DECODERS: Record<
-  string,
-  (log: Log) => ParsedEvent | null
-> = {
+const DECODERS: Record<string, (log: Log) => ParsedEvent | null> = {
   [ID_LOWER]: (log) => {
     const topic = log.topics[0]?.toLowerCase();
-    if (topic === EVENT_TOPICS.Transfer.toLowerCase()) return decodeTransfer(log);
+    if (topic === EVENT_TOPICS.Registered.toLowerCase())
+      return decodeRegistered(log);
     return null;
   },
   [REP_LOWER]: (log) => {
     const topic = log.topics[0]?.toLowerCase();
-    if (topic === EVENT_TOPICS.FeedbackGiven.toLowerCase()) return decodeFeedbackGiven(log);
+    if (topic === EVENT_TOPICS.NewFeedback.toLowerCase())
+      return decodeNewFeedback(log);
     return null;
   },
   [VAL_LOWER]: (log) => {
     const topic = log.topics[0]?.toLowerCase();
-    if (topic === EVENT_TOPICS.ValidationRequested.toLowerCase()) return decodeValidationRequested(log);
-    if (topic === EVENT_TOPICS.ValidationResponded.toLowerCase()) return decodeValidationResponded(log);
+    if (topic === EVENT_TOPICS.ValidationRequest.toLowerCase())
+      return decodeValidationRequest(log);
+    if (topic === EVENT_TOPICS.ValidationResponse.toLowerCase())
+      return decodeValidationResponse(log);
     return null;
   },
   [COMM_LOWER]: (log) => {
     const topic = log.topics[0]?.toLowerCase();
-    if (topic === EVENT_TOPICS.JobCreated.toLowerCase()) return decodeJobCreated(log);
-    if (topic === EVENT_TOPICS.BudgetSet.toLowerCase()) return decodeBudgetSet(log);
-    if (topic === EVENT_TOPICS.JobFunded.toLowerCase()) return decodeJobFunded(log);
-    if (topic === EVENT_TOPICS.JobSubmitted.toLowerCase()) return decodeJobSubmitted(log);
-    if (topic === EVENT_TOPICS.JobCompleted.toLowerCase()) return decodeJobCompleted(log);
-    if (topic === EVENT_TOPICS.JobRejected.toLowerCase()) return decodeJobRejected(log);
+    if (topic === EVENT_TOPICS.JobCreated.toLowerCase())
+      return decodeJobCreated(log);
+    if (topic === EVENT_TOPICS.BudgetSet.toLowerCase())
+      return decodeBudgetSet(log);
+    if (topic === EVENT_TOPICS.JobFunded.toLowerCase())
+      return decodeJobFunded(log);
+    if (topic === EVENT_TOPICS.JobSubmitted.toLowerCase())
+      return decodeJobSubmitted(log);
+    if (topic === EVENT_TOPICS.JobCompleted.toLowerCase())
+      return decodeJobCompleted(log);
+    if (topic === EVENT_TOPICS.JobRejected.toLowerCase())
+      return decodeJobRejected(log);
     return null;
   },
 };
