@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Copy, ExternalLink, Check } from 'lucide-react';
 import { truncateAddress, arcscanAddressUrl } from '@/lib/format';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export function Address({
   value,
@@ -16,15 +17,30 @@ export function Address({
 
   return (
     <span className="inline-flex items-center gap-1.5 font-mono text-sm">
-      <span>{full ? value : truncateAddress(value)}</span>
+      <span className="text-fg-mute">
+        {full ? value : truncateAddress(value)}
+      </span>
       <button
-        onClick={async () => {
+        type="button"
+        aria-label="Copy address"
+        onClick={async (e) => {
+          e.preventDefault();
           await navigator.clipboard.writeText(value);
           setCopied(true);
-          toast.success('Address copied');
+          toast('Address copied', {
+            duration: 800,
+            className: 'arc-toast-accent',
+            style: {
+              borderColor: 'var(--color-accent)',
+              color: 'var(--color-accent)',
+            },
+          });
           setTimeout(() => setCopied(false), 1500);
         }}
-        className="text-text-dim hover:text-text"
+        className={cn(
+          'transition-colors',
+          copied ? 'text-accent' : 'text-fg-dim hover:text-fg',
+        )}
       >
         {copied ? (
           <Check className="w-3 h-3" />
@@ -36,7 +52,8 @@ export function Address({
         href={arcscanAddressUrl(value)}
         target="_blank"
         rel="noreferrer"
-        className="text-text-dim hover:text-text"
+        aria-label="View on ArcScan"
+        className="text-fg-dim hover:text-accent transition-colors"
       >
         <ExternalLink className="w-3 h-3" />
       </a>

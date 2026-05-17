@@ -1,22 +1,23 @@
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const STATUS_STYLES: Record<string, string> = {
-  Open: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  Funded: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  Submitted: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-  Completed: 'bg-success/10 text-success border-success/30',
-  Rejected: 'bg-danger/10 text-danger border-danger/30',
-  Expired: 'bg-text-dim/10 text-text-dim border-text-dim/30',
+  Open: 'bg-accent-2/15 text-accent-2 border-accent-2/30',
+  Funded: 'bg-warn/15 text-warn border-warn/30',
+  Submitted: 'bg-fg-mute/10 text-fg-mute border-border-hi',
+  Completed: 'bg-accent/15 text-accent border-accent/30',
+  Rejected: 'bg-danger/15 text-danger border-danger/30',
+  Expired: 'bg-fg-dim/10 text-fg-dim border-border',
 };
 
 export function StatusBadge({ status }: { status: string }) {
   return (
-    <Badge
-      variant="outline"
-      className={cn('font-mono text-xs', STATUS_STYLES[status] ?? '')}
+    <span
+      className={cn(
+        'inline-flex items-center font-mono uppercase tracking-[0.1em] text-[10px] px-2 py-0.5 rounded border',
+        STATUS_STYLES[status] ?? 'bg-fg-mute/10 text-fg-mute border-border-hi',
+      )}
     >
       {status}
-    </Badge>
+    </span>
   );
 }
