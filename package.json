@@ -1,0 +1,17 @@
+{
+  "name": "arc-agents-explorer",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:indexer:backfill": "pnpm --filter indexer backfill",
+    "dev:indexer:live": "pnpm --filter indexer live",
+    "db:generate": "pnpm --filter @arc-agents/db generate",
+    "db:migrate": "pnpm --filter @arc-agents/db migrate",
+    "db:studio": "pnpm --filter @arc-agents/db studio",
+    "build:web": "pnpm --filter web build",
+    "build:indexer": "pnpm --filter indexer build",
+    "start:web": "pnpm --filter web start",
+    "start:indexer:live": "pnpm --filter indexer start:live",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
