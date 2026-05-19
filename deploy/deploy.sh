@@ -4,8 +4,8 @@ set -euo pipefail
 export PATH="$HOME/.npm-global/bin:$PATH"
 
 echo "🏗️  Building..."
-pnpm build:indexer
-pnpm build:web
+pnpm --filter @arc-agents/indexer build
+pnpm --filter web build
 
 echo "📋 Installing service files..."
 sudo cp deploy/arc-indexer-live.service /etc/systemd/system/

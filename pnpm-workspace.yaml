@@ -1,5 +1,7 @@
 packages:
-  - 'apps/*'
+  - 'indexer/*'
+  - 'rating'
+  - 'web'
   - 'packages/*'
 allowBuilds:
   esbuild: true

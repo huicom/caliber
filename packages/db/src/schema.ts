@@ -26,6 +26,7 @@ export const agents = pgTable(
   'agents',
   {
     agentId: bigint('agent_id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
     ownerAddress: text('owner_address').notNull(),
     metadataUri: text('metadata_uri'),
     metadata: jsonb('metadata').$type<AgentMetadata | null>(),
@@ -61,6 +62,7 @@ export const feedbackEvents = pgTable(
   'feedback_events',
   {
     id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
     agentId: bigint('agent_id', { mode: 'bigint' })
       .notNull()
       .references(() => agents.agentId, { onDelete: 'cascade' }),
@@ -87,6 +89,7 @@ export const validations = pgTable(
   'validations',
   {
     id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
     agentId: bigint('agent_id', { mode: 'bigint' })
       .notNull()
       .references(() => agents.agentId, { onDelete: 'cascade' }),
@@ -118,6 +121,7 @@ export const jobs = pgTable(
   'jobs',
   {
     jobId: bigint('job_id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
     clientAddress: text('client_address').notNull(),
     providerAddress: text('provider_address').notNull(),
     evaluatorAddress: text('evaluator_address'),
@@ -150,6 +154,7 @@ export const jobEvents = pgTable(
   'job_events',
   {
     id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
     jobId: bigint('job_id', { mode: 'bigint' })
       .notNull()
       .references(() => jobs.jobId, { onDelete: 'cascade' }),

@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "backfill": "tsx --env-file=../../.env src/backfill.ts",
-    "live": "tsx --env-file=../../.env src/live.ts",
+    "backfill": "tsx --env-file=../../.env backfill.ts",
+    "live": "tsx --env-file=../../.env live.ts",
     "build": "tsc",
     "start:live": "tsx dist/live.js",
     "typecheck": "tsc --noEmit"
