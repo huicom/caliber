@@ -10,6 +10,7 @@ import { CheckCircle, Circle, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { OnChainJobState } from './_components/OnChainJobState';
 import { JobActions } from './_components/JobActions';
+import { CaliberBondPanel } from './_components/CaliberBondPanel';
 
 const STEP_ORDER = ['Open', 'Funded', 'Submitted', 'Completed'];
 
@@ -113,6 +114,16 @@ export default async function JobDetailPage({
 
       <div className="mb-8">
         <JobActions jobId={id} />
+      </div>
+
+      <div className="mb-8">
+        <CaliberBondPanel
+          jobId={id}
+          providerAddress={job.providerAddress}
+          providerAgentId={provider[0]?.agentId ? String(provider[0].agentId) : null}
+          budgetRaw={job.budgetRaw}
+          jobStatus={status}
+        />
       </div>
 
       <Card className="mb-8">

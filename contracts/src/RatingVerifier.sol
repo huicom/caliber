@@ -7,8 +7,12 @@ import {EIP712} from "openzeppelin-contracts/contracts/utils/cryptography/EIP712
 contract RatingVerifier is EIP712 {
     using ECDSA for bytes32;
 
+    // v2 typehash — adds `uint16 lgdBps` so CaliberEscrow can price the bond
+    // formula (budget × PD × LGD) from a single signed attestation without a
+    // second oracle call. Earlier v1 attestations (no lgdBps field) no longer
+    // verify against this contract; the rating service was bumped in parallel.
     bytes32 private constant RATING_ATTESTATION_TYPEHASH = keccak256(
-        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
+        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint16 lgdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
     );
 
     struct RatingAttestation {
@@ -17,6 +21,7 @@ contract RatingVerifier is EIP712 {
         address agentAddress;
         uint8 tier;
         uint16 pdBps;
+        uint16 lgdBps;
         uint8 confidence;
         bytes32 methodologyVersion;
         uint64 asOf;
@@ -68,6 +73,7 @@ contract RatingVerifier is EIP712 {
                 att.agentAddress,
                 att.tier,
                 att.pdBps,
+                att.lgdBps,
                 att.confidence,
                 att.methodologyVersion,
                 att.asOf,

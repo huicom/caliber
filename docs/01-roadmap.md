@@ -10,7 +10,7 @@
 |---|---|---|
 | **W0** | Land in-flight working tree (engine, service, components, migration) | **✓ Shipped** — commit `915c6f2` |
 | **W1** | Job Marketplace at `/jobs/new`, tier-gated | **✓ Shipped** — form + draft API + insufficient-confidence guard + tier-gap pre-check + `/jobs` "Gated by Caliber" filter + per-row gate badge + ineligible audit signal |
-| **W2** | Caliber Escrow (bond = budget × LGD × PD) | Not started |
+| **W2** | Caliber Escrow (bond = budget × LGD × PD) | **✓ Shipped** — CaliberEscrow at 0x0193…3DF6 on Arc Testnet, lgdBps added to signed attestation, 25/25 forge tests pass, /integrate has bond math + lifecycle |
 | **W3** | Rating Trajectory (daily snapshots + chart) | Not started |
 | **W4** | Validator Scoreboard (predictiveness-weighted) | Not started — blocks on W3 |
 | **W5** | Watchlist + Downgrade Alerts | Not started — blocks on W3 |
@@ -188,10 +188,32 @@ Match the encoding the `RatingGateway` contract expects.
 
 ---
 
-## Wave 2 — Caliber Escrow (credit-priced collateral)
+## Wave 2 — Caliber Escrow (credit-priced collateral) ✓ shipped
 
-Turn a tier into a capital-efficiency number. This is the actual point of a
-credit rating.
+**Status: ✓ Done.** Deployed on Arc Testnet 2026-05-21. RatingAttestation
+struct extended with `uint16 lgdBps` so the bond formula is priced from a
+single signed payload. Three new contract addresses are live; the previous
+verifier/gateway are deprecated.
+
+**Deployed addresses (Arc Testnet, chain 5042002):**
+- RatingVerifier v2: `0x32C554edA5CDD2eb94F242ebf3f38820d3C53E29`
+- RatingGateway v2: `0xB4C1aF80Adb9F537985B93490a02eB229089259f`
+- CaliberEscrow:    `0x0193CB604BC0B4B8853EA45Dfdcd062aa1dc3DF6`
+
+**What landed:**
+- `contracts/src/RatingVerifier.sol` — struct + typehash bumped with lgdBps
+- `contracts/src/CaliberEscrow.sol` — 200 LOC, permissionless release/slash,
+  gated-jobs-only v0; reads `ratingGateway.jobPoster()` to resolve real client
+- `contracts/test/CaliberEscrow.t.sol` — 12 tests; bond math confirmed
+  AAA=0.6 / BBB=12 / CCC=150 USDC on a 1000 USDC job
+- `rating/src/attest.ts` — signs `lgdBps` in EIP-712 payload
+- `web/src/app/jobs/[id]/_components/CaliberBondPanel.tsx` — agent posts
+  bond, anyone calls release/slash; reads on-chain truth for status hints
+- `web/src/app/integrate/page.tsx` — "Caliber as collateral" section with
+  the formula, the AAA/BBB/CCC/D bond table, and the lifecycle/contract
+  snippet
+
+**Original design (kept for reference):**
 
 **Contract** (`contracts/src/CaliberEscrow.sol`):
 - `function postBond(uint256 jobId, RatingAttestation calldata att) external`

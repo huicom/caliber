@@ -12,6 +12,7 @@ export interface ChainConfig {
     usdcContract: `0x${string}`;
     ratingVerifier: `0x${string}`;
     ratingGateway: `0x${string}`;
+    caliberEscrow: `0x${string}`;
   };
   deploymentBlock: bigint;
 }
@@ -34,10 +35,14 @@ export const CHAINS: Record<string, ChainConfig> = {
         '0x8004Cb1BF31DAf7788923b405b754f57acEB4272',
       agenticCommerce: '0x0747EEf0706327138c69792bF28Cd525089e4583',
       usdcContract: '0x3600000000000000000000000000000000000000',
-      // Redeployed 2026-05-21 with EIP-712 name=Caliber. Previous v1: verifier 0x32d5…cdC6, gateway 0x3B7f…7682 (deprecated) via contracts/script/Deploy.s.sol.
-      // Signer: 0xbF017698BB2c936D54a74DCABF68Df42800bAA84. Methodology v1.0.0.
-      ratingVerifier: '0xbc5942F89AFDf3d62b5c73B946258A0Dcb1Aa6cb',
-      ratingGateway: '0x87230cfa52DbfBC4a81167F1dFa9eDA04B754837',
+      // Redeployed 2026-05-21 (Wave 2). RatingAttestation struct now includes
+      // uint16 lgdBps so CaliberEscrow can price bond = budget × pd × lgd from
+      // a single signed attestation. Previous v2: verifier 0xbc59…a6cb, gateway
+      // 0x8723…4837 (deprecated). Signer: 0xbF017698BB2c936D54a74DCABF68Df42800bAA84.
+      // Methodology v1.0.0 unchanged (contract wire change only).
+      ratingVerifier: '0x32C554edA5CDD2eb94F242ebf3f38820d3C53E29',
+      ratingGateway: '0xB4C1aF80Adb9F537985B93490a02eB229089259f',
+      caliberEscrow: '0x0193CB604BC0B4B8853EA45Dfdcd062aa1dc3DF6',
     },
     deploymentBlock: BigInt(process.env.DEPLOYMENT_BLOCK ?? '0'),
   },
@@ -63,6 +68,7 @@ export const BASE_CONFIG: ChainConfig = {
     usdcContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     ratingVerifier: MISSING_SENTINEL,
     ratingGateway: MISSING_SENTINEL,
+    caliberEscrow: MISSING_SENTINEL,
   },
   deploymentBlock: 0n,
 };
