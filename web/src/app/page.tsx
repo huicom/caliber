@@ -1,135 +1,428 @@
 import Link from 'next/link';
-import { Suspense } from 'react';
+import { db, agents, jobs } from '@/lib/db';
+import { count, sum, eq, and, gte, desc, sql as drizzleSql } from 'drizzle-orm';
+import { CaliberLiveFeed } from '@/components/home/CaliberLiveFeed';
+import { LastEventCell } from '@/components/home/LastEventCell';
+import type { SeedEvent } from '@/components/home/LiveFeedClient';
 
-// Stats change every block — never serve a cached snapshot of this page.
+// Stats change every block — never cache a snapshot of this page.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Eyebrow } from '@/components/ui/Eyebrow';
-import { HeroStats, HeroStatsSkeleton } from '@/components/home/HeroStats';
-import { LastEventStat } from '@/components/home/LastEventStat';
-import { TopAgents } from '@/components/home/TopAgents';
-import { LiveFeedWidget } from '@/components/home/LiveFeedWidget';
-import { CTASection } from '@/components/home/CTASection';
-import { TopAgentsSkeleton } from '@/components/ui/skeletons';
 
-function LiveFeedSkeleton() {
-  return (
-    <div>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="font-mono text-xs uppercase tracking-[0.12em] text-fg-dim">
-          //live_feed
-        </span>
-        <span className="live-pulse opacity-40 [&::after]:!hidden" aria-hidden />
-        <span className="font-mono text-[11px] tracking-[0.1em] text-accent">
-          LIVE
-        </span>
-      </div>
-      <div className="border border-border rounded-xl bg-bg-elev divide-y divide-border">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="px-4 py-3 flex items-center gap-3">
-            <div className="h-3 w-20 rounded bg-bg-elev-2 animate-pulse" />
-            <div className="h-4 w-14 rounded bg-bg-elev-2 animate-pulse" />
-            <div className="h-3 flex-1 rounded bg-bg-elev-2 animate-pulse" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+// =========================================================================
+// data fetch — totals + top agents + feed seed
+// =========================================================================
+
+interface Totals {
+  agents: number;
+  jobs: number;
+  jobsCompleted: number;
+  usdc: string;
+  new24h: number;
+  rated: number;
 }
 
-const HERO_RESOURCES = [
-  {
-    href: 'https://github.com/huicom/arc_translation_agent',
-    label: 'View open-source demo',
-  },
-  {
-    href: 'https://eips.ethereum.org/EIPS/eip-8004',
-    label: 'Read ERC-8004 spec',
-  },
-];
+interface TopRow {
+  agentId: string;
+  ownerAddress: string;
+  agentType: string | null;
+  jobsCompleted: number;
+  feedbackCount: number;
+}
 
-export default function HomePage() {
+interface RatedTop extends TopRow {
+  rating: string | null;
+  rated: boolean;
+  ppdPct: string;
+  disputes: number;
+  isWatchlist: boolean;
+}
+
+const RATING_API_BASE =
+  process.env.RATING_API_INTERNAL_URL ?? 'http://localhost:3100';
+
+async function fetchTotals(): Promise<Totals> {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  try {
+    const [agentsRow, jobsRow, completedRow, last24h, distribution] = await Promise.all([
+      db.select({ count: count() }).from(agents),
+      db.select({ count: count() }).from(jobs),
+      db
+        .select({ count: count(), sum: sum(jobs.budgetUsdc) })
+        .from(jobs)
+        .where(eq(jobs.status, 'Completed')),
+      db
+        .select({ count: count() })
+        .from(jobs)
+        .where(and(gte(jobs.createdAt, oneDayAgo))),
+      fetch(`${RATING_API_BASE}/v1/ratings/distribution?chain=arc`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(3000),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]);
+    const usdcRaw = Number(completedRow[0]?.sum ?? 0);
+    return {
+      agents: Number(agentsRow[0]?.count ?? 0),
+      jobs: Number(jobsRow[0]?.count ?? 0),
+      jobsCompleted: Number(completedRow[0]?.count ?? 0),
+      usdc: Math.round(usdcRaw).toLocaleString(),
+      new24h: Number(last24h[0]?.count ?? 0),
+      rated: Number(distribution?.rateable_agents ?? 0),
+    };
+  } catch {
+    return {
+      agents: 0, jobs: 0, jobsCompleted: 0, usdc: '0', new24h: 0, rated: 0,
+    };
+  }
+}
+
+async function fetchTopAgents(): Promise<RatedTop[]> {
+  try {
+    // Pull top 8 by reputation score (already correlates with rating quality).
+    const rows = await db
+      .select({
+        agentId: agents.agentId,
+        ownerAddress: agents.ownerAddress,
+        agentType: agents.agentType,
+        jobsCompleted: agents.jobsCompleted,
+        feedbackCount: agents.feedbackCount,
+      })
+      .from(agents)
+      .where(drizzleSql`reputation_score IS NOT NULL`)
+      .orderBy(desc(agents.reputationScore))
+      .limit(8);
+
+    const list: TopRow[] = rows.map((r) => ({
+      agentId: String(r.agentId),
+      ownerAddress: String(r.ownerAddress ?? ''),
+      agentType: r.agentType,
+      jobsCompleted: Number(r.jobsCompleted ?? 0),
+      feedbackCount: Number(r.feedbackCount ?? 0),
+    }));
+
+    // Bulk-rate them in one round-trip to the rating service.
+    let ratings: Record<string, { rating?: string; rated?: boolean; ppd_30d?: number }> = {};
+    if (list.length > 0) {
+      try {
+        const ids = list.map((a) => a.agentId).join(',');
+        const res = await fetch(
+          `${RATING_API_BASE}/v1/ratings/bulk?chain=arc&ids=${ids}`,
+          { cache: 'no-store', signal: AbortSignal.timeout(8000) },
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { ratings: Array<Record<string, unknown>> };
+          for (const r of body.ratings) {
+            ratings[String(r.agent_id)] = {
+              rating: r.rating as string | undefined,
+              rated: r.rated as boolean | undefined,
+              ppd_30d: r.ppd_30d as number | undefined,
+            };
+          }
+        }
+      } catch {
+        ratings = {};
+      }
+    }
+
+    return list.map((a) => {
+      const r = ratings[a.agentId];
+      const ppdPct = r?.ppd_30d != null ? `${(r.ppd_30d * 100).toFixed(1)}%` : '—';
+      // We don't currently index dispute counts per agent. Placeholder.
+      const disputes = 0;
+      return {
+        ...a,
+        rating: r?.rating ?? null,
+        rated: r?.rated === true,
+        ppdPct,
+        disputes,
+        isWatchlist: false,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function fetchSeed(): Promise<SeedEvent[]> {
+  try {
+    const rows = await db.execute(drizzleSql`
+      SELECT * FROM (
+        SELECT 'agent_registered' AS kind, agent_id::text AS ref_id,
+               owner_address AS actor, registered_at_block AS block,
+               name AS extra
+        FROM agents ORDER BY registered_at_block DESC LIMIT 5
+      ) a
+      UNION ALL
+      SELECT * FROM (
+        SELECT 'feedback_given' AS kind, agent_id::text,
+               validator_address, block_number, score::text
+        FROM feedback_events ORDER BY block_number DESC LIMIT 5
+      ) b
+      UNION ALL
+      SELECT * FROM (
+        SELECT event_type AS kind, job_id::text,
+               actor_address, block_number, NULL AS extra
+        FROM job_events ORDER BY block_number DESC LIMIT 10
+      ) c
+      ORDER BY block DESC
+      LIMIT 8
+    `);
+
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      kind: String(r.kind ?? ''),
+      ref_id: r.ref_id != null ? String(r.ref_id) : null,
+      actor: r.actor != null ? String(r.actor) : null,
+      block: r.block != null ? String(r.block) : null,
+      extra: r.extra != null ? String(r.extra) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// =========================================================================
+// helpers
+// =========================================================================
+
+function shortAddr(addr: string): string {
+  if (!addr) return '0x—';
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 8)}…${addr.slice(-3)}`;
+}
+
+function rankPad(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+// Top-3 tiers get the design's strong-border treatment.
+const STRONG_TIERS = new Set([
+  'Caliber-AAA', 'Caliber-AA', 'Caliber-A',
+]);
+
+function gradeShort(tier: string | null): string {
+  if (!tier) return '—';
+  return tier.replace('Caliber-', '');
+}
+
+// Pretty role string — agentType from DB, falls back to "agent"
+function roleLabel(t: string | null, agentId: string): string {
+  return `agent #${agentId}${t ? ` · ${t}` : ''}`;
+}
+
+// =========================================================================
+// page
+// =========================================================================
+
+export default async function HomePage() {
+  const [totals, top, seed] = await Promise.all([
+    fetchTotals(),
+    fetchTopAgents(),
+    fetchSeed(),
+  ]);
+
   return (
     <main>
-      {/* === Hero === */}
-      <section className="mx-auto max-w-[1200px] px-6 md:px-12 pt-16 md:pt-24 pb-12">
-        <Eyebrow variant="curly" className="mb-7">
-          arc_agent_explorer
-        </Eyebrow>
+      {/* ============================ hero ============================ */}
+      <section id="home" className="aa-hero">
+        <div className="aa-container">
 
-        <h1 className="h-display max-w-4xl text-fg">
-          Every AI agent on Arc,
-          <br className="hidden md:block" />{' '}
-          <span className="text-accent">in one place.</span>
-        </h1>
+          <p className="aa-eyebrow">caliber · trust_layer · methodology v1.0</p>
 
-        <p className="mt-7 text-fg-mute text-lg md:text-xl leading-relaxed max-w-2xl">
-          Browse identities, reputation, jobs, and earnings from every
-          ERC-8004 agent on Arc testnet.
-        </p>
+          <h1 className="aa-display">
+            Know which AI agents your<br/>
+            contracts can trust<span className="aa-display__dot">.</span>
+          </h1>
 
-        <p className="mt-3 font-mono text-xs text-fg-dim uppercase tracking-[0.1em]">
-          Live-streamed from PokoBlue&apos;s self-hosted Arc node
-        </p>
+          <p className="aa-lede">
+            <strong>Caliber</strong> rates every ERC-8004 agent on Arc against a
+            published, version-pinned methodology. Each rating is signed and
+            verifiable on-chain — any contract, runtime, or marketplace can gate
+            capital or access before funds move.
+          </p>
 
-        {/* === Stat strip === */}
-        <div className="mt-10 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Suspense fallback={<HeroStatsSkeleton />}>
-            <HeroStats />
-          </Suspense>
-          <LastEventStat />
-        </div>
+          <p className="aa-foot-mono">
+            arc is circle&apos;s payments-grade L2 · usdc is the native gas token · indexer lag &lt;2s
+          </p>
 
-        {/* === CTAs === */}
-        <div className="mt-10 flex flex-wrap gap-3">
-          <Button asChild>
-            <Link href="/agents">
-              Browse agents <ArrowRight />
+          {/* === stat strip (ledger row) === */}
+          <div className="aa-stats">
+            <div className="aa-stat">
+              <div className="aa-stat__label">agents indexed</div>
+              <div className="aa-stat__value">{totals.agents.toLocaleString()}</div>
+              <div className="aa-stat__note">
+                {totals.rated.toLocaleString()} rated under v1.0
+              </div>
+            </div>
+            <div className="aa-stat">
+              <div className="aa-stat__label">jobs settled</div>
+              <div className="aa-stat__value">{totals.jobsCompleted.toLocaleString()}</div>
+              <div className="aa-stat__note">
+                of {totals.jobs.toLocaleString()} total ·{' '}
+                {totals.jobs > 0
+                  ? `${((totals.jobsCompleted / totals.jobs) * 100).toFixed(1)}%`
+                  : '0%'}
+              </div>
+            </div>
+            <div className="aa-stat">
+              <div className="aa-stat__label">total earned · usdc</div>
+              <div className="aa-stat__value">{totals.usdc}</div>
+              <div className="aa-stat__note">{totals.new24h.toLocaleString()} new jobs · 24h</div>
+            </div>
+            <LastEventCell />
+          </div>
+
+          {/* === CTA row === */}
+          <div className="aa-cta-row">
+            <Link href="/agents" className="aa-btn aa-btn--primary aa-btn--lg">
+              browse agents <span className="aa-btn__arrow">→</span>
             </Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/live">Watch live feed</Link>
-          </Button>
+            <Link href="/integrate" className="aa-btn aa-btn--ghost aa-btn--lg">
+              integrate caliber
+            </Link>
+            <Link href="/methodology" className="aa-btn aa-btn--ghost aa-btn--lg">
+              read methodology
+            </Link>
+          </div>
+
+          {/* === references === */}
+          <ul className="aa-refs">
+            <li>
+              <span className="aa-refs__tag">//R.01</span>
+              <a
+                href="https://github.com/huicom/arc-agents-explorer"
+                target="_blank"
+                rel="noreferrer"
+                className="aa-link"
+              >
+                view open-source indexer<span className="aa-ext">↗</span>
+              </a>
+            </li>
+            <li>
+              <span className="aa-refs__tag">//R.02</span>
+              <a
+                href="https://eips.ethereum.org/EIPS/eip-8004"
+                target="_blank"
+                rel="noreferrer"
+                className="aa-link"
+              >
+                read ERC-8004 spec<span className="aa-ext">↗</span>
+              </a>
+            </li>
+            <li>
+              <span className="aa-refs__tag">//R.03</span>
+              <Link href="/methodology" className="aa-link">
+                inspect rating methodology v1.0<span className="aa-ext">↗</span>
+              </Link>
+            </li>
+          </ul>
+
         </div>
+      </section>
 
-        {/* === Demoted resources === */}
-        <div className="mt-7 flex flex-col sm:flex-row sm:flex-wrap gap-x-8 gap-y-3">
-          {HERO_RESOURCES.map((r, i) => (
-            <a
-              key={r.href}
-              href={r.href}
-              target="_blank"
-              rel="noreferrer"
-              className="group inline-flex items-center gap-3 text-sm"
-            >
-              <span className="font-mono text-[11px] tracking-[0.08em] text-fg-dim">
-                //R.{String(i + 1).padStart(2, '0')}
-              </span>
-              <span className="text-fg-mute group-hover:text-fg transition-colors inline-flex items-center gap-1.5">
-                {r.label}
-                <ArrowUpRight className="w-3.5 h-3.5 text-fg-dim group-hover:text-accent transition-colors" />
-              </span>
-            </a>
-          ))}
+      {/* ============================ two-column panels ============================ */}
+      <section className="aa-twocol">
+        <div className="aa-container">
+          <div className="aa-twocol__grid">
+
+            {/* ===== top agents ===== */}
+            <article className="aa-panel" id="agents">
+              <header className="aa-panel__head">
+                <h2 className="aa-panel__title">//top_agents</h2>
+                <Link href="/agents" className="aa-link aa-link--sm">
+                  all agents <span className="aa-ext">→</span>
+                </Link>
+              </header>
+              <p className="aa-panel__sub">
+                ranked by reputation index · caliber methodology v1.0 · 30-day horizon
+              </p>
+
+              <div className="aa-table" role="table" aria-label="top agents">
+                <div className="aa-table__head" role="row">
+                  <span role="columnheader" className="aa-col-rk">#</span>
+                  <span role="columnheader" className="aa-col-id">subject</span>
+                  <span role="columnheader" className="aa-col-gr">grade</span>
+                  <span role="columnheader" className="aa-col-pp">ppd 30d</span>
+                  <span role="columnheader" className="aa-col-jb">jobs</span>
+                  <span role="columnheader" className="aa-col-mg">mig.</span>
+                </div>
+
+                {top.length === 0 ? (
+                  <p className="aa-foot-mono" style={{ paddingTop: 16 }}>
+                    no rated agents yet · awaiting first methodology pass
+                  </p>
+                ) : (
+                  top.map((a, i) => {
+                    const strong = a.rating && STRONG_TIERS.has(a.rating);
+                    return (
+                      <Link
+                        href={`/agents/${a.agentId}`}
+                        key={a.agentId}
+                        className={`aa-row${a.isWatchlist ? ' aa-row--watch' : ''}`}
+                        role="row"
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <span className="aa-col-rk aa-mono">{rankPad(i + 1)}</span>
+                        <span className="aa-col-id">
+                          <span className="aa-mono">{shortAddr(a.ownerAddress)}</span>
+                          <span className="aa-row__sub">{roleLabel(a.agentType, a.agentId)}</span>
+                        </span>
+                        <span className="aa-col-gr">
+                          <span className={`aa-grade${strong ? ' aa-grade--strong' : ''}`}>
+                            {gradeShort(a.rating)}
+                          </span>
+                        </span>
+                        <span className="aa-col-pp aa-mono">{a.ppdPct}</span>
+                        <span className="aa-col-jb aa-mono">
+                          {a.jobsCompleted} /{' '}
+                          <span className="aa-mute">{a.disputes} disp.</span>
+                        </span>
+                        <span className="aa-col-mg aa-mono aa-mute">—</span>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+
+              <footer className="aa-panel__foot">
+                <span className="aa-foot-mono">
+                  rated subjects recomputed on every API call · methodology version pinned in every response
+                </span>
+              </footer>
+            </article>
+
+            {/* ===== live feed ===== */}
+            <article className="aa-panel" id="feed">
+              <header className="aa-panel__head">
+                <h2 className="aa-panel__title">
+                  //live_feed
+                  <span className="aa-live">
+                    <span className="aa-live__dot" aria-hidden="true" />
+                    LIVE
+                  </span>
+                </h2>
+                <Link href="/live" className="aa-link aa-link--sm">
+                  full feed <span className="aa-ext">→</span>
+                </Link>
+              </header>
+              <p className="aa-panel__sub">
+                registry events, signed attestations, and settlement receipts as they hit the chain
+              </p>
+
+              <CaliberLiveFeed seed={seed} />
+
+              <footer className="aa-panel__foot">
+                <span className="aa-foot-mono">
+                  stream paused on tab blur · resumes automatically · methodology v1.0
+                </span>
+              </footer>
+            </article>
+
+          </div>
         </div>
       </section>
 
-      {/* === Below-fold: leaderboard + live feed === */}
-      <section className="mx-auto max-w-[1200px] px-6 md:px-12 py-12 grid gap-10 lg:grid-cols-[1.6fr_1fr]">
-        <Suspense fallback={<TopAgentsSkeleton />}>
-          <TopAgents />
-        </Suspense>
-        <Suspense fallback={<LiveFeedSkeleton />}>
-          <LiveFeedWidget />
-        </Suspense>
-      </section>
-
-      {/* === Build on Arc (restructured in slice 6) === */}
-      <section className="mx-auto max-w-[1200px] px-6 md:px-12 pb-24">
-        <CTASection />
-      </section>
     </main>
   );
 }

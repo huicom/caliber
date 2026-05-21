@@ -398,3 +398,57 @@ export function parseLog(log: Log): ParsedEvent | null {
   if (!decoder) return null;
   return decoder(log);
 }
+
+export interface ContractAddresses {
+  identity: `0x${string}`;
+  reputation: `0x${string}`;
+  validation: `0x${string}`;
+  agenticCommerce: `0x${string}`;
+}
+
+export function createParseLog(addrs: ContractAddresses): (log: Log) => ParsedEvent | null {
+  const decoders: Record<string, (log: Log) => ParsedEvent | null> = {
+    [addrs.identity.toLowerCase()]: (log) => {
+      const topic = log.topics[0]?.toLowerCase();
+      if (topic === EVENT_TOPICS.Registered.toLowerCase())
+        return decodeRegistered(log);
+      return null;
+    },
+    [addrs.reputation.toLowerCase()]: (log) => {
+      const topic = log.topics[0]?.toLowerCase();
+      if (topic === EVENT_TOPICS.NewFeedback.toLowerCase())
+        return decodeNewFeedback(log);
+      return null;
+    },
+    [addrs.validation.toLowerCase()]: (log) => {
+      const topic = log.topics[0]?.toLowerCase();
+      if (topic === EVENT_TOPICS.ValidationRequest.toLowerCase())
+        return decodeValidationRequest(log);
+      if (topic === EVENT_TOPICS.ValidationResponse.toLowerCase())
+        return decodeValidationResponse(log);
+      return null;
+    },
+    [addrs.agenticCommerce.toLowerCase()]: (log) => {
+      const topic = log.topics[0]?.toLowerCase();
+      if (topic === EVENT_TOPICS.JobCreated.toLowerCase())
+        return decodeJobCreated(log);
+      if (topic === EVENT_TOPICS.BudgetSet.toLowerCase())
+        return decodeBudgetSet(log);
+      if (topic === EVENT_TOPICS.JobFunded.toLowerCase())
+        return decodeJobFunded(log);
+      if (topic === EVENT_TOPICS.JobSubmitted.toLowerCase())
+        return decodeJobSubmitted(log);
+      if (topic === EVENT_TOPICS.JobCompleted.toLowerCase())
+        return decodeJobCompleted(log);
+      if (topic === EVENT_TOPICS.JobRejected.toLowerCase())
+        return decodeJobRejected(log);
+      return null;
+    },
+  };
+
+  return (log: Log): ParsedEvent | null => {
+    const decoder = decoders[log.address.toLowerCase()];
+    if (!decoder) return null;
+    return decoder(log);
+  };
+}

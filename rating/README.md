@@ -1,6 +1,6 @@
-# ArcAgents Rating Service
+# Caliber Rating Service
 
-On-chain credit rating for ERC-8004 AI agents. Computes PD (Probability of Default), LGD (Loss Given Default), and EAD (Exposure At Default) from agent feedback history, validation status, and job performance, then assigns a tier from Arc-AAA to Arc-D.
+On-chain credit rating for ERC-8004 AI agents. Computes PD (Probability of Default), LGD (Loss Given Default), and EAD (Exposure At Default) from agent feedback history, validation status, and job performance, then assigns a tier from Caliber-AAA to Caliber-D.
 
 ## API
 

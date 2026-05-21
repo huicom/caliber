@@ -1,6 +1,6 @@
 import { config, IPFS_CONCURRENCY, IPFS_TIMEOUT_MS, IPFS_GATEWAY } from './config';
 import { db, agents, type AgentMetadata } from '@arc-agents/db';
-import { eq, and, isNull, isNotNull } from 'drizzle-orm';
+import { eq, and, isNull, isNotNull, gt, asc } from 'drizzle-orm';
 import { publicClient } from './viem';
 import { IDENTITY_ABI } from './abis';
 import { logger } from './logger';
@@ -40,18 +40,30 @@ export async function fetchTokenURI(agentId: bigint): Promise<string | null> {
 }
 
 export async function backfillMissingMetadata(): Promise<void> {
+  // Cursor-paginate by agent_id so IPFS fetch failures skip forward instead
+  // of looping forever on the same NULL-metadata batch.
   let total = 0;
+  let fetched = 0;
+  let cursor = 0n;
+  const BATCH = 500;
 
   while (true) {
     const missing = await db
       .select()
       .from(agents)
-      .where(and(isNull(agents.metadata), isNotNull(agents.metadataUri)))
-      .limit(500);
+      .where(
+        and(
+          isNull(agents.metadata),
+          isNotNull(agents.metadataUri),
+          gt(agents.agentId, cursor),
+        ),
+      )
+      .orderBy(asc(agents.agentId))
+      .limit(BATCH);
 
     if (missing.length === 0) break;
 
-    logger.info(`Found ${missing.length} agents needing metadata (total so far: ${total})`);
+    logger.info(`Fetching metadata for ${missing.length} agents (cursor: ${cursor}, total scanned: ${total}, fetched: ${fetched})`);
 
     const queue = [...missing];
     const workers = Array.from({ length: IPFS_CONCURRENCY }, async () => {
@@ -71,13 +83,15 @@ export async function backfillMissingMetadata(): Promise<void> {
               updatedAt: new Date(),
             })
             .where(eq(agents.agentId, agent.agentId));
+          fetched++;
         }
       }
     });
 
     await Promise.all(workers);
     total += missing.length;
+    cursor = missing[missing.length - 1].agentId;
   }
 
-  logger.info(`Metadata backfill complete — ${total} agents processed`);
+  logger.info(`Metadata backfill complete — ${total} scanned, ${fetched} fetched`);
 }

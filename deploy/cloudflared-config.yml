@@ -1,7 +1,18 @@
 tunnel: 980afb78-474d-476b-a506-6a95cd8ded2a
 credentials-file: /home/huicom/.cloudflared/980afb78-474d-476b-a506-6a95cd8ded2a.json
 
+# Caliber routes — managed in the Cloudflare dashboard. This file mirrors
+# the dashboard state for reproducibility. After renaming hostnames in the
+# dashboard, restart cloudflared to pick up the changes.
 ingress:
-  - hostname: arcagents.poko.blue
+  # public web (Next.js)
+  - hostname: caliber.poko.blue
     service: http://localhost:3000
+
+  # public rating API (Express). Single-level subdomain per Cloudflare Tunnel
+  # constraint — hyphen instead of "api.caliber.poko.blue".
+  - hostname: caliber-api.poko.blue
+    service: http://localhost:3100
+
+  # catch-all
   - service: http_status:404

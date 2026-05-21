@@ -125,7 +125,13 @@ function JobList() {
           ))}
         </div>
       ) : jobs.length === 0 ? (
-        <div className="text-text-dim text-center py-12">No jobs found.</div>
+        <div className="text-center py-16">
+          <p className="text-text-dim text-lg mb-2">No jobs yet</p>
+          <p className="text-text-dim text-sm mb-6">Jobs will appear here once they are posted on-chain.</p>
+          <Button variant="outline" onClick={() => router.push('/jobs/new')}>
+            Post a Job
+          </Button>
+        </div>
       ) : (
         <>
           <Table>

@@ -2,180 +2,139 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Github, Menu } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  useLive,
-  useNowTick,
-  formatRelative,
-} from '@/components/live/LiveContext';
 import { cn } from '@/lib/utils';
+import { ConnectKitButton } from 'connectkit';
+import { LiveTicker } from '@/components/home/LiveTicker';
 
-const NAV_LINKS = [
-  { href: '/', label: 'Home' },
-  { href: '/agents', label: 'Agents' },
-  { href: '/jobs', label: 'Jobs' },
-  { href: '/live', label: 'Live Feed' },
-  { href: '/stats', label: 'Stats' },
+interface SubItem {
+  href: string;
+  label: string;
+}
+
+interface NavItem {
+  label: string;
+  /** Single-link items use `href`. Groups use `children`. */
+  href?: string;
+  children?: SubItem[];
+}
+
+const NAV: NavItem[] = [
+  { label: 'home', href: '/' },
+  { label: 'agents', href: '/agents' },
+  {
+    label: 'jobs',
+    children: [
+      { href: '/jobs', label: 'jobs' },
+      { href: '/jobs/new', label: 'post a job' },
+      { href: '/live', label: 'live feed' },
+    ],
+  },
+  { label: 'methodology', href: '/methodology' },
+  {
+    label: 'stats',
+    children: [
+      { href: '/stats', label: 'stats' },
+      { href: '/integrate', label: 'integrate' },
+    ],
+  },
 ];
 
-function ArcMark({ className }: { className?: string }) {
-  // Flat geometric mark — an upward arc + a dot underneath.
-  // Reads as "arc" both visually and semantically. Uses currentColor
-  // so it inherits whatever color the parent sets.
+/**
+ * Caliber aperture mark — concentric rings with a copper datum dot.
+ * SVG inherits `currentColor` from its link.
+ */
+function ApertureMark({ size = 22 }: { size?: number }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-      className={className}
-    >
-      <path
-        d="M3 17 A 9 9 0 0 1 21 17"
-        stroke="currentColor"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="20" r="1.4" fill="currentColor" />
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" className="aa-brand__mark">
+      <circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="20" cy="12" r="1.4" fill="var(--color-copper)" />
     </svg>
   );
 }
 
-function LiveCursor() {
-  useNowTick(1000);
-  const { lastBlock, lastEventAt, isConnected } = useLive();
-  const ago = formatRelative(lastEventAt);
-
-  return (
-    <div className="hidden sm:flex items-center gap-2 pl-4 ml-1 border-l border-border h-6">
-      <span
-        className={cn(
-          'live-pulse',
-          !isConnected && 'opacity-40 [&::after]:!hidden',
-        )}
-        aria-hidden
-      />
-      <span className="font-mono text-xs text-fg-mute">
-        {lastBlock ? (
-          <>
-            <span className="text-fg-dim">#</span>
-            <span className="text-fg">
-              {Number(lastBlock).toLocaleString()}
-            </span>
-            {ago ? (
-              <span className="text-fg-dim ml-2">· {ago}</span>
-            ) : null}
-          </>
-        ) : (
-          <span className="text-fg-dim">connecting…</span>
-        )}
-      </span>
-    </div>
-  );
+function isItemActive(item: NavItem, pathname: string): boolean {
+  if (item.href) return pathname === item.href;
+  return Boolean(item.children?.some((c) => c.href === pathname));
 }
 
 export function Nav() {
   const pathname = usePathname();
 
   return (
-    <TooltipProvider delayDuration={150}>
-      <nav className="sticky top-0 z-50 border-b border-border bg-bg/85 backdrop-blur supports-[backdrop-filter]:bg-bg/70">
-        <div className="mx-auto max-w-[1200px] flex items-center justify-between px-6 md:px-12 h-14">
-          {/* === Left: brand + live cursor === */}
-          <div className="flex items-center gap-3 min-w-0">
-            <Link
-              href="/"
-              className="flex items-center gap-2.5 text-accent shrink-0"
-            >
-              <ArcMark className="w-5 h-5" />
-              <span className="font-semibold text-fg tracking-tight text-[15px]">
-                ArcAgents
-              </span>
-            </Link>
-            <LiveCursor />
-          </div>
+    <header className="aa-header">
+      <div className="aa-container aa-header__row">
 
-          {/* === Center: links === */}
-          <div className="hidden md:flex items-center gap-6">
-            {NAV_LINKS.map((l) => {
-              const active = pathname === l.href;
+        <Link href="/" className="aa-brand" aria-label="arc agents home">
+          <ApertureMark />
+          <span className="aa-brand__word">
+            caliber<span className="aa-brand__dot">.</span>
+          </span>
+        </Link>
+
+        <LiveTicker />
+
+        <nav className="aa-nav" aria-label="primary">
+          {NAV.map((item) => {
+            const active = isItemActive(item, pathname);
+
+            // Plain link
+            if (item.href && !item.children) {
               return (
                 <Link
-                  key={l.href}
-                  href={l.href}
-                  className={cn(
-                    'relative font-mono text-[13px] tracking-wide transition-colors py-1 border-b-2 border-transparent',
-                    active
-                      ? 'border-accent text-fg'
-                      : 'text-fg-mute hover:text-fg',
-                  )}
+                  key={item.label}
+                  href={item.href}
+                  className={cn('aa-nav__link', active && 'aa-nav__link--active')}
                 >
-                  {l.label}
+                  {item.label}
                 </Link>
               );
-            })}
-          </div>
+            }
 
-          {/* === Right: testnet pill + github + mobile menu === */}
-          <div className="flex items-center gap-3">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="font-mono text-[10.5px] uppercase tracking-[0.15em] px-2 py-1 rounded border border-border-hi text-fg-mute cursor-default select-none"
-                  tabIndex={0}
+            // Group with submenu
+            return (
+              <div key={item.label} className="aa-nav__group">
+                <button
+                  type="button"
+                  className={cn('aa-nav__link', active && 'aa-nav__link--active')}
+                  aria-haspopup="menu"
+                  aria-expanded="false"
                 >
-                  Testnet
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                Arc testnet · chain 5042002
-              </TooltipContent>
-            </Tooltip>
-
-            <a
-              href="https://github.com/huicom/arc-agents-explorer"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="GitHub repository"
-              className="text-fg-dim hover:text-fg transition-colors"
-            >
-              <Github className="w-4 h-4" />
-            </a>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="md:hidden text-fg-mute hover:text-fg"
-                aria-label="Open menu"
-              >
-                <Menu className="w-5 h-5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {NAV_LINKS.map((l) => (
-                  <DropdownMenuItem key={l.href} asChild>
+                  {item.label}
+                  <span className="aa-nav__group__chev" aria-hidden="true">▾</span>
+                </button>
+                <div className="aa-nav__sub" role="menu">
+                  {item.children?.map((c) => (
                     <Link
-                      href={l.href}
-                      className="font-mono text-[13px]"
+                      key={c.href}
+                      href={c.href}
+                      role="menuitem"
+                      className={cn(
+                        'aa-nav__sub__link',
+                        pathname === c.href && 'aa-nav__sub__link--active',
+                      )}
                     >
-                      {l.label}
+                      {c.label}
                     </Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="aa-header__right">
+          {/* ConnectKit renders its own DOM; we wrap so the visual matches `.aa-btn--primary`. */}
+          <ConnectKitButton.Custom>
+            {({ isConnected, show, truncatedAddress }) => (
+              <button type="button" onClick={show} className="aa-btn aa-btn--primary">
+                {isConnected ? truncatedAddress : 'connect wallet'}
+              </button>
+            )}
+          </ConnectKitButton.Custom>
         </div>
-      </nav>
-    </TooltipProvider>
+      </div>
+    </header>
   );
 }

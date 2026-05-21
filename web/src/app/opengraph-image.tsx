@@ -60,7 +60,7 @@ export default async function Image() {
             marginBottom: 32,
           }}
         >
-          {'{arc_agent_explorer}'}
+          {'{caliber · arc agents}'}
         </div>
 
         {/* Mark + wordmark */}

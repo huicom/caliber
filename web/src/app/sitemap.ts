@@ -3,7 +3,7 @@ import { count } from 'drizzle-orm';
 import type { MetadataRoute } from 'next';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://arcagents.poko.blue';
+  const baseUrl = 'https://caliber.poko.blue';
 
   const staticRoutes = [
     { url: baseUrl, lastModified: new Date(), changeFrequency: 'hourly' as const, priority: 1 },

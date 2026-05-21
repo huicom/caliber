@@ -6,6 +6,7 @@ import {
   jsonb,
   numeric,
   integer,
+  smallint,
   timestamp,
   index,
 } from 'drizzle-orm/pg-core';
@@ -180,3 +181,31 @@ export const indexerState = pgTable('indexer_state', {
   value: text('value').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const jobDrafts = pgTable(
+  'job_drafts',
+  {
+    draftId: text('draft_id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    draftHash: text('draft_hash').notNull(),
+    chainId: text('chain_id').notNull().default('arc'),
+    poster: text('poster').notNull(),
+    targetAgentId: text('target_agent_id').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    budgetUsdc: text('budget_usdc').notNull(),
+    minTier: smallint('min_tier').notNull(),
+    minConfidence: smallint('min_confidence').notNull(),
+    deadline: timestamp('deadline', { withTimezone: true }).notNull(),
+    onchainJobId: text('onchain_job_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    posterIdx: index('idx_job_drafts_poster').on(table.poster),
+    draftHashIdx: index('idx_job_drafts_hash').on(table.draftHash),
+  }),
+);
+
+export type JobDraft = typeof jobDrafts.$inferSelect;
+export type NewJobDraft = typeof jobDrafts.$inferInsert;

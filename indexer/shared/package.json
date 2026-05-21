@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@arc-agents/db": "workspace:*"
+    "@arc-agents/db": "workspace:*",
+    "drizzle-orm": "^0.42.0",
+    "viem": "^2.27.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, type StatsResponse } from '@/lib/api';
+import { api, type StatsResponse, type RatingDistribution } from '@/lib/api';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -21,6 +22,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from 'recharts';
 
 export default function StatsPage() {
@@ -28,10 +30,16 @@ export default function StatsPage() {
   const [timeseries, setTimeseries] = useState<
     Array<{ day: string; agents: number; jobs: number; usdc: string }>
   >([]);
+  const [distribution, setDistribution] = useState<RatingDistribution | null>(null);
+  const [distributionError, setDistributionError] = useState(false);
 
   useEffect(() => {
     api.stats().then(setStats).catch(() => {});
     api.timeseries().then(setTimeseries).catch(() => {});
+    api
+      .ratingDistribution('arc')
+      .then(setDistribution)
+      .catch(() => setDistributionError(true));
   }, []);
 
   if (!stats) {
@@ -81,6 +89,11 @@ export default function StatsPage() {
         />
       </div>
 
+      <RatingDistributionSection
+        distribution={distribution}
+        errored={distributionError}
+      />
+
       {chartData.length > 0 && (
         <>
           <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -91,20 +104,20 @@ export default function StatsPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222838" />
-                    <XAxis dataKey="day" tick={{ fill: '#9095A6', fontSize: 12 }} />
-                    <YAxis tick={{ fill: '#9095A6', fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E1E5EA" />
+                    <XAxis dataKey="day" tick={{ fill: '#4A5460', fontSize: 12 }} />
+                    <YAxis tick={{ fill: '#4A5460', fontSize: 12 }} />
                     <Tooltip
                       contentStyle={{
-                        background: '#12151F',
-                        border: '1px solid #222838',
+                        background: '#FFFFFF',
+                        border: '1px solid #E1E5EA',
                         borderRadius: '8px',
                       }}
                     />
                     <Line
                       type="monotone"
                       dataKey="agents"
-                      stroke="#5B5BD6"
+                      stroke="#0066FF"
                       strokeWidth={2}
                       dot={false}
                     />
@@ -120,17 +133,17 @@ export default function StatsPage() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222838" />
-                    <XAxis dataKey="day" tick={{ fill: '#9095A6', fontSize: 12 }} />
-                    <YAxis tick={{ fill: '#9095A6', fontSize: 12 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E1E5EA" />
+                    <XAxis dataKey="day" tick={{ fill: '#4A5460', fontSize: 12 }} />
+                    <YAxis tick={{ fill: '#4A5460', fontSize: 12 }} />
                     <Tooltip
                       contentStyle={{
-                        background: '#12151F',
-                        border: '1px solid #222838',
+                        background: '#FFFFFF',
+                        border: '1px solid #E1E5EA',
                         borderRadius: '8px',
                       }}
                     />
-                    <Bar dataKey="jobs" fill="#3DDC97" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="jobs" fill="#00B894" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -144,21 +157,21 @@ export default function StatsPage() {
             <CardContent>
               <ResponsiveContainer width="100%" height={250}>
                 <AreaChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#222838" />
-                  <XAxis dataKey="day" tick={{ fill: '#9095A6', fontSize: 12 }} />
-                  <YAxis tick={{ fill: '#9095A6', fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E1E5EA" />
+                  <XAxis dataKey="day" tick={{ fill: '#4A5460', fontSize: 12 }} />
+                  <YAxis tick={{ fill: '#4A5460', fontSize: 12 }} />
                   <Tooltip
                     contentStyle={{
-                      background: '#12151F',
-                      border: '1px solid #222838',
+                      background: '#FFFFFF',
+                      border: '1px solid #E1E5EA',
                       borderRadius: '8px',
                     }}
                   />
                   <Area
                     type="monotone"
                     dataKey="usdc"
-                    stroke="#F2C744"
-                    fill="#F2C744"
+                    stroke="#0066FF"
+                    fill="#0066FF"
                     fillOpacity={0.1}
                     strokeWidth={2}
                   />
@@ -229,6 +242,186 @@ function StatCard({
       <Icon className="w-5 h-5 text-text-muted mb-3" />
       <div className="font-mono text-2xl font-bold">{value}</div>
       <div className="text-sm text-text-muted">{label}</div>
+    </div>
+  );
+}
+
+const TIER_ORDER: Array<keyof RatingDistribution['by_tier']> = [
+  'Caliber-AAA',
+  'Caliber-AA',
+  'Caliber-A',
+  'Caliber-BBB',
+  'Caliber-BB',
+  'Caliber-B',
+  'Caliber-CCC',
+  'Caliber-CC',
+  'Caliber-D',
+];
+
+const TIER_COLOR: Record<string, string> = {
+  'Caliber-AAA': '#00D4A8',
+  'Caliber-AA': '#00D4A8',
+  'Caliber-A': '#00D4A8',
+  'Caliber-BBB': '#FFB547',
+  'Caliber-BB': '#FFB547',
+  'Caliber-B': '#FF9F45',
+  'Caliber-CCC': '#FF9F45',
+  'Caliber-CC': '#FF5C5C',
+  'Caliber-D': '#FF5C5C',
+};
+
+function RatingDistributionSection({
+  distribution,
+  errored,
+}: {
+  distribution: RatingDistribution | null;
+  errored: boolean;
+}) {
+  if (errored) {
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Rating distribution</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-text-muted">
+            Rating service unreachable. Refresh in a moment, or check{' '}
+            <a
+              href="https://caliber-api.poko.blue/health"
+              className="text-accent hover:underline"
+            >
+              /health
+            </a>
+            .
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!distribution) {
+    return (
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Rating distribution</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3 text-sm text-text-muted">
+            <Skeleton className="h-4 w-4 rounded-full" />
+            Computing ratings for all rateable agents… (first load may take up to a minute; subsequent loads are cached for 5 minutes)
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const data = TIER_ORDER.map((t) => ({
+    tier: t.replace('Caliber-', ''),
+    fullTier: t,
+    count: distribution.by_tier[t] ?? 0,
+    color: TIER_COLOR[t],
+  }));
+
+  const total = distribution.total_agents;
+  const rateable = distribution.rateable_agents;
+  const ratedPct = total > 0 ? ((rateable / total) * 100).toFixed(1) : '0';
+  const meanPdPct = (distribution.mean_ppd_30d * 100).toFixed(2);
+
+  return (
+    <Card className="mb-8">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+          <span>Rating distribution</span>
+          <span className="text-xs font-mono text-text-dim">
+            {rateable.toLocaleString()} / {total.toLocaleString()} agents rated ({ratedPct}%)
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid lg:grid-cols-[1fr_auto] gap-6 items-start">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data} margin={{ top: 10, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E1E5EA" vertical={false} />
+              <XAxis dataKey="tier" tick={{ fill: '#4A5460', fontSize: 12, fontFamily: 'monospace' }} />
+              <YAxis tick={{ fill: '#4A5460', fontSize: 12 }} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E1E5EA',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                }}
+                labelFormatter={(label) => `Arc-${label}`}
+                formatter={(value: number) => [value.toLocaleString(), 'agents']}
+              />
+              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                {data.map((entry) => (
+                  <Cell key={entry.tier} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+
+          <div className="space-y-3 lg:min-w-[200px]">
+            <DistStat
+              label="Mean 30d PPD"
+              value={`${meanPdPct}%`}
+            />
+            <DistStat
+              label="High confidence"
+              value={distribution.by_confidence.high.toLocaleString()}
+              sub="≥50 interactions"
+            />
+            <DistStat
+              label="Medium"
+              value={distribution.by_confidence.medium.toLocaleString()}
+              sub="15-49 interactions"
+            />
+            <DistStat
+              label="Low"
+              value={distribution.by_confidence.low.toLocaleString()}
+              sub="5-14 interactions"
+            />
+            <DistStat
+              label="Unrated"
+              value={(
+                distribution.unrated.insufficient_interactions +
+                distribution.unrated.insufficient_history +
+                distribution.unrated.other
+              ).toLocaleString()}
+              sub={`${distribution.unrated.insufficient_history} too young · ${distribution.unrated.insufficient_interactions} too quiet`}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-border flex items-center justify-between flex-wrap gap-3 text-xs text-text-dim">
+          <span>
+            Computed{' '}
+            <time dateTime={distribution.computed_at}>
+              {new Date(distribution.computed_at).toLocaleString()}
+            </time>{' '}
+            · cached 5 min
+          </span>
+          <Link
+            href="/methodology#3-rating-scale"
+            className="text-accent hover:underline"
+          >
+            How tiers are assigned →
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DistStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-bg-elev px-3 py-2.5">
+      <div className="font-mono text-[0.65rem] uppercase tracking-wider text-text-dim">
+        {label}
+      </div>
+      <div className="font-mono text-lg text-fg tabular-nums">{value}</div>
+      {sub ? <div className="text-[0.7rem] text-text-dim">{sub}</div> : null}
     </div>
   );
 }
