@@ -146,15 +146,17 @@ Ratings are issued on the following 9-tier Caliber-* scale. The `Caliber-` prefi
 
 | Rating | PPD Range (30d) | Description |
 |--------|-----------------|-------------|
-| Caliber-AAA | < 0.5% | Highest quality, minimal performance risk |
-| Caliber-AA | 0.5% – 1.5% | Very high quality |
-| Caliber-A | 1.5% – 3.0% | Upper-medium grade |
-| Caliber-BBB | 3.0% – 6.0% | Medium grade |
-| Caliber-BB | 6.0% – 12.0% | Speculative |
-| Caliber-B | 12.0% – 20.0% | Highly speculative |
-| Caliber-CCC | 20.0% – 35.0% | Substantial risks |
-| Caliber-CC | 35.0% – 60.0% | Very high risks |
-| Caliber-D | > 60.0% or in active default | Defaulted or near-defaulted |
+| Caliber-AAA | < 0.4% | Highest quality, minimal performance risk |
+| Caliber-AA | 0.4% – 1.0% | Very high quality |
+| Caliber-A | 1.0% – 2.5% | Upper-medium grade |
+| Caliber-BBB | 2.5% – 6.0% | Medium grade |
+| Caliber-BB | 6.0% – 13.0% | Speculative |
+| Caliber-B | 13.0% – 22.0% | Highly speculative |
+| Caliber-CCC | 22.0% – 35.0% | Substantial risks |
+| Caliber-CC | 35.0% – 55.0% | Very high risks |
+| Caliber-D | > 55.0% or in active default | Defaulted or near-defaulted |
+
+*Bands reflect the v1.0.1-tuning recalibration (2026-05-21) against the first 883 rateable agents on Arc. See Appendix F for the pre-tuning bands and rationale; the formula and factor list are unchanged.*
 
 The bands are deliberately wide. Narrower bands invite false precision on a young dataset. The reasoning behind the band widths and the planned tightening schedule is in Appendix C (Calibration Philosophy).
 
@@ -164,10 +166,12 @@ Each rating includes a confidence indicator:
 
 | Confidence | Conditions |
 |------------|-----------|
-| **High** | ≥ 50 interactions in lookback window |
-| **Medium** | 15–49 interactions |
-| **Low** | 5–14 interactions; rating shown but consumers should not act on it alone |
+| **High** | ≥ 75 interactions in lookback window |
+| **Medium** | 25–74 interactions |
+| **Low** | 5–24 interactions; rating shown but consumers should not act on it alone |
 | **Insufficient** | < 5 interactions; no rating issued (see §1.5) |
+
+*Thresholds reflect the v1.0.1-tuning recalibration; see Appendix F.*
 
 The "±2% confidence interval" sometimes attached to the High tier is a planned statistical estimate based on the underlying PPD distribution. It is not yet computed for every rating in v1 — when present, the calculation method will be documented in a subsequent minor version. Until then, the confidence tier is the primary indicator of evidence sufficiency.
 
@@ -550,7 +554,7 @@ EL = PPD × LGPF × EAD
    = 270 USDC
 ```
 
-The model estimates **270 USDC of expected performance-loss exposure** for Agent A's current in-flight job book over the next 30 days. The agent's PPD of 9.0% lands in the **Caliber-BB** band (6.0%–12.0%).
+The model estimates **270 USDC of expected performance-loss exposure** for Agent A's current in-flight job book over the next 30 days. The agent's PPD of 9.0% lands in the **Caliber-BB** band (6.0%–13.0%).
 
 This example is illustrative. The actual factor weights for any published rating are documented in `rating/engine/pd.ts` (`PD_COEFFICIENTS`) and surfaced per-rating in the API under `factor_contributions`.
 

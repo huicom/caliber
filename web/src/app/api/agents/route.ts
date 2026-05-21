@@ -55,11 +55,19 @@ export async function GET(req: Request) {
     if (q.ratedOnly === 'true') {
       // Server-side approximation of "could be rated". The real rating engine
       // checks ≥5 interactions across feedback + validations + jobs and ≥14
-      // days of history; we use feedback + jobs >= 5 as a cheap pre-filter.
+      // days of history. Validations are joined via correlated subquery
+      // (uses idx_validations_agent + chain_id filter, sub-ms per row).
+      // Without this term, validation-heavy agents — including the rare
+      // Caliber-AAA tier whose rating comes mostly from clean validator
+      // history — get excluded and the AAA tier-chip filter appears empty.
       // False positives (passes filter but engine rejects) are fine — the
-      // client-side RatingBadge will fall back to "Unrated" for those rows.
+      // client-side RatingBadge falls back to "Unrated" for those rows.
       whereParts.push(
-        drizzleSql`(COALESCE(feedback_count, 0) + COALESCE(jobs_completed, 0)) >= 5`,
+        drizzleSql`(
+          COALESCE(feedback_count, 0)
+          + COALESCE(jobs_completed, 0)
+          + (SELECT COUNT(*) FROM validations v WHERE v.agent_id = agents.agent_id AND v.chain_id = agents.chain_id)
+        ) >= 5`,
       );
     }
 
