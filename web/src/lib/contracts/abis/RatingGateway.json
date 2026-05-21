@@ -1,0 +1,60 @@
+[
+  {
+    "type": "function",
+    "name": "postGatedJob",
+    "inputs": [
+      { "name": "provider", "type": "address", "internalType": "address" },
+      { "name": "evaluator", "type": "address", "internalType": "address" },
+      { "name": "expiredAt", "type": "uint256", "internalType": "uint256" },
+      { "name": "description", "type": "string", "internalType": "string" },
+      { "name": "budget", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "att",
+        "type": "tuple",
+        "internalType": "struct RatingVerifier.RatingAttestation",
+        "components": [
+          { "name": "chain", "type": "bytes32" },
+          { "name": "agentId", "type": "uint256" },
+          { "name": "agentAddress", "type": "address" },
+          { "name": "tier", "type": "uint8" },
+          { "name": "pdBps", "type": "uint16" },
+          { "name": "confidence", "type": "uint8" },
+          { "name": "methodologyVersion", "type": "bytes32" },
+          { "name": "asOf", "type": "uint64" },
+          { "name": "validUntil", "type": "uint64" },
+          { "name": "nonce", "type": "uint256" }
+        ]
+      },
+      { "name": "signature", "type": "bytes", "internalType": "bytes" },
+      { "name": "maxTierAllowed", "type": "uint8", "internalType": "uint8" },
+      { "name": "minConfidenceAllowed", "type": "uint8", "internalType": "uint8" }
+    ],
+    "outputs": [{ "name": "jobId", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "fundJob",
+    "inputs": [{ "name": "jobId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "JobPostedWithRating",
+    "inputs": [
+      { "name": "jobId", "type": "uint256", "indexed": true },
+      { "name": "poster", "type": "address", "indexed": true },
+      { "name": "agentId", "type": "uint256", "indexed": false },
+      { "name": "tier", "type": "uint8", "indexed": false },
+      { "name": "methodologyVersion", "type": "bytes32", "indexed": false }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "jobPoster",
+    "inputs": [{ "name": "jobId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  }
+]

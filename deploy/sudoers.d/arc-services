@@ -1,0 +1,32 @@
+# /etc/sudoers.d/arc-services
+#
+# Allow user `huicom` to restart / start / stop / reload the three ArcAgents
+# systemd services without a password prompt. Required so that Claude Code's
+# `!sudo systemctl restart …` shell escape works from non-tty contexts
+# (remote-control mode in particular cannot supply a sudo password).
+#
+# Scope is deliberately narrow:
+#   - Only the three named units are listed — no wildcards.
+#   - Only state-changing verbs are granted (restart/start/stop/reload).
+#   - Read-only verbs like `status` and `is-active` already work for non-root.
+#
+# Install with:
+#     sudo install -m 0440 -o root -g root \
+#         deploy/sudoers.d/arc-services /etc/sudoers.d/arc-services
+#     sudo visudo -c -f /etc/sudoers.d/arc-services
+#
+# After install, verify with:
+#     sudo -n systemctl restart arc-web    # should succeed silently
+
+huicom ALL=(root) NOPASSWD: /usr/bin/systemctl restart arc-web, \
+                            /usr/bin/systemctl restart arc-rating, \
+                            /usr/bin/systemctl restart arc-indexer-live, \
+                            /usr/bin/systemctl start   arc-web, \
+                            /usr/bin/systemctl start   arc-rating, \
+                            /usr/bin/systemctl start   arc-indexer-live, \
+                            /usr/bin/systemctl stop    arc-web, \
+                            /usr/bin/systemctl stop    arc-rating, \
+                            /usr/bin/systemctl stop    arc-indexer-live, \
+                            /usr/bin/systemctl reload  arc-web, \
+                            /usr/bin/systemctl reload  arc-rating, \
+                            /usr/bin/systemctl reload  arc-indexer-live

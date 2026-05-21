@@ -15,6 +15,13 @@
       "when": 1779170872021,
       "tag": "0001_futuristic_alex_wilder",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779266158521,
+      "tag": "0002_brainy_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

@@ -12,10 +12,20 @@ import {
 export const dynamic = 'force-dynamic';
 
 const schema = paginationSchema.extend({
-  sort: z.enum(['recent', 'reputation', 'earned', 'jobs']).default('recent'),
+  // Override the paginationSchema limit cap so a tier-filter view can fetch
+  // the full rateable set (~860 agents) in one round-trip — client-side tier
+  // filters need the full dataset to work, since the server has no rating
+  // column to filter on.
+  limit: z.coerce.number().int().min(1).max(1000).default(20),
+  sort: z.enum(['recent', 'reputation', 'earned', 'jobs', 'rating']).default('rating'),
   search: z.string().optional(),
   minReputation: z.coerce.number().min(0).max(100).optional(),
   validated: z.enum(['true', 'false']).optional(),
+  // When true, restrict to agents that *could* be rated by the rating engine
+  // — i.e. ones whose interaction count plausibly clears the §1.5 minimum
+  // (≥5). We approximate "interactions" as feedback_count + jobs_completed
+  // since validation counts are joined separately and aren't in this row.
+  ratedOnly: z.enum(['true', 'false']).optional(),
 });
 
 export async function GET(req: Request) {
@@ -42,6 +52,16 @@ export async function GET(req: Request) {
     if (q.validated === 'true') {
       whereParts.push(drizzleSql`validation_status = 'PASSED'`);
     }
+    if (q.ratedOnly === 'true') {
+      // Server-side approximation of "could be rated". The real rating engine
+      // checks ≥5 interactions across feedback + validations + jobs and ≥14
+      // days of history; we use feedback + jobs >= 5 as a cheap pre-filter.
+      // False positives (passes filter but engine rejects) are fine — the
+      // client-side RatingBadge will fall back to "Unrated" for those rows.
+      whereParts.push(
+        drizzleSql`(COALESCE(feedback_count, 0) + COALESCE(jobs_completed, 0)) >= 5`,
+      );
+    }
 
     const whereClause = whereParts.length > 0 ? and(...whereParts) : undefined;
 
@@ -55,6 +75,14 @@ export async function GET(req: Request) {
         break;
       case 'jobs':
         orderBy = desc(agents.jobsCompleted);
+        break;
+      case 'rating':
+        // No precomputed rating column — sort by total interaction count
+        // (feedback + jobs) so the most-rateable agents bubble up. The
+        // client then re-sorts the visible page by Arc-tier.
+        orderBy = desc(
+          drizzleSql`(COALESCE(feedback_count, 0) + COALESCE(jobs_completed, 0))`,
+        );
         break;
       case 'recent':
       default:

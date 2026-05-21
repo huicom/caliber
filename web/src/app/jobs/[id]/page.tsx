@@ -8,6 +8,8 @@ import { TxLink } from '@/components/ui/TxLink';
 import { formatUSDC } from '@/lib/format';
 import { CheckCircle, Circle, XCircle } from 'lucide-react';
 import Link from 'next/link';
+import { OnChainJobState } from './_components/OnChainJobState';
+import { JobActions } from './_components/JobActions';
 
 const STEP_ORDER = ['Open', 'Funded', 'Submitted', 'Completed'];
 
@@ -104,6 +106,14 @@ export default async function JobDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <div className="mb-8">
+        <OnChainJobState jobId={id} />
+      </div>
+
+      <div className="mb-8">
+        <JobActions jobId={id} />
+      </div>
 
       <Card className="mb-8">
         <CardHeader>

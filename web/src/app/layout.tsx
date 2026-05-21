@@ -1,20 +1,20 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
 import { Nav } from '@/components/site/Nav';
 import { Footer } from '@/components/site/Footer';
 import { LiveProvider } from '@/components/live/LiveContext';
 import { Toaster } from 'sonner';
+import { Web3Provider } from '@/lib/wagmi/Web3Provider';
 
 export const metadata: Metadata = {
-  title: 'ArcAgents — AI Agent Explorer for Arc',
+  title: 'Caliber — Trust layer for the Arc agent economy',
   description:
-    'Browse every ERC-8004 agent on Arc. Reputation, validations, jobs, earnings — all in one place.',
+    'Caliber rates ERC-8004 AI agents on Arc with a published methodology. Signed attestations, on-chain enforcement, Caliber-AAA … Caliber-D tiers. ',
   openGraph: {
-    title: 'ArcAgents',
-    description: 'The first agent explorer for Arc',
-    url: 'https://arcagents.poko.blue',
+    title: 'Caliber — the trust primitive for AI agent commerce on Arc',
+    description:
+      'Know which agents your contracts can trust. Published methodology, signed attestations, on-chain enforcement.',
+    url: 'https://caliber.poko.blue',
     type: 'website',
   },
 };
@@ -25,22 +25,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className="min-h-screen bg-bg text-fg">
-        <LiveProvider>
-          <Nav />
-          {children}
-          <Footer />
-        </LiveProvider>
+    <html lang="en">
+      <body className="min-h-screen">
+        <Web3Provider>
+          <LiveProvider>
+            <Nav />
+            {children}
+            <Footer />
+          </LiveProvider>
+        </Web3Provider>
         <Toaster
-          theme="dark"
+          theme="light"
           toastOptions={{
             style: {
-              background: 'var(--color-bg-elev)',
+              background: 'var(--color-bg)',
               border: '1px solid var(--color-border)',
               color: 'var(--color-fg)',
               fontFamily: 'var(--font-family-mono)',
               fontSize: '0.8125rem',
+              boxShadow: '0 12px 32px -16px rgba(11, 15, 22, 0.18)',
             },
           }}
         />

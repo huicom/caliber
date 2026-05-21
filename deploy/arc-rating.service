@@ -1,0 +1,26 @@
+[Unit]
+Description=ArcAgents Rating API (Express)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PORT=3100
+
+ExecStart=/home/huicom/.npm-global/bin/pnpm --filter @arc-agents/rating start
+
+Restart=always
+RestartSec=5
+
+StandardOutput=append:/var/log/arc-rating.log
+StandardError=append:/var/log/arc-rating-err.log
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

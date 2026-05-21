@@ -3,10 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "backfill": "tsx backfill.ts"
+  },
+  "dependencies": {
+    "@arc-agents/db": "workspace:*",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.42.0",
+    "viem": "^2.27.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }

@@ -3,9 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "RUN_INTEGRATION=1 vitest run",
+    "dev": "tsx src/server.ts",
+    "start": "tsx src/server.ts",
+    "spike:base": "tsx scripts/base-spike.ts",
+    "spike:pd": "tsx scripts/pd-sanity.ts",
+    "rate-one": "tsx scripts/rate-one.ts",
+    "backfill-registered-at": "tsx scripts/backfill-registered-at.ts"
+  },
+  "dependencies": {
+    "@arc-agents/db": "workspace:*",
+    "dotenv": "^16.5.0",
+    "drizzle-orm": "^0.42.0",
+    "express": "^5.1.0",
+    "viem": "^2.27.3",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   }
 }

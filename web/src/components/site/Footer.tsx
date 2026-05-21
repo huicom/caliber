@@ -1,160 +1,107 @@
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
-import { Eyebrow } from '@/components/ui/Eyebrow';
 
-function ArcMark({ className }: { className?: string }) {
+/**
+ * Caliber-styled aperture mark for the dark footer. Same SVG as the
+ * header Nav, but renders on the ink-dark backdrop.
+ */
+function ApertureMark() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
-      <path
-        d="M3 17 A 9 9 0 0 1 21 17"
-        stroke="currentColor"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="20" r="1.4" fill="currentColor" />
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" className="aa-brand__mark">
+      <circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth="1" />
+      <circle cx="20" cy="12" r="1.4" fill="var(--color-copper)" />
     </svg>
   );
 }
 
 const EXPLORE = [
-  { href: '/', label: 'Home' },
-  { href: '/agents', label: 'Agents' },
-  { href: '/jobs', label: 'Jobs' },
-  { href: '/live', label: 'Live Feed' },
-  { href: '/stats', label: 'Stats' },
+  { href: '/agents', label: 'agents' },
+  { href: '/jobs', label: 'jobs' },
+  { href: '/live', label: 'live feed' },
+  { href: '/stats', label: 'stats' },
 ];
 
-const ARC_ECOSYSTEM = [
-  { href: 'https://arc.network', label: 'Arc Network' },
-  { href: 'https://docs.arc.network', label: 'Arc Docs' },
-  { href: 'https://testnet.arcscan.app', label: 'ArcScan' },
-  { href: 'https://eips.ethereum.org/EIPS/eip-8004', label: 'ERC-8004 spec' },
+const METHODOLOGY = [
+  { href: '/methodology', label: 'methodology v1.0' },
+  { href: '/methodology#3-rating-scale', label: 'rating scale' },
+  { href: '/methodology#41-performance-default-definition', label: 'default definition' },
+  { href: '/methodology#45-anti-gaming-controls', label: 'anti-gaming controls' },
 ];
 
-const CONNECT = [
-  { href: 'https://discord.gg/buildonarc', label: 'Arc Discord' },
-  { href: 'https://community.arc.io', label: 'Arc House' },
-  { href: 'https://github.com/huicom/arc-agents-explorer', label: 'GitHub' },
+const BUILD = [
+  { href: '/integrate', label: 'integrate caliber' },
+  { href: '/jobs/new', label: 'demo marketplace' },
+  { href: 'https://eips.ethereum.org/EIPS/eip-8004', label: 'ERC-8004 spec ↗', external: true },
+  { href: 'https://github.com/huicom/arc-agents-explorer', label: 'github ↗', external: true },
 ];
 
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-border">
-      <div className="mx-auto max-w-[1200px] px-6 md:px-12 py-16">
-        <div className="grid gap-10 md:grid-cols-3 md:gap-16">
-          {/* === //Explore === */}
-          <div>
-            <Eyebrow variant="slash" className="mb-5">
-              Explore
-            </Eyebrow>
-            <ul className="space-y-2.5">
-              {EXPLORE.map((l) => (
-                <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="text-fg-mute hover:text-fg transition-colors text-[14px]"
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+    <footer className="aa-foot">
+      <div className="aa-container aa-foot__grid">
 
-          {/* === //Arc ecosystem (numbered resources) === */}
-          <div>
-            <Eyebrow variant="slash" className="mb-5">
-              Arc ecosystem
-            </Eyebrow>
-            <ul className="space-y-2.5">
-              {ARC_ECOSYSTEM.map((l, i) => (
-                <li key={l.href}>
-                  <a
-                    href={l.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group inline-flex items-baseline gap-3 text-[14px]"
-                  >
-                    <span className="font-mono text-[11px] tracking-[0.08em] text-fg-dim shrink-0">
-                      //R.{String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span className="text-fg-mute group-hover:text-fg transition-colors inline-flex items-center gap-1">
-                      {l.label}
-                      <ArrowUpRight className="w-3.5 h-3.5 text-fg-dim group-hover:text-accent transition-colors translate-y-[1px]" />
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* === //Connect === */}
-          <div>
-            <Eyebrow variant="slash" className="mb-5">
-              Connect
-            </Eyebrow>
-            <ul className="space-y-2.5">
-              {CONNECT.map((l) => (
-                <li key={l.href}>
-                  <a
-                    href={l.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group inline-flex items-center gap-1 text-[14px] text-fg-mute hover:text-fg transition-colors"
-                  >
-                    {l.label}
-                    <ArrowUpRight className="w-3.5 h-3.5 text-fg-dim group-hover:text-accent transition-colors" />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* === Bottom strip === */}
-      <div className="border-t border-border">
-        <div className="mx-auto max-w-[1200px] px-6 md:px-12 py-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-fg-mute">
-            <span className="flex items-center gap-2 text-accent">
-              <ArcMark className="w-4 h-4" />
-              <span className="font-semibold text-fg tracking-tight">
-                ArcAgents
-              </span>
+        <div className="aa-foot__col">
+          <Link href="/" className="aa-brand" aria-label="arc agents">
+            <ApertureMark />
+            <span className="aa-brand__word">
+              caliber<span className="aa-brand__dot">.</span>
             </span>
-            <span
-              className="font-mono text-[10.5px] uppercase tracking-[0.15em] px-2 py-0.5 rounded border border-accent/40 text-accent select-none"
-              title="Built by an independent Arc Architect"
-            >
-              {'{architect_built}'}
-            </span>
-            <a
-              href="https://poko.blue"
-              target="_blank"
-              rel="noreferrer"
-              className="group flex items-center gap-2 text-fg-dim hover:text-fg transition-colors"
-            >
-              <img
-                src="https://ipfs.io/ipfs/QmRQ6SnphN8Bepmve8VSSsdqSuEgFNbSorRhWpD824Rskh"
-                alt="PokoBlue"
-                width={20}
-                height={20}
-                loading="lazy"
-                className="rounded-full ring-1 ring-border-hi group-hover:ring-accent transition-colors"
-              />
-              <span>
-                A{' '}
-                <span className="text-fg-mute group-hover:text-accent transition-colors underline-offset-4 group-hover:underline">
-                  PokoBlue
-                </span>{' '}
-                project
-              </span>
-            </a>
-          </div>
-          <p className="text-[12px] text-fg-dim md:text-right">
-            Not affiliated with Circle or the Arc team.
+          </Link>
+          <p className="aa-foot__blurb">
+            an open-source explorer for the ERC-8004 agent registry on Arc.
+            ratings issued under a public, versioned <strong>Caliber</strong> methodology.
           </p>
         </div>
+
+        <nav className="aa-foot__col" aria-label="explore">
+          <div className="aa-foot__title">explore</div>
+          {EXPLORE.map((l) => (
+            <Link key={l.href} href={l.href} className="aa-foot__link">
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+
+        <nav className="aa-foot__col" aria-label="methodology">
+          <div className="aa-foot__title">methodology</div>
+          {METHODOLOGY.map((l) => (
+            <Link key={l.href} href={l.href} className="aa-foot__link">
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+
+        <nav className="aa-foot__col" aria-label="build">
+          <div className="aa-foot__title">build</div>
+          {BUILD.map((l) =>
+            l.external ? (
+              <a
+                key={l.href}
+                href={l.href}
+                target="_blank"
+                rel="noreferrer"
+                className="aa-foot__link"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link key={l.href} href={l.href} className="aa-foot__link">
+                {l.label}
+              </Link>
+            ),
+          )}
+        </nav>
+
+      </div>
+
+      <div className="aa-container aa-foot__ledger">
+        <span className="aa-mono aa-mute">
+          testnet · methodology v1.0 · built by pokoblue
+        </span>
+        <span className="aa-mono aa-mute">
+          © 2026 · caliber — the rating layer for the agent economy
+        </span>
       </div>
     </footer>
   );
