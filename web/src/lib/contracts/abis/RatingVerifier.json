@@ -3,97 +3,110 @@
     "type": "constructor",
     "inputs": [
       {
-        "name": "verifier_",
+        "name": "signer_",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "agenticCommerce_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "usdc_",
-        "type": "address",
-        "internalType": "address"
+        "name": "methodologyVersion_",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "agenticCommerce",
+    "name": "eip712Domain",
     "inputs": [],
     "outputs": [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC8183"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "fundJob",
-    "inputs": [
-      {
-        "name": "jobId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "jobPoster",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postGatedJob",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
+        "name": "fields",
+        "type": "bytes1",
+        "internalType": "bytes1"
       },
       {
-        "name": "evaluator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expiredAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "description",
+        "name": "name",
         "type": "string",
         "internalType": "string"
       },
       {
-        "name": "budget",
+        "name": "version",
+        "type": "string",
+        "internalType": "string"
+      },
+      {
+        "name": "chainId",
         "type": "uint256",
         "internalType": "uint256"
       },
+      {
+        "name": "verifyingContract",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "extensions",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "lastUsedNonce",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "methodologyVersion",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "previousMethodologyVersion",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "requireMinRating",
+    "inputs": [
       {
         "name": "att",
         "type": "tuple",
@@ -172,76 +185,101 @@
         "internalType": "uint8"
       }
     ],
-    "outputs": [
-      {
-        "name": "jobId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
+    "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "usdc",
-    "inputs": [],
-    "outputs": [
+    "name": "setMethodologyVersion",
+    "inputs": [
       {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
+        "name": "newVersion",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "verifier",
+    "name": "signer",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "contract RatingVerifier"
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "event",
-    "name": "JobPostedWithRating",
+    "name": "EIP712DomainChanged",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MethodologyVersionUpdated",
     "inputs": [
       {
-        "name": "jobId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "poster",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "agentId",
-        "type": "uint256",
+        "name": "newVersion",
+        "type": "bytes32",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "bytes32"
       },
       {
-        "name": "tier",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      },
-      {
-        "name": "methodologyVersion",
+        "name": "previousVersion",
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidShortString",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StringTooLong",
+    "inputs": [
+      {
+        "name": "str",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
   }
 ]

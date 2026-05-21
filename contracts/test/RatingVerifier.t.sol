@@ -26,7 +26,7 @@ contract RatingVerifierTest is Test {
     );
 
     bytes32 constant RATING_ATTESTATION_TYPEHASH = keccak256(
-        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
+        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint16 lgdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
     );
 
     function setUp() public {
@@ -54,6 +54,7 @@ contract RatingVerifierTest is Test {
             agentAddress: agentAddress,
             tier: tier,
             pdBps: 150,
+            lgdBps: 3000,
             confidence: confidence,
             methodologyVersion: methodologyVersion,
             asOf: uint64(block.timestamp),
@@ -85,6 +86,7 @@ contract RatingVerifierTest is Test {
                 att.agentAddress,
                 att.tier,
                 att.pdBps,
+                att.lgdBps,
                 att.confidence,
                 att.methodologyVersion,
                 att.asOf,

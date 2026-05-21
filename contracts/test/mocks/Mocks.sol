@@ -9,12 +9,23 @@ contract MockERC20 {
         balances[account] = amount;
     }
 
+    function balanceOf(address account) external view returns (uint256) {
+        return balances[account];
+    }
+
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool) {
         require(balances[sender] >= amount, "insufficient balance");
         require(allowances[sender][msg.sender] >= amount, "insufficient allowance");
         unchecked { balances[sender] -= amount; }
         unchecked { balances[recipient] += amount; }
-        allowances[sender][msg.sender] = 0;
+        allowances[sender][msg.sender] -= amount;
+        return true;
+    }
+
+    function transfer(address recipient, uint256 amount) external returns (bool) {
+        require(balances[msg.sender] >= amount, "insufficient balance");
+        unchecked { balances[msg.sender] -= amount; }
+        unchecked { balances[recipient] += amount; }
         return true;
     }
 
@@ -25,6 +36,14 @@ contract MockERC20 {
 }
 
 contract MockERC8183 {
+    // Status codes mirror the ERC-8183 reference deployment used on Arc.
+    uint8 public constant STATUS_OPEN = 0;
+    uint8 public constant STATUS_FUNDED = 1;
+    uint8 public constant STATUS_SUBMITTED = 2;
+    uint8 public constant STATUS_COMPLETED = 3;
+    uint8 public constant STATUS_REJECTED = 4;
+    uint8 public constant STATUS_EXPIRED = 5;
+
     uint256 public jobCounter;
     mapping(uint256 => Job) public jobs;
 
@@ -62,7 +81,7 @@ contract MockERC8183 {
             description: description,
             budget: 0,
             expiredAt: expiredAt,
-            status: 0,
+            status: STATUS_OPEN,
             hook: hook
         });
         emit JobCreated(jobId, msg.sender, provider, evaluator, expiredAt, hook);
@@ -78,9 +97,16 @@ contract MockERC8183 {
     function fund(uint256 jobId, bytes calldata) external {
         require(jobs[jobId].id != 0, "Job not found");
         require(msg.sender == jobs[jobId].client, "Unauthorized");
-        jobs[jobId].status = 1;
+        jobs[jobId].status = STATUS_FUNDED;
         fundedCalled[jobId][msg.sender] = true;
         emit JobFunded(jobId, msg.sender, jobs[jobId].budget);
+    }
+
+    // Test-only helpers so CaliberEscrow tests can simulate ERC-8183 state
+    // transitions without wiring the full job lifecycle.
+    function setStatus(uint256 jobId, uint8 newStatus) external {
+        require(jobs[jobId].id != 0, "Job not found");
+        jobs[jobId].status = newStatus;
     }
 
     function getJob(uint256 jobId)

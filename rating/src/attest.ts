@@ -186,6 +186,9 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       agentAddress: agentAddress as `0x${string}`,
       tier: TIER_MAP[result.rating] ?? 8,
       pdBps: Math.round(result.ppd_30d * 10000),
+      // Wave 2: lgdBps signed in the attestation so CaliberEscrow can price
+      // bond = budget × pd × lgd from this single signed payload.
+      lgdBps: Math.round(result.lgd * 10000),
       confidence: CONFIDENCE_MAP[result.confidence] ?? 2,
       methodologyVersion: stringToBytes32(METHODOLOGY_VERSION),
       asOf: BigInt(now),
@@ -214,6 +217,7 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
         { name: 'agentAddress', type: 'address' },
         { name: 'tier', type: 'uint8' },
         { name: 'pdBps', type: 'uint16' },
+        { name: 'lgdBps', type: 'uint16' },
         { name: 'confidence', type: 'uint8' },
         { name: 'methodologyVersion', type: 'bytes32' },
         { name: 'asOf', type: 'uint64' },

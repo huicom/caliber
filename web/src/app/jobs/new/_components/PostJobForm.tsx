@@ -82,6 +82,7 @@ interface AttestationResponse {
     agentAddress: string;
     tier: number;
     pdBps: number;
+    lgdBps: number;
     confidence: number;
     methodologyVersion: string;
     asOf: string;
@@ -329,6 +330,7 @@ export function PostJobForm() {
             agentAddress: att.agentAddress as `0x${string}`,
             tier: att.tier,
             pdBps: att.pdBps,
+            lgdBps: att.lgdBps,
             confidence: att.confidence,
             methodologyVersion: att.methodologyVersion as `0x${string}`,
             asOf: BigInt(att.asOf),
