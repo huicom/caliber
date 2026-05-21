@@ -12,6 +12,7 @@ import { arcTestnet } from '@/lib/wagmi/chains';
 import USDC_ABI from '@/lib/contracts/abis/USDC.json';
 import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
 import { type Abi, decodeEventLog } from 'viem';
+import { api, type CaliberTier } from '@/lib/api';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Caliber-gated job-posting form. Three-popup flow:
@@ -50,6 +51,27 @@ const TIER_NAME_MAP: Record<number, string> = {
   7: 'Caliber-CC',
   8: 'Caliber-D',
 };
+
+// Lower ordinal = stronger tier. minTier ordinal 3 (Caliber-BBB) allows
+// agents at ordinal 0..3 and refuses 4..8. Mirrors the contract enum.
+const TIER_TO_ORDINAL: Record<CaliberTier, number> = {
+  'Caliber-AAA': 0,
+  'Caliber-AA': 1,
+  'Caliber-A': 2,
+  'Caliber-BBB': 3,
+  'Caliber-BB': 4,
+  'Caliber-B': 5,
+  'Caliber-CCC': 6,
+  'Caliber-CC': 7,
+  'Caliber-D': 8,
+};
+
+type TargetCheck =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'rated'; rating: CaliberTier; ppd: number; confidence: string; meetsTier: boolean }
+  | { status: 'unrated'; reason: string }
+  | { status: 'error' };
 
 type Step = 'form' | 'attesting' | 'approving' | 'posting' | 'success' | 'error';
 
@@ -118,9 +140,52 @@ export function PostJobForm() {
   const [attestationData, setAttestationData] = useState<AttestationResponse | null>(null);
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
+  const [targetCheck, setTargetCheck] = useState<TargetCheck>({ status: 'idle' });
 
+  // Pre-flight tier-gap check: as soon as the user picks an agent + tier,
+  // hit /v1/ratings/bulk to surface "agent is Caliber-BB, requires Caliber-A"
+  // before they spend gas on an attestation that will refuse.
+  useEffect(() => {
+    if (!targetAgentId || !/^\d+$/.test(targetAgentId)) {
+      setTargetCheck({ status: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    setTargetCheck({ status: 'loading' });
+    const t = setTimeout(async () => {
+      try {
+        const data = await api.bulkRatings('arc', [targetAgentId]);
+        if (cancelled) return;
+        const r = data.ratings[0];
+        if (!r) {
+          setTargetCheck({ status: 'error' });
+          return;
+        }
+        if (!r.rated || !r.rating) {
+          setTargetCheck({ status: 'unrated', reason: r.reason ?? 'unrated' });
+          return;
+        }
+        const ord = TIER_TO_ORDINAL[r.rating];
+        setTargetCheck({
+          status: 'rated',
+          rating: r.rating,
+          ppd: r.ppd_30d ?? 0,
+          confidence: r.confidence ?? 'low',
+          meetsTier: ord <= minTier,
+        });
+      } catch {
+        if (!cancelled) setTargetCheck({ status: 'error' });
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [targetAgentId, minTier]);
+
+  const tierGapBlocked = targetCheck.status === 'rated' && !targetCheck.meetsTier;
   const submitDisabled =
-    !title || !description || !budget || !targetAgentId || !evaluatorAddress || !isConnected || wrongChain;
+    !title || !description || !budget || !targetAgentId || !evaluatorAddress || !isConnected || wrongChain || tierGapBlocked;
   const budgetWei = budget ? String(Math.floor(parseFloat(budget) * 1e6)) : '0';
 
   const handleAttest = useCallback(async () => {
@@ -499,6 +564,8 @@ export function PostJobForm() {
             </div>
           </div>
 
+          <TargetGateStatus check={targetCheck} minTierOrdinal={minTier} />
+
           <button
             onClick={handleAttest}
             disabled={submitDisabled}
@@ -580,6 +647,80 @@ export function PostJobForm() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function TargetGateStatus({
+  check,
+  minTierOrdinal,
+}: {
+  check: TargetCheck;
+  minTierOrdinal: number;
+}) {
+  if (check.status === 'idle') return null;
+
+  const minTierName = TIER_NAME_MAP[minTierOrdinal] ?? 'Caliber-BBB';
+
+  if (check.status === 'loading') {
+    return (
+      <div className="border border-[var(--color-hairline)] bg-[var(--color-bg-elev)] rounded-[2px] px-4 py-3 text-xs font-mono text-[var(--color-mute)]">
+        // pre-flight · checking caliber rating…
+      </div>
+    );
+  }
+
+  if (check.status === 'error') {
+    return (
+      <div className="border border-[var(--color-hairline)] bg-[var(--color-bg-elev)] rounded-[2px] px-4 py-3 text-xs font-mono text-[var(--color-mute)]">
+        // pre-flight · rating lookup failed (will retry on submit)
+      </div>
+    );
+  }
+
+  if (check.status === 'unrated') {
+    return (
+      <div className="border-l-2 border-[var(--color-copper)] bg-white rounded-[2px] px-4 py-3 text-sm">
+        <div className="font-mono text-[11px] text-[var(--color-copper)] uppercase tracking-[0.05em] mb-1">
+          ⚠ pre-flight · no rating yet
+        </div>
+        <div className="text-[var(--color-ink)]">
+          This agent has no Caliber rating (
+          <span className="font-mono text-xs">{check.reason}</span>). The attestation
+          step will refuse. Pick a more-interacted agent or one with ≥14 days history.
+        </div>
+      </div>
+    );
+  }
+
+  // status === 'rated'
+  if (check.meetsTier) {
+    return (
+      <div className="border-l-2 border-[var(--color-signal-up)] bg-white rounded-[2px] px-4 py-3 text-sm">
+        <div className="font-mono text-[11px] text-[var(--color-signal-up)] uppercase tracking-[0.05em] mb-1">
+          ✓ pre-flight · meets gate
+        </div>
+        <div className="text-[var(--color-ink)] flex items-baseline gap-3">
+          <span>
+            Agent is <strong className="font-mono">{check.rating}</strong> (
+            <span className="font-mono">{(check.ppd * 100).toFixed(2)}% PD</span>,{' '}
+            {check.confidence} confidence). Minimum: {minTierName}.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-l-2 border-[var(--color-signal-down)] bg-white rounded-[2px] px-4 py-3 text-sm">
+      <div className="font-mono text-[11px] text-[var(--color-signal-down)] uppercase tracking-[0.05em] mb-1">
+        ✗ pre-flight · blocked
+      </div>
+      <div className="text-[var(--color-ink)]">
+        Agent is <strong className="font-mono">{check.rating}</strong>, requires{' '}
+        <strong className="font-mono">{minTierName}</strong>. Lower the minimum tier or pick a
+        higher-rated agent — submit is disabled until the gap closes.
+      </div>
     </div>
   );
 }
