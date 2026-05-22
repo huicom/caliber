@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { DocShell } from '@/components/site/DocShell';
 
 const PAGE_DESCRIPTION =
   'Operational companion to the Caliber Rating Methodology v2.0. How the service is operated, what the API contract looks like, how the on-chain primitives compose, and the v1→v2 provenance lesson.';
@@ -37,31 +36,22 @@ async function loadOverview(): Promise<string> {
 export default async function MethodologyServicePage() {
   const markdown = await loadOverview();
   return (
-    <main className="mx-auto max-w-3xl px-5 py-16 sm:py-20">
-      <article
-        className="
-          prose prose-lg max-w-none
-          prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-[var(--color-fg)]
-          prose-h1:text-4xl prose-h1:mb-6 prose-h1:mt-0
-          prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-4 prose-h2:border-b prose-h2:border-[var(--color-border)] prose-h2:pb-3
-          prose-h3:text-xl prose-h3:mt-8
-          prose-h4:text-lg prose-h4:mt-6
-          prose-p:leading-relaxed prose-p:text-[var(--color-fg)]
-          prose-li:text-[var(--color-fg)] prose-li:leading-relaxed
-          prose-strong:text-[var(--color-fg)] prose-strong:font-semibold
-          prose-em:text-[var(--color-fg-mute)] prose-em:italic
-          prose-a:text-[var(--color-accent)] prose-a:no-underline hover:prose-a:underline
-          prose-blockquote:border-l-[var(--color-accent)] prose-blockquote:text-[var(--color-fg-mute)] prose-blockquote:not-italic prose-blockquote:font-normal
-          prose-code:text-[var(--color-accent)] prose-code:bg-[var(--color-bg-elev)] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-normal prose-code:before:hidden prose-code:after:hidden
-          prose-pre:bg-[var(--color-bg-elev)] prose-pre:border prose-pre:border-[var(--color-border)] prose-pre:text-[var(--color-fg)]
-          prose-hr:border-[var(--color-border)] prose-hr:my-10
-          prose-table:text-sm
-          prose-th:text-[var(--color-fg)] prose-th:border-b-[var(--color-border-hi)]
-          prose-td:text-[var(--color-fg)] prose-td:border-[var(--color-border)]
-        "
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-      </article>
-    </main>
+    <DocShell
+      crumbs={[
+        { href: '/', label: 'caliber' },
+        { href: '/docs', label: 'docs' },
+        { label: 'service' },
+      ]}
+      eyebrow="//service_companion"
+      title="Service Companion"
+      kicker="How Caliber Rating v2.0 is operated. System architecture, on-chain primitives, the API surface, data-quality disclosures, ops model, and the v1 → v2 pivot lesson."
+      markdown={markdown}
+      seeAlso={[
+        { href: '/methodology', label: 'methodology paper' },
+        { href: '/developers', label: 'developer guide' },
+        { href: '/integrate', label: 'integrate (code samples)' },
+        { href: '/builders', label: 'builders guide' },
+      ]}
+    />
   );
 }
