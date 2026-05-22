@@ -234,7 +234,16 @@ body {
  * The trigger renders identically to a sibling link; the chevron telegraphs
  * children. Submenu is a hairline-bordered paper card; rows are mono lowercase
  * links with copper hover, matching the audit-report chrome. */
-.aa-nav__group { position: relative; }
+/* The group <div> wraps a button trigger + dropdown card. It was rendering
+ * as display: block by default — wider/taller than its button content —
+ * so it landed on a different baseline than the plain <a class="aa-nav__link">
+ * siblings in the flex row. inline-flex + align-items: center makes it
+ * shrink to the trigger button and sit on the same line as anchor items. */
+.aa-nav__group {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
 .aa-nav__group__chev {
   display: inline-block;
   margin-left: 4px;
