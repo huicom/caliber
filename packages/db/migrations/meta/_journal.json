@@ -29,6 +29,13 @@
       "when": 1779409134631,
       "tag": "0003_talented_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779449675242,
+      "tag": "0004_aspiring_karen_page",
+      "breakpoints": true
     }
   ]
 }
