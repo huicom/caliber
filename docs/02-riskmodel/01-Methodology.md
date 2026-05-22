@@ -60,6 +60,10 @@ Three steps, left to right. Each step builds on the previous; each step is docum
 
 ### fig. 1 — rating pipeline
 
+![Caliber rating pipeline: Step 01 Foundation (deterministic feature summaries from on-chain events) → Step 02 Transformation (credibility weighting, forward-looking estimate, risk flags) → Step 03 Output (tier, score 0–100, confidence interval). Score composition: 50% smoothed reliability, 25% forward estimate, 15% network, 10% latency.](/methodology/rating-pipeline.png)
+
+The table below is the same diagram in copy-pasteable form for accessibility and indexing.
+
 | **Step 01 · Foundation** | **Step 02 · Transformation** | **Step 03 · Output** |
 |---|---|---|
 | **The features** | **The math** | **The rating** |
