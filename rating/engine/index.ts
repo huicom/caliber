@@ -1,8 +1,8 @@
-export { rateAgent } from './rating';
-export { computePD, PD_COEFFICIENTS, isInActiveDefault, isInactiveDefault } from './pd';
-export { computeLGD, LGD_SEGMENT_PRIORS } from './lgd';
-export { computeEAD } from './ead';
-export { classifySegment } from './segment';
+export { rateAgent, assignTier, POPULATION_COMPLETION_RATE, SCORE_WEIGHTS, TIER_GATES } from './rating';
+export { computeCompletionFeatures } from './completion-rate';
+export { credibilityBlend, credibilityWeight, DEFAULT_CREDIBILITY_CONSTANT_K } from './credibility';
+export { forwardSuccessProbability } from './survival';
+export { computeFlags, FLAG_THRESHOLDS } from './flags';
 export { buildFeatures } from './features';
 export { METHODOLOGY_VERSION } from './version';
 export type {
@@ -11,8 +11,14 @@ export type {
   RatingResult,
   RatingFactors,
   AgentFeatures,
-  AgentSegment,
-  ConfidenceTier,
   CaliberTier,
+  ConfidenceLabel,
+  RatingFlag,
   RatingView,
+} from './types';
+export {
+  TIER_ORDER,
+  TIER_ORDINAL,
+  FLAG_BIT,
+  flagsToBitfield,
 } from './types';

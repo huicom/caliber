@@ -1,65 +1,99 @@
-export type AgentSegment = 'payment-relay' | 'trading' | 'service' | 'validator';
+// Caliber Rating v2.0 — type surface.
+//
+// Major change from v1.x: the rating no longer has a probability-of-default
+// shape (PD/LGD/EAD/EL). The new shape is (tier, score 0-100, confidence,
+// flags). The methodology paper is in docs/02-riskmodel/01-Methodology.md;
+// the v2.0 provenance is in §Methodology Provenance / Appendix F.
 
-export type ConfidenceTier = 'high' | 'medium' | 'low';
+export type CaliberTier =
+  | 'Established'
+  | 'Proven'
+  | 'Emerging'
+  | 'Provisional'
+  | 'Watch'
+  | 'Inactive';
+
+export const TIER_ORDER: CaliberTier[] = [
+  'Established',
+  'Proven',
+  'Emerging',
+  'Provisional',
+  'Watch',
+  'Inactive',
+];
+
+export const TIER_ORDINAL: Record<CaliberTier, number> = {
+  Established: 0,
+  Proven: 1,
+  Emerging: 2,
+  Provisional: 3,
+  Watch: 4,
+  Inactive: 5,
+};
+
+export type ConfidenceLabel = 'high' | 'moderate' | 'low' | 'insufficient';
+
+export type RatingFlag =
+  | 'CounterpartyConcentration'
+  | 'ValidatorConcentration'
+  | 'SybilPattern'
+  | 'VolumeAnomaly'
+  | 'Dormancy';
+
+export const FLAG_BIT: Record<RatingFlag, number> = {
+  CounterpartyConcentration: 0b00001,
+  ValidatorConcentration: 0b00010,
+  SybilPattern: 0b00100,
+  VolumeAnomaly: 0b01000,
+  Dormancy: 0b10000,
+};
+
+export function flagsToBitfield(flags: RatingFlag[]): number {
+  return flags.reduce((acc, f) => acc | FLAG_BIT[f], 0);
+}
 
 export type RatingView = 'PIT' | 'TTC';
 
-export type CaliberTier =
-  | 'Caliber-AAA'
-  | 'Caliber-AA'
-  | 'Caliber-A'
-  | 'Caliber-BBB'
-  | 'Caliber-BB'
-  | 'Caliber-B'
-  | 'Caliber-CCC'
-  | 'Caliber-CC'
-  | 'Caliber-D';
+export interface RatingFactors {
+  completion_rate_raw: number;       // raw individual completion %
+  completion_rate_smoothed: number;  // credibility-weighted
+  forward_success: number;           // forward-looking probability
+  network_endorsement: number;       // 0-100
+  latency_consistency: number;       // 0-100
+  completed_jobs: number;
+  disputed_jobs: number;
+  in_flight_jobs: number;
+  unique_clients: number;
+  unique_validators: number;
+  top_client_share: number;          // [0,1]
+  top_validator_share: number;       // [0,1]
+  total_settled_usdc: string;
+  median_settled_usdc: string;
+  active_escrow_usdc: string;
+  age_days: number;
+  flag_details: Partial<Record<RatingFlag, string>>;
+}
 
 export interface RatingResponse {
   agent_id: string;
   chain_id: string;
   rated: true;
-  rating: CaliberTier;
-  ppd_30d: number;
-  lgd: number;
-  lgd_downturn: number;
-  ead_usdc: string;
-  el_usdc: string;
-  confidence: ConfidenceTier;
-  view: RatingView;
+  tier: CaliberTier;
+  score: number;                     // integer 0-100
+  confidence: ConfidenceLabel;
+  confidence_label: string;          // human-readable
+  flags: RatingFlag[];
+  interaction_count: number;
   methodology_version: string;
   computed_at: string;
+  view: RatingView;
   factors: RatingFactors;
-}
-
-export interface RatingFactors {
-  segment: AgentSegment;
-  base_ppd: number;
-  agent_age_days: number;
-  validator_diversity_index: number;
-  job_size_cv: number;
-  recent_feedback_slope: number;
-  sybil_flag: 0 | 1;
-  cross_chain_count: number;
-  validator_quality_avg: number;
-  logit: number;
-  ppd_ci: null;
-  total_terminal_jobs: number;
-  defaulted_jobs: number;
-  interaction_count: number;
-  active_default: boolean;
-  lgd_assumptions: string;
-  lookback_days: number | null;
 }
 
 export interface UnratedResponse {
   agent_id: string;
   chain_id: string;
   rated: false;
-  // unknown_identity = we have feedback/validation data for this agent ID but
-  // the agent was never observed in an AgentRegistered event (placeholder row
-  // inserted for FK safety per CLAUDE.md indexer notes). Without an on-chain
-  // owner we can't issue an attestation, so we refuse to rate.
   reason: 'insufficient_interactions' | 'insufficient_history' | 'unknown_identity';
   interactions: number;
   methodology_version: string;
@@ -67,6 +101,10 @@ export interface UnratedResponse {
 
 export type RatingResult = RatingResponse | UnratedResponse;
 
+// AgentFeatures is the raw materials buildFeatures() returns. The new engine
+// uses the same query layer as v1 — only the downstream math changed.
+// Adds clientAddresses (extracted from jobs) and jobs[].clientAddress so
+// counterparty-concentration flagging has the data it needs.
 export interface AgentFeatures {
   agentId: bigint;
   chainId: string;
@@ -88,6 +126,7 @@ export interface AgentFeatures {
   jobs: Array<{
     jobId: bigint;
     status: string;
+    clientAddress: string;
     budgetUsdc: string | null;
     completionReason: string | null;
     createdAtBlock: bigint;
