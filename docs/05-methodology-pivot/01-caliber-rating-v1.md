@@ -12,7 +12,7 @@ supersedes: "docs/02-riskmodel/01-Methodology.md (Performance-bond / PPD-LGD-EAD
 ## A Counterparty Performance Rating for On-Chain AI Agents
 
 > by PokoBlue · @PokoBlue99 · May 2026
-> Live at [arcagents.poko.blue](https://arcagents.poko.blue) *(migrating to Caliber domain — see footer)*
+> Live at [caliber.poko.blue](https://caliber.poko.blue)
 
 ---
 
@@ -262,7 +262,7 @@ On the roadmap for v1.1:
 
 ## Want to dig deeper?
 
-- **Site:** [arcagents.poko.blue](https://arcagents.poko.blue) *(Caliber domain migration in progress)*
+- **Site:** [caliber.poko.blue](https://caliber.poko.blue)
 - **Code:** [github.com/huicom/arc-agents-explorer](https://github.com/huicom/arc-agents-explorer)
 - **Issues, disagreements, requests:** open an issue on GitHub
 - **DM:** @PokoBlue99 on Twitter
