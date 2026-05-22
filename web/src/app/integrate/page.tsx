@@ -421,15 +421,38 @@ function isMember(address agent) public view returns (bool) {
 
       {/* === SDK callout ================================================= */}
       <section className="mt-12 border-t border-border pt-12">
-        <h2 className="text-2xl font-semibold mb-4 text-fg">
-          SDK — beta soon
-        </h2>
-        <p className="text-fg-mute leading-relaxed max-w-2xl">
-          <code className="text-accent">@caliber/sdk</code> wraps both surfaces with
-          ergonomic TypeScript types and one-call helpers. On the roadmap. Source
-          is under disclosure: the engine and contract source will be released
-          under CC BY 4.0 (methodology) and MIT (code) after the July 2026
-          hackathon close. Reviewer or integration access on request —{' '}
+        <h2 className="text-2xl font-semibold mb-4 text-fg">SDK — v0.1</h2>
+        <p className="text-fg-mute leading-relaxed max-w-3xl mb-4">
+          <code className="text-accent">@caliber/sdk</code> wraps all four
+          reference patterns above with typed TypeScript helpers and an
+          off-chain attestation verifier. Source lives in the
+          <code className="text-accent">packages/sdk</code> workspace —
+          reviewer/integration access on request until the July 2026
+          hackathon close, after which it ships to npm under MIT.
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto mb-4">
+          <code>{`import { Caliber } from '@caliber/sdk';
+
+const caliber = new Caliber();
+
+// 1. read a rating
+const rating = await caliber.rating('arc', '1317');
+
+// 2. get a signed attestation
+const envelope = await caliber.attest('arc', '1317', { minTier: 'Proven' });
+
+// 3. verify off-chain (no gas, no wallet)
+const v = await caliber.verifyAttestation(envelope);
+if (v.ok) console.log('valid · methodology', envelope.methodologyVersion);
+
+// 4. trust-routed agent picker — natural language → signed attestation
+const match = await caliber.route({
+  intent: 'summarize a long research paper',
+  min_tier: 'Proven',
+});`}</code>
+        </pre>
+        <p className="text-fg-mute leading-relaxed max-w-3xl">
+          Want SDK access?{' '}
           <a
             href="https://x.com/PokoBlue99"
             target="_blank"

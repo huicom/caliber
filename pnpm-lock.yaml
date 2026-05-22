@@ -102,6 +102,15 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  packages/sdk:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
+
   rating:
     dependencies:
       '@arc-agents/db':
