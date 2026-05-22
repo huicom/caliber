@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useAccount, useReadContract, useWriteContract, usePublicClient, useChainId } from 'wagmi';
 import { ConnectKitButton } from 'connectkit';
 import { type Abi } from 'viem';
@@ -245,14 +246,22 @@ export function CaliberBondPanel({
 
   return (
     <div className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-5 space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between flex-wrap gap-2">
         <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
           //caliber_bond
         </h2>
         <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
-          bond = budget × pd × lgd
+          reference implementation · bond = budget × bondBps[tier]
         </span>
       </div>
+      <p className="text-[11px] text-[var(--color-mute)] leading-snug -mt-2">
+        We built <code className="font-mono text-[var(--color-copper)]">CaliberEscrow</code> as
+        one example of consuming a Caliber attestation: the agent locks USDC sized by their tier
+        as a commitment device. The tier is the rating signal; the bond is a separate concern
+        (creates agent-side downside that ERC-8183&apos;s default refund doesn&apos;t).
+        Other contracts could consume the same attestation differently — see{' '}
+        <Link href="/integrate" className="text-[var(--color-copper)] hover:underline">/integrate</Link>.
+      </p>
 
       {error && (
         <div className="border-l-2 border-[var(--color-signal-down)] bg-white px-3 py-2 text-xs text-[var(--color-signal-down)]">

@@ -4,9 +4,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export const metadata = {
-  title: 'Caliber Rating Methodology',
+  title: 'Caliber Rating Methodology v2.0',
   description:
-    'Open performance-risk rating methodology for ERC-8004 AI agents on Arc. Estimates the probability that an agent accepts a job but fails to complete it. Caliber-AAA … Caliber-D scale. Not a bank credit rating, surety bond, or regulatory capital model.',
+    'Open counterparty performance rating methodology for ERC-8004 AI agents on Arc. Tier + score + flags, computed from on-chain track record with credibility-weighted reliability, survival analysis, and rule-based risk flags. Not a credit rating.',
 };
 
 async function loadMethodology(): Promise<string> {

@@ -192,22 +192,34 @@ If you run the same inputs and get a different rating, **we want to hear about i
 
 ---
 
-## On-Chain Consumption: Attestations and Bonds
+## The Attestation Primitive
 
-Caliber publishes every rating as a signed EIP-712 attestation that any contract on Arc can verify. The deployed `RatingVerifier` (address rotates with major versions; see the live page) checks the signature, the methodology version, freshness, and tier/flag thresholds you specify.
+**The product is the attestation, not just the rating.**
 
-One direct use of the rating is **performance bonding**. The `CaliberEscrow` contract requires an agent to lock USDC collateral proportional to their tier when they accept a gated job. The rates are configurable (admin-set, event-logged, capped at 50% of budget) and currently set to:
+Caliber publishes every rating as a **signed EIP-712 attestation** that any contract on Arc can verify and consume. The rating describes an agent's track record; the attestation makes that description composable into on-chain logic. Any contract on the chain can read a signed Caliber claim and do something with it — gate access, require collateral, weight a vote, route payments, set fees, condition disbursements.
 
-| Tier | Bond rate (% of budget) | Notes |
-|---|---|---|
-| Established | 0.5% | Strong track record earns the lowest lockup |
-| Proven | 1.5% | |
-| Emerging | 5.0% | |
-| Provisional | 15% | Higher bond compensates for thin history |
-| Watch | refused | Cannot post bond; gateway also refuses gated jobs |
-| Inactive | refused | Same |
+This is what makes Caliber a **trust primitive** rather than a dashboard. We compute and sign; the network builds on top.
 
-Material changes to the bond table follow the same 30-day notice rule as methodology version changes (see §Versioning). The current rates are part of the v2.0 launch configuration; we expect them to drift as backtests accumulate.
+### What the attestation carries
+
+Each EIP-712 `RatingAttestation` carries: the agent's chain + on-chain ID + wallet address, the tier (0–5 enum), the score (0–100), the interaction count, the flags bitfield, the methodology version, a freshness window, and a replay-protection nonce. A contract that verifies the signature against the published Caliber signer key knows the claim is current, complete, and untampered.
+
+### Reference implementations
+
+We built two reference contracts to show what consuming an attestation can look like:
+
+- **`RatingGateway`** — a thin wrapper over ERC-8183 `createJob()` that refuses jobs whose providers fall below a caller-chosen tier threshold (or trigger blocking flags). This is **access gating**: the application decides who is allowed to participate.
+- **`CaliberEscrow`** — a tier-stepped performance-bond escrow. Agents lock USDC collateral when accepting a gated job, sized by their tier. The bond returns on completion or slashes to the original client on rejection/expiry. This is **commitment device**: the application creates an additional consequence for failure beyond the ERC-8183 protocol's default refund.
+
+These are examples, not the methodology's outputs. Other contracts can consume the same attestation differently — and we expect they will. A staking module could weight votes by tier. A marketplace could set listing fees inversely to tier. A payment router could disburse to Established agents at lower latency. The attestation is the primitive; the integrations are open-ended.
+
+### A note on bonds vs. rating
+
+A bond is a *commitment device*, not a *rating signal*. The tier already tells you what the agent has shown. The bond creates a different thing: an actual consequence the agent's wallet feels when they fail. These do related but distinct work. ERC-8183 escrow already refunds the client's budget on rejection — the bond addresses something the budget refund doesn't, the agent's lack of personal downside otherwise.
+
+Bond rates are configurable on-chain (admin-set, event-logged, capped at 50% of budget). They are an **editorial market-design choice**, not an empirically calibrated default-probability estimate — there is not enough resolved-default data on a young testnet to derive them from observed failure rates. As resolved defaults accumulate, the table can be re-derived from observed failure rate × loss severity. Until then we publish them as a published schedule with a refinement path. The bond table itself lives at [`caliber.poko.blue/integrate`](/integrate) — the methodology paper does not prescribe specific rates, because rate-setting is an application-layer decision, not a rating decision.
+
+Material changes to the bond table follow the same 30-day notice rule as methodology version changes (see §Versioning).
 
 ---
 
