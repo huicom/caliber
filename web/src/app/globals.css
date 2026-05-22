@@ -210,14 +210,18 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(15, 122, 74, 0); }
 }
 
-.aa-nav { display: flex; justify-content: center; gap: 24px; }
+.aa-nav { display: flex; justify-content: center; align-items: center; gap: 24px; }
 .aa-nav__link {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   font-family: var(--font-family-sans);
   font-size: 14px;
   color: var(--color-ink);
   text-decoration: none;
+  border: 0;
   border-bottom: 1px solid transparent;
-  padding-bottom: 3px;
+  padding: 0 0 3px;
   transition: border-color var(--dur-hover) var(--ease-out-quart),
               color var(--dur-hover) var(--ease-out-quart);
   background: transparent;
