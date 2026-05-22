@@ -239,6 +239,11 @@ export const ratingSnapshots = pgTable(
     lgd: numeric('lgd', { precision: 8, scale: 6 }),
     eadUsdc: text('ead_usdc'),
     confidence: text('confidence').notNull(),
+    // Bitmask of risk flags as of this snapshot. Bits (matches engine FLAG_BIT):
+    //   0x01 CounterpartyConcentration · 0x02 ValidatorConcentration
+    //   0x04 SybilPattern · 0x08 VolumeAnomaly · 0x10 Dormancy
+    // Nullable for backwards compat with snapshots taken before flag tracking.
+    flags: smallint('flags'),
     view: text('view').notNull(),
     methodologyVersion: text('methodology_version').notNull(),
     interactionCount: integer('interaction_count'),
@@ -253,3 +258,42 @@ export const ratingSnapshots = pgTable(
 
 export type RatingSnapshot = typeof ratingSnapshots.$inferSelect;
 export type NewRatingSnapshot = typeof ratingSnapshots.$inferInsert;
+
+// Track 3 (Phase 2 voyage): tier-transition feed. One row per snapshot-to-
+// snapshot transition that is "interesting" — first rating issued, tier
+// moved up or down, flags added/removed, agent crossed into Watch or
+// Inactive. Populated by snapshot-daily.ts after the day's snapshot insert.
+//
+// Kept narrow & append-only so the Watchlist UI + RSS feed + JSON endpoint
+// can each read one table with no joins. methodology_version is included so
+// transitions are interpretable even across version bumps.
+export const tierTransitions = pgTable(
+  'tier_transitions',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
+    agentId: bigint('agent_id', { mode: 'bigint' }).notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    // Discrete change kind. Multiple transitions per day are allowed (e.g.
+    // tier_down + flag_added on the same snapshot diff). Values:
+    //   first_rating · tier_up · tier_down · flag_added · flag_removed
+    //   enter_watch · enter_inactive · exit_watch · exit_inactive
+    kind: text('kind').notNull(),
+    fromTier: text('from_tier'),
+    toTier: text('to_tier').notNull(),
+    fromFlags: smallint('from_flags'),
+    toFlags: smallint('to_flags').notNull(),
+    fromScore: smallint('from_score'),
+    toScore: smallint('to_score'),
+    methodologyVersion: text('methodology_version').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    atIdx: index('idx_transitions_at').on(table.at),
+    agentIdx: index('idx_transitions_agent').on(table.agentId, table.at),
+    kindIdx: index('idx_transitions_kind').on(table.kind, table.at),
+  }),
+);
+
+export type TierTransition = typeof tierTransitions.$inferSelect;
+export type NewTierTransition = typeof tierTransitions.$inferInsert;
