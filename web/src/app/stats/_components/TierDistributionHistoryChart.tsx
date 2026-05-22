@@ -13,20 +13,14 @@ import {
 } from 'recharts';
 import { api, type CaliberTier, type DistributionHistoryResponse } from '@/lib/api';
 
-// Color stack roughly follows the rating ladder: deep green (AAA) →
-// olive/khaki (BBB cluster center) → amber (BB) → red (CCC+). Mirrors the
-// RatingBadge palette in lighter saturations so the stacked area reads
-// cleanly at a glance.
+// Caliber Rating v2.0 tier palette (mirrors RatingBadge.tsx).
 const TIER_FILL: Record<CaliberTier, string> = {
-  'Caliber-AAA': '#00B894',
-  'Caliber-AA': '#1ABC9C',
-  'Caliber-A': '#7ED957',
-  'Caliber-BBB': '#C2A86A',
-  'Caliber-BB': '#E6A23C',
-  'Caliber-B': '#F39C12',
-  'Caliber-CCC': '#E07845',
-  'Caliber-CC': '#C0392B',
-  'Caliber-D': '#7E1B0F',
+  Established: '#00B894',
+  Proven:      '#0EA5E9',
+  Emerging:    '#14B8A6',
+  Provisional: '#94A3B8',
+  Watch:       '#F59E0B',
+  Inactive:    '#1F2937',
 };
 
 type WindowDays = 30 | 90 | 180;

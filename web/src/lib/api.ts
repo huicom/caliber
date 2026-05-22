@@ -75,23 +75,49 @@ async function ratingFetcher<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// Caliber Rating v2.0 tier scale. Order matches engine TIER_ORDINAL.
 export type CaliberTier =
-  | 'Caliber-AAA'
-  | 'Caliber-AA'
-  | 'Caliber-A'
-  | 'Caliber-BBB'
-  | 'Caliber-BB'
-  | 'Caliber-B'
-  | 'Caliber-CCC'
-  | 'Caliber-CC'
-  | 'Caliber-D';
+  | 'Established'
+  | 'Proven'
+  | 'Emerging'
+  | 'Provisional'
+  | 'Watch'
+  | 'Inactive';
+
+export const TIER_ORDER: CaliberTier[] = [
+  'Established',
+  'Proven',
+  'Emerging',
+  'Provisional',
+  'Watch',
+  'Inactive',
+];
+
+export const TIER_ORDINAL: Record<CaliberTier, number> = {
+  Established: 0,
+  Proven: 1,
+  Emerging: 2,
+  Provisional: 3,
+  Watch: 4,
+  Inactive: 5,
+};
+
+export type ConfidenceLabel = 'high' | 'moderate' | 'low' | 'insufficient';
+
+export type RatingFlag =
+  | 'CounterpartyConcentration'
+  | 'ValidatorConcentration'
+  | 'SybilPattern'
+  | 'VolumeAnomaly'
+  | 'Dormancy';
 
 export interface BulkRatingSummary {
   agent_id: string;
   rated: boolean;
-  rating?: CaliberTier;
-  ppd_30d?: number;
-  confidence?: 'high' | 'medium' | 'low';
+  tier?: CaliberTier;
+  score?: number;
+  confidence?: ConfidenceLabel;
+  flags?: RatingFlag[];
   reason?: string;
   interactions?: number;
 }
@@ -113,17 +139,18 @@ export interface RatingDistribution {
     other: number;
   };
   by_tier: Record<CaliberTier, number>;
-  by_confidence: { high: number; medium: number; low: number };
-  mean_ppd_30d: number;
+  by_confidence: { high: number; moderate: number; low: number; insufficient: number };
+  by_flag_count: { zero: number; one: number; two_or_more: number };
+  mean_score: number;
 }
 
 export interface RatingHistoryPoint {
   date: string;
   tier: CaliberTier;
-  ppd_30d: number | null;
-  lgd: number | null;
-  ead_usdc: string | null;
-  confidence: 'high' | 'medium' | 'low';
+  completion_rate_smoothed: number | null;
+  forward_success: number | null;
+  active_escrow_usdc: string | null;
+  confidence: ConfidenceLabel;
   view: 'PIT' | 'TTC';
   methodology_version: string;
   interaction_count: number | null;
@@ -154,16 +181,15 @@ export interface DistributionHistoryResponse {
 export interface ExposureSummaryByTier {
   tier: CaliberTier;
   agent_count: number;
-  ead_usdc: string;
-  el_usdc: string;
+  active_escrow_usdc: string;
 }
 
 export interface ExposureSummary {
   chain: string;
+  methodology_version: string;
   computed_at: string | null;
   total_agents: number;
-  total_ead_usdc: string;
-  total_el_usdc: string;
+  total_active_escrow_usdc: string;
   by_tier: ExposureSummaryByTier[];
 }
 

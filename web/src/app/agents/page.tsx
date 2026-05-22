@@ -29,25 +29,24 @@ import { RatingBadge } from '@/components/ui/RatingBadge';
 import { formatUSDC } from '@/lib/format';
 import { Search, Briefcase } from 'lucide-react';
 
+// Caliber Rating v2.0 tier set (strongest → weakest), with display chip
+// styling that mirrors RatingBadge.tsx.
 const ALL_TIERS: CaliberTier[] = [
-  'Caliber-AAA', 'Caliber-AA', 'Caliber-A',
-  'Caliber-BBB', 'Caliber-BB', 'Caliber-B',
-  'Caliber-CCC', 'Caliber-CC', 'Caliber-D',
+  'Established',
+  'Proven',
+  'Emerging',
+  'Provisional',
+  'Watch',
+  'Inactive',
 ];
 
-// Light-theme contrast-tuned tier chip colors. Brand hue lives in the border
-// and a faint background wash; the text uses a darker shade for AA contrast
-// on white. Mirrors the RatingBadge palette in components/ui/RatingBadge.tsx.
 const TIER_COLORS: Record<CaliberTier, string> = {
-  'Caliber-AAA': 'bg-[#00B894]/14 border-[#00B894]/55 text-[#047857]',
-  'Caliber-AA':  'bg-[#00B894]/14 border-[#00B894]/55 text-[#047857]',
-  'Caliber-A':   'bg-[#00B894]/14 border-[#00B894]/55 text-[#047857]',
-  'Caliber-BBB': 'bg-[#F59E0B]/14 border-[#F59E0B]/60 text-[#B45309]',
-  'Caliber-BB':  'bg-[#F59E0B]/14 border-[#F59E0B]/60 text-[#B45309]',
-  'Caliber-B':   'bg-[#FB923C]/14 border-[#FB923C]/60 text-[#C2410C]',
-  'Caliber-CCC': 'bg-[#FB923C]/14 border-[#FB923C]/60 text-[#C2410C]',
-  'Caliber-CC':  'bg-[#EF4444]/14 border-[#EF4444]/60 text-[#B91C1C]',
-  'Caliber-D':   'bg-[#EF4444]/14 border-[#EF4444]/60 text-[#B91C1C]',
+  Established: 'bg-[#00B894]/14 border-[#00B894]/55 text-[#047857]',
+  Proven:      'bg-[#0EA5E9]/14 border-[#0EA5E9]/55 text-[#075985]',
+  Emerging:    'bg-[#14B8A6]/14 border-[#14B8A6]/55 text-[#0F766E]',
+  Provisional: 'bg-[#94A3B8]/14 border-[#94A3B8]/55 text-[#475569]',
+  Watch:       'bg-[#F59E0B]/14 border-[#F59E0B]/55 text-[#B45309]',
+  Inactive:    'bg-[#1F2937]/14 border-[#1F2937]/55 text-[#111827]',
 };
 
 export default function AgentsPage() {
@@ -171,7 +170,7 @@ function AgentList() {
     let filtered = agents.filter((a) => {
       const r = ratings[a.agentId];
       if (!r || !r.rated) return showUnrated;
-      if (selectedTiers.size > 0 && !(r.rating && selectedTiers.has(r.rating))) return false;
+      if (selectedTiers.size > 0 && !(r.tier && selectedTiers.has(r.tier))) return false;
       return true;
     });
 
@@ -183,11 +182,10 @@ function AgentList() {
         if (!ra?.rated) return 1;
         if (!rb?.rated) return -1;
         const tierOrder: Record<CaliberTier, number> = {
-          'Caliber-AAA': 0, 'Caliber-AA': 1, 'Caliber-A': 2,
-          'Caliber-BBB': 3, 'Caliber-BB': 4, 'Caliber-B': 5,
-          'Caliber-CCC': 6, 'Caliber-CC': 7, 'Caliber-D': 8,
+          Established: 0, Proven: 1, Emerging: 2,
+          Provisional: 3, Watch: 4, Inactive: 5,
         };
-        return (tierOrder[ra.rating!] ?? 99) - (tierOrder[rb.rating!] ?? 99);
+        return (tierOrder[ra.tier!] ?? 99) - (tierOrder[rb.tier!] ?? 99);
       });
     }
 
@@ -382,7 +380,7 @@ function AgentList() {
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>Agent</TableHead>
                     <TableHead>Rating</TableHead>
-                    <TableHead className="hidden md:table-cell">PD (30d)</TableHead>
+                    <TableHead className="hidden md:table-cell">Score</TableHead>
                     <TableHead className="hidden md:table-cell">Confidence</TableHead>
                     <TableHead>Reputation</TableHead>
                     <TableHead>Jobs</TableHead>
@@ -422,7 +420,7 @@ function AgentList() {
                         </TableCell>
                         <TableCell>
                           <RatingBadge
-                            tier={r?.rating}
+                            tier={r?.tier}
                             rated={r?.rated ?? false}
                             reason={r?.reason}
                             loading={ratingsLoading && !r}
@@ -432,7 +430,7 @@ function AgentList() {
                           />
                         </TableCell>
                         <TableCell className="hidden md:table-cell font-mono text-xs text-text-dim">
-                          {r?.ppd_30d != null ? `${(r.ppd_30d / 100).toFixed(2)}%` : '—'}
+                          {r?.score != null ? r.score : '—'}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs">
                           {r?.confidence ? (
@@ -440,9 +438,11 @@ function AgentList() {
                               className={
                                 r.confidence === 'high'
                                   ? 'text-[#047857]'
-                                  : r.confidence === 'medium'
-                                    ? 'text-[#B45309]'
-                                    : 'text-[#C2410C]'
+                                  : r.confidence === 'moderate'
+                                    ? 'text-[#075985]'
+                                    : r.confidence === 'low'
+                                      ? 'text-[#B45309]'
+                                      : 'text-[#C2410C]'
                               }
                             >
                               {r.confidence}

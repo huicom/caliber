@@ -4,17 +4,19 @@
 > `docs/01-mysel-roadmap.md` (deleted 2026-05-21). Phase 0 there is fully
 > shipped; everything forward is the wave structure below.
 
-## Status snapshot — 2026-05-21
+## Status snapshot — 2026-05-22
 
 | Wave | Goal | Status |
 |---|---|---|
-| **W0** | Land in-flight working tree (engine, service, components, migration) | **✓ Shipped** — commit `915c6f2` |
-| **W1** | Job Marketplace at `/jobs/new`, tier-gated | **✓ Shipped** — form + draft API + insufficient-confidence guard + tier-gap pre-check + `/jobs` "Gated by Caliber" filter + per-row gate badge + ineligible audit signal |
-| **W2** | Caliber Escrow (bond = budget × LGD × PD) | **✓ Shipped** — CaliberEscrow at 0x0193…3DF6 on Arc Testnet, lgdBps added to signed attestation, 25/25 forge tests pass, /integrate has bond math + lifecycle |
-| **W3** | Rating Trajectory (daily snapshots + chart) | **✓ Shipped** — `rating_snapshots` table + cron + 2 API endpoints + trajectory chart on `/agents/[id]` + stacked-area on `/stats` |
-| **W4** | Validator Scoreboard (predictiveness-weighted) | Not started — unblocked by W3 |
-| **W5** | Watchlist + Downgrade Alerts | Not started — unblocked by W3 |
-| **W6** | Per-factor Audit Drill-down | Not started — independent of W2-W5 |
+| **W0** | Land in-flight working tree | ✓ Shipped (commit `915c6f2`) |
+| **W1** | Job Marketplace at `/jobs/new`, tier-gated | ✓ Shipped (v1 contracts) |
+| **W2** | Caliber Escrow v1 (bond = budget × LGD × PD) | ⚠ Shipped under v1 methodology; formula **superseded by WM tier-stepped bonds** |
+| **W3** | Rating Trajectory (daily snapshots + chart) | ✓ Shipped (engine swap done in WM; snapshot schema survives) |
+| **W3.5** | EAD/EL panels on /agents/[id] + /stats | ⚠ Shipped; EL framing reframed to "active escrow" in WM |
+| **WM** | **Methodology pivot to Caliber Rating v2.0** | **✓ Shipped** — methodology paper v2.0, engine rewritten (credibility + survival + flags), 3 contracts redeployed, web reframed, builder's guide v2 + service companion rewritten |
+| **W4** | Validator Scoreboard (predictiveness-weighted) | Not started — unblocked by W3 snapshots |
+| **W5** | Watchlist + Downgrade Alerts | Not started — unblocked by W3 snapshots |
+| **W6** | Per-factor Audit Drill-down | Not started — natural fit under v2.0 factor decomposition |
 
 ### Hard corrections vs the originating plan
 

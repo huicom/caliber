@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { sql as rawSql } from '@arc-agents/db';
+import { TIER_ORDER } from '../engine/types';
 
 const querySchema = z.object({
   chain: z.string().min(1).default('arc'),
@@ -61,21 +62,11 @@ export async function distributionHistoryRoute(req: Request, res: Response): Pro
     )) as Array<{ day: string; tier: string; count: number }>;
 
     // Pivot to wide format for the chart: one row per day, columns per tier.
-    const TIERS = [
-      'Caliber-AAA',
-      'Caliber-AA',
-      'Caliber-A',
-      'Caliber-BBB',
-      'Caliber-BB',
-      'Caliber-B',
-      'Caliber-CCC',
-      'Caliber-CC',
-      'Caliber-D',
-    ] as const;
-
+    // v2.0 tier set: Established / Proven / Emerging / Provisional / Watch /
+    // Inactive (ordered from strongest to weakest for stack rendering).
     const byDay = new Map<string, Record<string, number>>();
     for (const row of rows) {
-      const entry = byDay.get(row.day) ?? Object.fromEntries(TIERS.map((t) => [t, 0]));
+      const entry = byDay.get(row.day) ?? Object.fromEntries(TIER_ORDER.map((t) => [t, 0]));
       entry[row.tier] = row.count;
       byDay.set(row.day, entry);
     }
@@ -88,7 +79,7 @@ export async function distributionHistoryRoute(req: Request, res: Response): Pro
       chain,
       view,
       days,
-      tiers: TIERS,
+      tiers: TIER_ORDER,
       series,
     };
 

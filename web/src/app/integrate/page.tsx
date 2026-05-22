@@ -47,11 +47,15 @@ export default function IntegratePage() {
 
 # Returns:
 # { "rated": true,
-#   "rating": "Caliber-AAA",
-#   "ppd_30d": 0.0018,
-#   "confidence": "low",
-#   "methodology_version": "1.0.0",
-#   ... }`}</code>
+#   "tier": "Proven",
+#   "score": 73,
+#   "confidence": "moderate",
+#   "confidence_label": "Moderate confidence — based on 31 jobs over 4 months",
+#   "flags": [],
+#   "interaction_count": 247,
+#   "methodology_version": "2.0.0",
+#   "factors": { ... }
+# }`}</code>
           </pre>
         </section>
 
@@ -69,14 +73,18 @@ export default function IntegratePage() {
           </p>
           <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto">
             <code>{`IRatingVerifier verifier = IRatingVerifier(
-  0x32C554edA5CDD2eb94F242ebf3f38820d3C53E29
+  0xE3b1e82f1A047BC5B41d8982EaC635EC61526EE8
 );
 
 verifier.requireMinRating(
-  att,            // EIP-712 RatingAttestation
+  att,            // EIP-712 RatingAttestation (v2.0)
   signature,      // signed by Caliber
-  3,              // max tier allowed (Caliber-BBB)
-  1               // min confidence (Medium)
+  3,              // weakest tier accepted: 3 = Provisional
+                  //   (0=Established, 1=Proven, 2=Emerging,
+                  //    3=Provisional, 4=Watch, 5=Inactive)
+  0x1F            // blockingFlagMask — refuse any flagged agent
+                  //   (5 flag bits: counterparty, validator,
+                  //    sybil, volume, dormancy)
 );
 // reverts if agent doesn't qualify`}</code>
           </pre>
@@ -87,17 +95,18 @@ verifier.requireMinRating(
       <section className="mt-12 border-t border-border pt-12">
         <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-5">
           <span className="rule-accent" />
-          new · wave 2
+          performance bonds · tier-stepped
         </p>
         <h2 className="text-2xl font-semibold mb-4 text-fg">
-          Caliber as collateral — credit-priced bonds
+          Caliber as collateral — tier-stepped bonds
         </h2>
         <p className="text-fg-mute leading-relaxed max-w-3xl mb-6">
-          A Caliber rating prices an agent&apos;s skin in the game. The{' '}
-          <code className="text-accent">CaliberEscrow</code> contract reads PD
-          and LGD straight off the signed attestation and locks the agent&apos;s
-          USDC bond proportional to risk. The same rating that gates a job also
-          determines how much capital the agent has to back it.
+          A Caliber tier prices an agent&apos;s skin in the game. The{' '}
+          <code className="text-accent">CaliberEscrow</code> contract reads the
+          tier off the signed v2.0 attestation and locks the agent&apos;s USDC
+          bond at a published per-tier rate. Bond rates are configurable
+          on-chain (owner-set, event-logged, ≤50% safety cap); changes follow
+          the methodology §9 governance rule.
         </p>
 
         <div className="grid gap-6 lg:grid-cols-2 mb-6">
@@ -106,12 +115,14 @@ verifier.requireMinRating(
               {'{'}formula{'}'}
             </p>
             <pre className="bg-bg p-3 rounded-lg border border-border text-xs">
-              <code>required_bond = budget × PD × LGD</code>
+              <code>required_bond = budget × bondBps[tier] / 10_000</code>
             </pre>
             <p className="text-fg-mute text-sm mt-3 leading-relaxed">
-              PD = probability of performance default (30-day).{' '}
-              LGD = loss given failure, segment-specific (§5.3 of the
-              methodology). Both signed in the EIP-712 attestation.
+              Each tier carries a basis-points bond rate. No PD × LGD product,
+              no expected-loss math: just a published tier and a published rate.
+              Caliber v2.0 swapped to this shape because the credit-rating
+              vocabulary (PD, LGD, EAD, EL) overclaimed what a young dataset
+              can support.
             </p>
           </div>
 
@@ -123,40 +134,41 @@ verifier.requireMinRating(
               <thead className="text-fg-dim">
                 <tr>
                   <th className="text-left pb-2">tier</th>
-                  <th className="text-left pb-2">pd</th>
-                  <th className="text-left pb-2">lgd</th>
+                  <th className="text-left pb-2">rate</th>
                   <th className="text-right pb-2">bond</th>
                 </tr>
               </thead>
               <tbody className="text-fg">
                 <tr className="border-t border-border">
-                  <td className="py-1">Caliber-AAA</td>
-                  <td className="py-1">0.4%</td>
-                  <td className="py-1">15%</td>
-                  <td className="py-1 text-right">0.6 USDC</td>
+                  <td className="py-1">Established</td>
+                  <td className="py-1">0.5%</td>
+                  <td className="py-1 text-right">5 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1">Caliber-BBB</td>
-                  <td className="py-1">4%</td>
-                  <td className="py-1">30%</td>
-                  <td className="py-1 text-right">12 USDC</td>
+                  <td className="py-1">Proven</td>
+                  <td className="py-1">1.5%</td>
+                  <td className="py-1 text-right">15 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1">Caliber-CCC</td>
-                  <td className="py-1">30%</td>
-                  <td className="py-1">50%</td>
+                  <td className="py-1">Emerging</td>
+                  <td className="py-1">5.0%</td>
+                  <td className="py-1 text-right">50 USDC</td>
+                </tr>
+                <tr className="border-t border-border">
+                  <td className="py-1">Provisional</td>
+                  <td className="py-1">15.0%</td>
                   <td className="py-1 text-right">150 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1 text-[var(--color-signal-down)]">Caliber-D</td>
-                  <td className="py-1" colSpan={3}>
-                    <span className="text-[var(--color-signal-down)]">blocked at the gate</span>
+                  <td className="py-1 text-[var(--color-signal-down)]">Watch / Inactive</td>
+                  <td className="py-1 text-[var(--color-signal-down)]" colSpan={2}>
+                    refused at the gate
                   </td>
                 </tr>
               </tbody>
             </table>
             <p className="text-fg-mute text-xs mt-3 leading-relaxed">
-              Higher trust = lower lockup. Capital-efficient by construction.
+              Higher tier = lower lockup. Capital-efficient by construction.
             </p>
           </div>
         </div>
@@ -168,8 +180,9 @@ verifier.requireMinRating(
           <ol className="space-y-2 text-sm text-fg-mute leading-relaxed">
             <li>
               <span className="font-mono text-accent">postBond(jobId, att, sig)</span> — agent
-              calls with their own signed attestation. Contract verifies, computes bond, pulls
-              USDC. The agent must be the on-chain job&apos;s provider.
+              calls with their own signed attestation. Contract verifies, computes
+              bond from tier, pulls USDC. The agent must be the on-chain job&apos;s
+              provider.
             </li>
             <li>
               <span className="font-mono text-accent">release(jobId)</span> — anyone can call.
@@ -181,10 +194,10 @@ verifier.requireMinRating(
             </li>
           </ol>
           <pre className="bg-bg p-3 rounded-lg border border-border text-xs mt-4 overflow-x-auto">
-            <code>{`CaliberEscrow at 0x0193CB604BC0B4B8853EA45Dfdcd062aa1dc3DF6
+            <code>{`CaliberEscrow at 0xc76bb990E498ACace1ff6A83ea4CCDDa92485365
   (Arc Testnet, chain 5042002)
 
-uint256 bond = escrow.requiredBond(budget, pdBps, lgdBps);
+uint256 bond = escrow.requiredBond(budget, tierOrdinal);
 usdc.approve(address(escrow), bond);
 escrow.postBond(jobId, att, signature);`}</code>
           </pre>

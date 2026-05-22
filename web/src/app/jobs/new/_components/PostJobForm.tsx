@@ -25,51 +25,48 @@ import { api, type CaliberTier } from '@/lib/api';
  * Each error path is surfaced explicitly so the user sees a real message.
  * ────────────────────────────────────────────────────────────────────────── */
 
+// Caliber Rating v2.0 — poster selects the WEAKEST acceptable tier.
+// Bondable tiers only (Watch + Inactive are auto-refused by the escrow
+// and the gateway tier check; no point listing them as a choice).
 const TIER_OPTIONS = [
-  { value: 0, label: 'Caliber-AAA (< 0.4% PD)' },
-  { value: 1, label: 'Caliber-AA (0.4–1.0%)' },
-  { value: 2, label: 'Caliber-A (1.0–2.5%)' },
-  { value: 3, label: 'Caliber-BBB (2.5–6.0%)' },
-  { value: 4, label: 'Caliber-BB (6.0–13.0%)' },
-  { value: 5, label: 'Caliber-B (13.0–22.0%)' },
+  { value: 0, label: 'Established (only the top tier)' },
+  { value: 1, label: 'Proven or better' },
+  { value: 2, label: 'Emerging or better' },
+  { value: 3, label: 'Provisional or better (loosest)' },
 ];
 
 const CONFIDENCE_OPTIONS = [
-  { value: 0, label: 'High (≥75 interactions)' },
-  { value: 1, label: 'Medium (25–74)' },
-  { value: 2, label: 'Low (5–24, warned)' },
+  { value: 0, label: 'High (≥75 completed jobs)' },
+  { value: 1, label: 'Moderate (≥25 completed)' },
+  { value: 2, label: 'Low (≥5 completed, warned)' },
 ];
 
 const TIER_NAME_MAP: Record<number, string> = {
-  0: 'Caliber-AAA',
-  1: 'Caliber-AA',
-  2: 'Caliber-A',
-  3: 'Caliber-BBB',
-  4: 'Caliber-BB',
-  5: 'Caliber-B',
-  6: 'Caliber-CCC',
-  7: 'Caliber-CC',
-  8: 'Caliber-D',
+  0: 'Established',
+  1: 'Proven',
+  2: 'Emerging',
+  3: 'Provisional',
+  4: 'Watch',
+  5: 'Inactive',
 };
 
-// Lower ordinal = stronger tier. minTier ordinal 3 (Caliber-BBB) allows
-// agents at ordinal 0..3 and refuses 4..8. Mirrors the contract enum.
+// Lower ordinal = stronger tier. minTier ordinal 3 (Provisional) allows
+// agents at ordinal 0..3 and refuses 4..5. Mirrors the contract enum.
 const TIER_TO_ORDINAL: Record<CaliberTier, number> = {
-  'Caliber-AAA': 0,
-  'Caliber-AA': 1,
-  'Caliber-A': 2,
-  'Caliber-BBB': 3,
-  'Caliber-BB': 4,
-  'Caliber-B': 5,
-  'Caliber-CCC': 6,
-  'Caliber-CC': 7,
-  'Caliber-D': 8,
+  Established: 0,
+  Proven: 1,
+  Emerging: 2,
+  Provisional: 3,
+  Watch: 4,
+  Inactive: 5,
 };
+
+const CONFIDENCE_NAMES = ['high', 'moderate', 'low'] as const;
 
 type TargetCheck =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'rated'; rating: CaliberTier; ppd: number; confidence: string; meetsTier: boolean }
+  | { status: 'rated'; tier: CaliberTier; score: number; confidence: string; meetsTier: boolean }
   | { status: 'unrated'; reason: string }
   | { status: 'error' };
 
@@ -80,10 +77,10 @@ interface AttestationResponse {
     chain: string;
     agentId: string;
     agentAddress: string;
-    tier: number;
-    pdBps: number;
-    lgdBps: number;
-    confidence: number;
+    tier: number;             // 0=Established, 5=Inactive
+    score: number;            // 0-100
+    interactionCount: number;
+    flags: number;            // bitfield
     methodologyVersion: string;
     asOf: string;
     validUntil: string;
@@ -92,6 +89,10 @@ interface AttestationResponse {
   signature: string;
   validUntil: number;
   methodologyVersion: string;
+  tier: CaliberTier;
+  score: number;
+  confidence: string;
+  flags: string[];
 }
 
 const RATING_API_BASE =
@@ -162,15 +163,15 @@ export function PostJobForm() {
           setTargetCheck({ status: 'error' });
           return;
         }
-        if (!r.rated || !r.rating) {
+        if (!r.rated || !r.tier) {
           setTargetCheck({ status: 'unrated', reason: r.reason ?? 'unrated' });
           return;
         }
-        const ord = TIER_TO_ORDINAL[r.rating];
+        const ord = TIER_TO_ORDINAL[r.tier];
         setTargetCheck({
           status: 'rated',
-          rating: r.rating,
-          ppd: r.ppd_30d ?? 0,
+          tier: r.tier,
+          score: r.score ?? 0,
           confidence: r.confidence ?? 'low',
           meetsTier: ord <= minTier,
         });
@@ -225,9 +226,9 @@ export function PostJobForm() {
       const { draftHash: hash } = await draftRes.json();
       setDraftHash(hash);
 
-      // Step 2: signed rating attestation from Caliber
-      const tierName = TIER_NAME_MAP[minTier] ?? 'Caliber-BBB';
-      const confName = minConfidence === 0 ? 'high' : minConfidence === 1 ? 'medium' : 'low';
+      // Step 2: signed Caliber v2.0 rating attestation
+      const tierName = TIER_NAME_MAP[minTier] ?? 'Provisional';
+      const confName = CONFIDENCE_NAMES[minConfidence] ?? 'moderate';
 
       const res = await fetch(
         `${RATING_API_BASE}/v1/agents/arc/${targetAgentId}/attest`,
@@ -243,7 +244,7 @@ export function PostJobForm() {
         if (res.status === 422) {
           if (data.reason === 'insufficient_interactions' || data.reason === 'insufficient_history') {
             setError(
-              'This agent has no rating yet (insufficient confidence). Most agents need at least 5 interactions and 14 days of history.',
+              'This agent has no rating yet (insufficient interactions or history). Most agents need at least 5 completed jobs and 14 days of on-chain history.',
             );
           } else if (data.reason === 'unknown_identity') {
             setError(
@@ -251,11 +252,11 @@ export function PostJobForm() {
             );
           } else if (data.reason === 'rating_below_threshold') {
             setError(
-              `This agent's rating is below your threshold (${data.rating}). Lower the minimum or pick a higher-rated agent.`,
+              `This agent's tier (${data.tier}) does not meet your minimum (${tierName}). Lower the minimum or pick a higher-tier agent.`,
             );
           } else if (data.reason === 'confidence_below_threshold') {
             setError(
-              `This agent's confidence (${data.confidence}) is below your minimum. Allow "Low" confidence or pick a more-interacted agent.`,
+              `This agent's confidence (${data.confidence}) is below your minimum. Allow lower confidence or pick a more-interacted agent.`,
             );
           } else {
             setError(data.detail || data.reason || 'Attestation failed');
@@ -329,9 +330,9 @@ export function PostJobForm() {
             agentId: BigInt(att.agentId),
             agentAddress: att.agentAddress as `0x${string}`,
             tier: att.tier,
-            pdBps: att.pdBps,
-            lgdBps: att.lgdBps,
-            confidence: att.confidence,
+            score: att.score,
+            interactionCount: att.interactionCount,
+            flags: att.flags,
             methodologyVersion: att.methodologyVersion as `0x${string}`,
             asOf: BigInt(att.asOf),
             validUntil: BigInt(att.validUntil),
@@ -339,7 +340,7 @@ export function PostJobForm() {
           },
           attestationData.signature as `0x${string}`,
           minTier,
-          minConfidence,
+          0, // blockingFlagMask = 0 — tier check already refuses Watch/Inactive
         ],
       },
       {
@@ -662,7 +663,7 @@ function TargetGateStatus({
 }) {
   if (check.status === 'idle') return null;
 
-  const minTierName = TIER_NAME_MAP[minTierOrdinal] ?? 'Caliber-BBB';
+  const minTierName = TIER_NAME_MAP[minTierOrdinal] ?? 'Provisional';
 
   if (check.status === 'loading') {
     return (
@@ -704,8 +705,8 @@ function TargetGateStatus({
         </div>
         <div className="text-[var(--color-ink)] flex items-baseline gap-3">
           <span>
-            Agent is <strong className="font-mono">{check.rating}</strong> (
-            <span className="font-mono">{(check.ppd * 100).toFixed(2)}% PD</span>,{' '}
+            Agent is <strong className="font-mono">{check.tier}</strong> (
+            <span className="font-mono">score {check.score}</span>,{' '}
             {check.confidence} confidence). Minimum: {minTierName}.
           </span>
         </div>
@@ -719,9 +720,9 @@ function TargetGateStatus({
         ✗ pre-flight · blocked
       </div>
       <div className="text-[var(--color-ink)]">
-        Agent is <strong className="font-mono">{check.rating}</strong>, requires{' '}
+        Agent is <strong className="font-mono">{check.tier}</strong>, requires{' '}
         <strong className="font-mono">{minTierName}</strong>. Lower the minimum tier or pick a
-        higher-rated agent — submit is disabled until the gap closes.
+        higher-tier agent — submit is disabled until the gap closes.
       </div>
     </div>
   );
@@ -729,18 +730,20 @@ function TargetGateStatus({
 
 function AttestationInfo({ att }: { att: AttestationResponse }) {
   const tierName = TIER_NAME_MAP[att.attestation.tier] ?? `tier ${att.attestation.tier}`;
-  const confName =
-    att.attestation.confidence === 0 ? 'high'
-    : att.attestation.confidence === 1 ? 'medium'
-    : 'low';
   return (
     <div className="bg-[var(--color-bg-elev)] border border-[var(--color-hairline)] rounded-[2px] p-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
-      <div className="text-[var(--color-mute)]">rating</div>
+      <div className="text-[var(--color-mute)]">tier</div>
       <div className="text-[var(--color-ink)] font-medium text-right">{tierName}</div>
-      <div className="text-[var(--color-mute)]">ppd</div>
-      <div className="text-[var(--color-ink)] text-right">{(att.attestation.pdBps / 100).toFixed(2)}%</div>
+      <div className="text-[var(--color-mute)]">score</div>
+      <div className="text-[var(--color-ink)] text-right">{att.attestation.score} / 100</div>
       <div className="text-[var(--color-mute)]">confidence</div>
-      <div className="text-[var(--color-ink)] text-right">{confName}</div>
+      <div className="text-[var(--color-ink)] text-right">{att.confidence ?? '—'}</div>
+      <div className="text-[var(--color-mute)]">interactions</div>
+      <div className="text-[var(--color-ink)] text-right">{att.attestation.interactionCount}</div>
+      <div className="text-[var(--color-mute)]">flags</div>
+      <div className="text-[var(--color-ink)] text-right">
+        {att.flags && att.flags.length > 0 ? att.flags.join(', ') : 'none'}
+      </div>
       <div className="text-[var(--color-mute)]">valid until</div>
       <div className="text-[var(--color-ink)] text-right">{new Date(att.validUntil * 1000).toLocaleTimeString()}</div>
       <div className="text-[var(--color-mute)]">methodology</div>

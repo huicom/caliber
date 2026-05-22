@@ -63,6 +63,12 @@ export async function ratingHistoryRoute(req: Request, res: Response): Promise<v
       .where(and(...conditions))
       .orderBy(asc(ratingSnapshots.computedAt));
 
+    // Caliber v2.0 column reuse (per WaveM Stage B notes in snapshot-daily.ts):
+    //   ppd_30d  storage column → carries `completion_rate_smoothed`
+    //   lgd      storage column → carries `forward_success`
+    //   ead_usdc storage column → carries `active_escrow_usdc`
+    // The API response uses the v2.0 names so external consumers see the
+    // current semantics. A column-rename migration is a follow-up.
     res.json({
       chain,
       agent_id: id,
@@ -72,9 +78,9 @@ export async function ratingHistoryRoute(req: Request, res: Response): Promise<v
       history: rows.map((r) => ({
         date: r.computedAt.toISOString(),
         tier: r.tier,
-        ppd_30d: r.ppd30d ? Number(r.ppd30d) : null,
-        lgd: r.lgd ? Number(r.lgd) : null,
-        ead_usdc: r.eadUsdc,
+        completion_rate_smoothed: r.ppd30d ? Number(r.ppd30d) : null,
+        forward_success: r.lgd ? Number(r.lgd) : null,
+        active_escrow_usdc: r.eadUsdc,
         confidence: r.confidence,
         view: r.view,
         methodology_version: r.methodologyVersion,
