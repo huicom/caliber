@@ -6,6 +6,8 @@ import { ratingRoute } from './rating';
 import { attestRoute } from './attest';
 import { bulkRatingsRoute } from './bulk';
 import { distributionRoute } from './distribution';
+import { ratingHistoryRoute } from './history';
+import { distributionHistoryRoute } from './distribution-history';
 
 const app = express();
 
@@ -24,10 +26,12 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '64kb' }));
 
 app.get('/v1/agents/:chain/:id/rating', ratingRoute);
+app.get('/v1/agents/:chain/:id/rating/history', ratingHistoryRoute);
 app.post('/v1/agents/:chain/:id/attest', attestRoute);
 app.get('/v1/ratings/bulk', bulkRatingsRoute);
 app.post('/v1/ratings/bulk', bulkRatingsRoute);
 app.get('/v1/ratings/distribution', distributionRoute);
+app.get('/v1/ratings/distribution/history', distributionHistoryRoute);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

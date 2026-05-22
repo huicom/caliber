@@ -1,0 +1,12 @@
+[Unit]
+Description=Caliber daily snapshot timer (Wave 3)
+
+[Timer]
+# Fire daily at 04:00 UTC — well past any indexer catch-up bursts. Persistent
+# = true ensures missed runs (e.g. VPS reboot) trigger immediately on boot.
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

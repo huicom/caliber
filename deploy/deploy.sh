@@ -11,6 +11,8 @@ echo "📋 Installing service files..."
 sudo cp deploy/arc-indexer-live.service /etc/systemd/system/
 sudo cp deploy/arc-web.service /etc/systemd/system/
 sudo cp deploy/arc-rating.service /etc/systemd/system/
+sudo cp deploy/caliber-snapshot.service /etc/systemd/system/
+sudo cp deploy/caliber-snapshot.timer /etc/systemd/system/
 
 echo "📋 Installing nginx config (for arcagents.poko.blue only — rating uses Cloudflare Tunnel)..."
 sudo cp deploy/nginx-arcagents.conf /etc/nginx/sites-available/arcagents
@@ -21,7 +23,8 @@ echo "🔧 Creating log files..."
 sudo touch /var/log/arc-indexer.log /var/log/arc-indexer-err.log
 sudo touch /var/log/arc-web.log     /var/log/arc-web-err.log
 sudo touch /var/log/arc-rating.log  /var/log/arc-rating-err.log
-sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log
+sudo touch /var/log/caliber-snapshot.log /var/log/caliber-snapshot-err.log
+sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log
 
 echo "🔧 Reloading systemd..."
 sudo systemctl daemon-reload
@@ -35,6 +38,9 @@ sudo systemctl reload nginx
 echo "▶️  Starting services..."
 sudo systemctl enable arc-indexer-live arc-web arc-rating
 sudo systemctl restart arc-indexer-live arc-web arc-rating
+
+echo "▶️  Enabling Caliber daily snapshot timer (Wave 3)..."
+sudo systemctl enable --now caliber-snapshot.timer
 
 echo ""
 echo "✅  Deploy complete. Check status:"

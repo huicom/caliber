@@ -12,7 +12,8 @@
     "spike:base": "tsx scripts/base-spike.ts",
     "spike:pd": "tsx scripts/pd-sanity.ts",
     "rate-one": "tsx scripts/rate-one.ts",
-    "backfill-registered-at": "tsx scripts/backfill-registered-at.ts"
+    "backfill-registered-at": "tsx scripts/backfill-registered-at.ts",
+    "snapshot:daily": "tsx scripts/snapshot-daily.ts"
   },
   "dependencies": {
     "@arc-agents/db": "workspace:*",

@@ -209,3 +209,40 @@ export const jobDrafts = pgTable(
 
 export type JobDraft = typeof jobDrafts.$inferSelect;
 export type NewJobDraft = typeof jobDrafts.$inferInsert;
+
+// Wave 3 — Rating Trajectory.
+// Daily snapshot per (agent, chain, view) so the trajectory chart on the agent
+// detail page can render a tier-over-time line, the stats page can show the
+// registry's tier-mix evolution, and W4 (validator calibration) + W5
+// (downgrade alerts) have a history to diff against.
+//
+// The cron job (rating/scripts/snapshot-daily.ts) inserts one PIT row per
+// rateable agent per day. TTC rows are produced only when ≥180 days of
+// history exist (per methodology §3.3); on a young testnet that won't fire
+// for months, but the schema and view enum are ready for it.
+export const ratingSnapshots = pgTable(
+  'rating_snapshots',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    chainId: text('chain_id').notNull().default('arc'),
+    agentId: bigint('agent_id', { mode: 'bigint' }).notNull(),
+    computedAt: timestamp('computed_at', { withTimezone: true }).notNull(),
+    tier: text('tier').notNull(),
+    ppd30d: numeric('ppd_30d', { precision: 8, scale: 6 }),
+    lgd: numeric('lgd', { precision: 8, scale: 6 }),
+    eadUsdc: text('ead_usdc'),
+    confidence: text('confidence').notNull(),
+    view: text('view').notNull(),
+    methodologyVersion: text('methodology_version').notNull(),
+    interactionCount: integer('interaction_count'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    agentDayIdx: index('idx_snapshots_agent_day').on(table.agentId, table.computedAt),
+    computedAtIdx: index('idx_snapshots_computed_at').on(table.computedAt),
+    chainAgentIdx: index('idx_snapshots_chain_agent').on(table.chainId, table.agentId),
+  }),
+);
+
+export type RatingSnapshot = typeof ratingSnapshots.$inferSelect;
+export type NewRatingSnapshot = typeof ratingSnapshots.$inferInsert;

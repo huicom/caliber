@@ -117,6 +117,40 @@ export interface RatingDistribution {
   mean_ppd_30d: number;
 }
 
+export interface RatingHistoryPoint {
+  date: string;
+  tier: CaliberTier;
+  ppd_30d: number | null;
+  lgd: number | null;
+  ead_usdc: string | null;
+  confidence: 'high' | 'medium' | 'low';
+  view: 'PIT' | 'TTC';
+  methodology_version: string;
+  interaction_count: number | null;
+}
+
+export interface RatingHistoryResponse {
+  chain: string;
+  agent_id: string;
+  days: number;
+  view: 'PIT' | 'TTC' | 'all';
+  count: number;
+  history: RatingHistoryPoint[];
+}
+
+export interface DistributionHistoryPoint {
+  date: string;
+  [tier: string]: number | string;
+}
+
+export interface DistributionHistoryResponse {
+  chain: string;
+  view: 'PIT' | 'TTC';
+  days: number;
+  tiers: CaliberTier[];
+  series: DistributionHistoryPoint[];
+}
+
 export const api = {
   stats: () => fetcher<StatsResponse>('/api/stats'),
   agents: (params: Record<string, string | number>) => {
@@ -148,4 +182,21 @@ export const api = {
     ratingFetcher<BulkRatingsResponse>(`/v1/ratings/bulk?chain=${chain}&ids=${ids.join(',')}`),
   ratingDistribution: (chain: string = 'arc') =>
     ratingFetcher<RatingDistribution>(`/v1/ratings/distribution?chain=${chain}`),
+  ratingHistory: (chain: string, id: string, params: { days?: number; view?: 'PIT' | 'TTC' | 'all' } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.days) qs.set('days', String(params.days));
+    if (params.view) qs.set('view', params.view);
+    return ratingFetcher<RatingHistoryResponse>(
+      `/v1/agents/${chain}/${id}/rating/history${qs.toString() ? `?${qs}` : ''}`,
+    );
+  },
+  distributionHistory: (params: { chain?: string; days?: number; view?: 'PIT' | 'TTC' } = {}) => {
+    const qs = new URLSearchParams();
+    qs.set('chain', params.chain ?? 'arc');
+    if (params.days) qs.set('days', String(params.days));
+    if (params.view) qs.set('view', params.view);
+    return ratingFetcher<DistributionHistoryResponse>(
+      `/v1/ratings/distribution/history?${qs}`,
+    );
+  },
 };

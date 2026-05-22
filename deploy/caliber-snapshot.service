@@ -1,0 +1,22 @@
+[Unit]
+Description=Caliber daily rating snapshot (Wave 3)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+
+ExecStart=/home/huicom/.npm-global/bin/pnpm --filter @arc-agents/rating snapshot:daily
+
+StandardOutput=append:/var/log/caliber-snapshot.log
+StandardError=append:/var/log/caliber-snapshot-err.log
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

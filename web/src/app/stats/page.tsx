@@ -10,6 +10,7 @@ import { AgentAvatar } from '@/components/ui/AgentAvatar';
 import { ReputationStars } from '@/components/ui/ReputationStars';
 import { formatUSDC } from '@/lib/format';
 import { Bot, Briefcase, DollarSign } from 'lucide-react';
+import { TierDistributionHistoryChart } from './_components/TierDistributionHistoryChart';
 import {
   LineChart,
   Line,
@@ -93,6 +94,8 @@ export default function StatsPage() {
         distribution={distribution}
         errored={distributionError}
       />
+
+      <TierDistributionHistoryChart />
 
       {chartData.length > 0 && (
         <>
