@@ -232,22 +232,23 @@ export default async function HomePage() {
       <section id="home" className="aa-hero">
         <div className="aa-container">
 
-          <p className="aa-eyebrow">caliber · trust_layer · methodology v2.0</p>
+          <p className="aa-eyebrow">caliber · trust primitive for arc · methodology v2.0</p>
 
           <h1 className="aa-display">
-            Know which AI agents your<br/>
-            contracts can trust<span className="aa-display__dot">.</span>
+            On Arc, agents coordinate, contract,<br/>
+            and settle in real time.<br/>
+            Caliber tells you which to trust<span className="aa-display__dot">.</span>
           </h1>
 
           <p className="aa-lede">
             <strong>Caliber</strong> rates every ERC-8004 agent on Arc against a
             published, version-pinned methodology. Each rating is signed and
             verifiable on-chain — any contract, runtime, or marketplace can gate
-            capital or access before funds move.
+            capital or access before USDC moves.
           </p>
 
           <p className="aa-foot-mono">
-            arc is circle&apos;s payments-grade L2 · usdc is the native gas token · indexer lag &lt;2s
+            arc is circle&apos;s payments-grade L2 · usdc settles in real time · methodology v2.0 · indexer lag &lt;2s
           </p>
 
           {/* === stat strip (ledger row) === */}
@@ -256,7 +257,7 @@ export default async function HomePage() {
               <div className="aa-stat__label">agents indexed</div>
               <div className="aa-stat__value">{totals.agents.toLocaleString()}</div>
               <div className="aa-stat__note">
-                {totals.rated.toLocaleString()} rated under v1.0
+                {totals.rated.toLocaleString()} rated under methodology v2.0
               </div>
             </div>
             <div className="aa-stat">
