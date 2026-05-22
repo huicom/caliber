@@ -8,6 +8,7 @@ import { bulkRatingsRoute } from './bulk';
 import { distributionRoute } from './distribution';
 import { ratingHistoryRoute } from './history';
 import { distributionHistoryRoute } from './distribution-history';
+import { exposureSummaryRoute } from './exposure-summary';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.get('/v1/ratings/bulk', bulkRatingsRoute);
 app.post('/v1/ratings/bulk', bulkRatingsRoute);
 app.get('/v1/ratings/distribution', distributionRoute);
 app.get('/v1/ratings/distribution/history', distributionHistoryRoute);
+app.get('/v1/ratings/exposure-summary', exposureSummaryRoute);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

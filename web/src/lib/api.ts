@@ -151,6 +151,22 @@ export interface DistributionHistoryResponse {
   series: DistributionHistoryPoint[];
 }
 
+export interface ExposureSummaryByTier {
+  tier: CaliberTier;
+  agent_count: number;
+  ead_usdc: string;
+  el_usdc: string;
+}
+
+export interface ExposureSummary {
+  chain: string;
+  computed_at: string | null;
+  total_agents: number;
+  total_ead_usdc: string;
+  total_el_usdc: string;
+  by_tier: ExposureSummaryByTier[];
+}
+
 export const api = {
   stats: () => fetcher<StatsResponse>('/api/stats'),
   agents: (params: Record<string, string | number>) => {
@@ -199,4 +215,6 @@ export const api = {
       `/v1/ratings/distribution/history?${qs}`,
     );
   },
+  exposureSummary: (chain: string = 'arc') =>
+    ratingFetcher<ExposureSummary>(`/v1/ratings/exposure-summary?chain=${chain}`),
 };

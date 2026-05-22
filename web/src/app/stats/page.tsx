@@ -11,6 +11,7 @@ import { ReputationStars } from '@/components/ui/ReputationStars';
 import { formatUSDC } from '@/lib/format';
 import { Bot, Briefcase, DollarSign } from 'lucide-react';
 import { TierDistributionHistoryChart } from './_components/TierDistributionHistoryChart';
+import { ExposureSummaryPanel } from './_components/ExposureSummaryPanel';
 import {
   LineChart,
   Line,
@@ -94,6 +95,8 @@ export default function StatsPage() {
         distribution={distribution}
         errored={distributionError}
       />
+
+      <ExposureSummaryPanel />
 
       <TierDistributionHistoryChart />
 
