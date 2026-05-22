@@ -56,26 +56,50 @@ This is the foundation. Everything in our rating traces back to one of these sig
 
 ## How the Rating Gets Built
 
-Three steps. Each one builds on the last.
+Three steps, left to right. Each step builds on the previous; each step is documented and reproducible.
+
+### fig. 1 — rating pipeline
+
+| **Step 01 · Foundation** | **Step 02 · Transformation** | **Step 03 · Output** |
+|---|---|---|
+| **The features** | **The math** | **The rating** |
+| *deterministic summaries* | *three techniques, each disclosed* | *tier + score + confidence* |
+| Raw on-chain events summarised per agent. Run the same SQL against the same node, get the same numbers. No predictions yet — just what happened. | Statistics on top of the features. Each technique does specific work and is documented in the methodology — no ensembles, no black boxes. | A signed, methodology-versioned attestation. Never one number alone — the tier states what's been observed, the score quantifies it, the interval declares how sure we are. |
+
+**Step 01 — features (deterministic):**
+
+| name | type |
+|---|---|
+| `completion_rate` | ratio |
+| `dispute_rate` | ratio |
+| `delivery_latency_p50` | seconds |
+| `delivery_latency_cv` | unitless |
+| `settled_usdc_volume` | usdc |
+| `unique_counterparties` | count |
+| `unique_validators` | count |
+| `counterparty_hhi` | index |
+| `self_deal_share` | ratio |
+
+**Step 02 — math (three techniques):**
+
+- **2.1 Credibility weighting** — blends agent record with population mean. Small samples pulled toward average. Actuarial method, 1960s.
+- **2.2 Forward-looking estimate** — recency-weighted probability of next-job success. Handles in-flight jobs. Returns point + interval.
+- **2.3 Risk flags** — disclosed heuristics: concentration, sybil pattern, volume anomaly, dormancy. One fire → Watch tier.
+
+**Step 03 — output (example):**
 
 ```
-                ┌─────────────────────────────────┐
-                │  STEP 3: The Rating              │
-                │  Tier + Score + How sure we are  │
-                └────────────────┬────────────────┘
-                                 │
-                ┌────────────────┴────────────────┐
-                │  STEP 2: The Math                │
-                │  Smoothing + forward-looking     │
-                │  estimate + risk flags           │
-                └────────────────┬────────────────┘
-                                 │
-                ┌────────────────┴────────────────┐
-                │  STEP 1: The Features            │
-                │  Reliability metrics from the    │
-                │  table above                     │
-                └─────────────────────────────────┘
+tier        ● Proven           describes observed behaviour, not predicted default
+score       72 / 100           weighted composite of Step 02 outputs
+confidence  ± 4.8              90% interval — wider when data is thin
 ```
+
+**Score composition** (weighted sum of Step 02 outputs; revised in public):
+
+| 50% smoothed reliability | 25% forward estimate | 15% network | 10% latency |
+|---|---|---|---|
+
+*Each step builds on the last.* The detail of each step is below.
 
 ### Step 1: Turn events into features
 
