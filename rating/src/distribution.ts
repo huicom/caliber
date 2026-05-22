@@ -2,18 +2,7 @@ import type { Request, Response } from 'express';
 import { db, agents } from '@arc-agents/db';
 import { eq, and, gt } from 'drizzle-orm';
 import { rateAgent } from '../engine/rating';
-
-const ALL_TIERS = [
-  'Caliber-AAA',
-  'Caliber-AA',
-  'Caliber-A',
-  'Caliber-BBB',
-  'Caliber-BB',
-  'Caliber-B',
-  'Caliber-CCC',
-  'Caliber-CC',
-  'Caliber-D',
-] as const;
+import { TIER_ORDER, type CaliberTier } from '../engine/types';
 
 interface DistributionResponse {
   chain: string;
@@ -25,10 +14,11 @@ interface DistributionResponse {
     insufficient_history: number;
     other: number;
   };
-  by_tier: Record<(typeof ALL_TIERS)[number], number>;
-  by_confidence: { high: number; medium: number; low: number };
-  /** Mean PPD across all rated agents (sanity indicator). */
-  mean_ppd_30d: number;
+  by_tier: Record<CaliberTier, number>;
+  by_confidence: { high: number; moderate: number; low: number; insufficient: number };
+  by_flag_count: { zero: number; one: number; two_or_more: number };
+  /** Mean composite score across all rated agents (sanity indicator). */
+  mean_score: number;
 }
 
 interface CacheEntry {
@@ -48,16 +38,26 @@ async function computeDistribution(chain: string): Promise<DistributionResponse>
     .where(and(eq(agents.chainId, chain), gt(agents.registeredAtBlock, 0n)));
 
   const total_agents = candidates.length;
-  const tier_counts: Record<string, number> = {};
-  for (const t of ALL_TIERS) tier_counts[t] = 0;
+  const tier_counts: Record<CaliberTier, number> = {
+    Established: 0,
+    Proven: 0,
+    Emerging: 0,
+    Provisional: 0,
+    Watch: 0,
+    Inactive: 0,
+  };
   let rateable_agents = 0;
   let conf_high = 0;
-  let conf_medium = 0;
+  let conf_moderate = 0;
   let conf_low = 0;
+  let conf_insufficient = 0;
+  let flag_zero = 0;
+  let flag_one = 0;
+  let flag_multi = 0;
   let unrated_insufficient_interactions = 0;
   let unrated_insufficient_history = 0;
   let unrated_other = 0;
-  let pd_sum = 0;
+  let score_sum = 0;
 
   const BATCH_SIZE = 25;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
@@ -81,12 +81,21 @@ async function computeDistribution(chain: string): Promise<DistributionResponse>
         continue;
       }
       rateable_agents++;
-      tier_counts[r.rating] = (tier_counts[r.rating] ?? 0) + 1;
+      tier_counts[r.tier] = (tier_counts[r.tier] ?? 0) + 1;
       if (r.confidence === 'high') conf_high++;
-      else if (r.confidence === 'medium') conf_medium++;
+      else if (r.confidence === 'moderate') conf_moderate++;
       else if (r.confidence === 'low') conf_low++;
-      pd_sum += r.ppd_30d;
+      else conf_insufficient++;
+      if (r.flags.length === 0) flag_zero++;
+      else if (r.flags.length === 1) flag_one++;
+      else flag_multi++;
+      score_sum += r.score;
     }
+  }
+
+  // Sanity: ensure all tier keys are present even if zero
+  for (const t of TIER_ORDER) {
+    if (tier_counts[t] === undefined) tier_counts[t] = 0;
   }
 
   return {
@@ -99,9 +108,19 @@ async function computeDistribution(chain: string): Promise<DistributionResponse>
       insufficient_history: unrated_insufficient_history,
       other: unrated_other,
     },
-    by_tier: tier_counts as Record<(typeof ALL_TIERS)[number], number>,
-    by_confidence: { high: conf_high, medium: conf_medium, low: conf_low },
-    mean_ppd_30d: rateable_agents > 0 ? pd_sum / rateable_agents : 0,
+    by_tier: tier_counts,
+    by_confidence: {
+      high: conf_high,
+      moderate: conf_moderate,
+      low: conf_low,
+      insufficient: conf_insufficient,
+    },
+    by_flag_count: {
+      zero: flag_zero,
+      one: flag_one,
+      two_or_more: flag_multi,
+    },
+    mean_score: rateable_agents > 0 ? score_sum / rateable_agents : 0,
   };
 }
 

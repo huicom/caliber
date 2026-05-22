@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { rateAgent } from '../engine/rating';
-import type { RatingResult } from '../engine/types';
+import type { RatingResult, CaliberTier, ConfidenceLabel, RatingFlag } from '../engine/types';
 
 const bodySchema = z.object({
   chain: z.string().min(1),
@@ -13,14 +13,16 @@ const querySchema = z.object({
   ids: z.string().regex(/^[\d,]+$/),
 });
 
+// v2.0 shape: tier + score + confidence + flags. Drops rating/ppd_30d/lgd.
 interface BulkSummary {
   agent_id: string;
   rated: boolean;
-  rating?: string;
-  ppd_30d?: number;
-  confidence?: 'high' | 'medium' | 'low';
-  reason?: string;
+  tier?: CaliberTier;
+  score?: number;
+  confidence?: ConfidenceLabel;
+  flags?: RatingFlag[];
   interactions?: number;
+  reason?: string;
 }
 
 function summarize(result: RatingResult): BulkSummary {
@@ -35,10 +37,11 @@ function summarize(result: RatingResult): BulkSummary {
   return {
     agent_id: result.agent_id,
     rated: true,
-    rating: result.rating,
-    ppd_30d: result.ppd_30d,
+    tier: result.tier,
+    score: result.score,
     confidence: result.confidence,
-    interactions: result.factors.interaction_count,
+    flags: result.flags,
+    interactions: result.interaction_count,
   };
 }
 

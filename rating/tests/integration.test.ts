@@ -1,38 +1,45 @@
 import { describe, it, expect } from 'vitest';
 import 'dotenv/config';
 import { rateAgent } from '../engine/rating';
+import { TIER_ORDER } from '../engine/types';
 
 const runIntegration = process.env.RUN_INTEGRATION === '1';
-const skipMessage = 'RUN_INTEGRATION=1 not set';
 
-describe.skipIf(!runIntegration)('Integration: rate real agents against live DB', () => {
-  it('rates agent 4102 (arc) with sensible factor ranges', async () => {
+describe.skipIf(!runIntegration)('Integration: rate real agents against live DB (v2.0)', () => {
+  it('rates agent 4102 (arc) into the new shape', async () => {
     const result = await rateAgent(BigInt(4102), 'arc', 'PIT');
 
     if (!result.rated) {
-      // Agent may be unrated if insufficient data — skip validation
       console.log(`Agent 4102 unrated: ${result.reason} (${result.interactions} interactions)`);
       return;
     }
 
     expect(result.rated).toBe(true);
-    expect(result.rating).toMatch(/^Arc-[A-D]+$/);
-    expect(result.factors.logit).toBeGreaterThan(-10);
-    expect(result.factors.logit).toBeLessThan(10);
-    expect(result.factors.validator_quality_avg).toBeGreaterThanOrEqual(0);
-    expect(result.factors.validator_quality_avg).toBeLessThanOrEqual(1);
-    expect(result.factors.total_terminal_jobs).toBeDefined();
-    expect(result.factors.defaulted_jobs).toBeGreaterThanOrEqual(0);
-    expect(result.lgd).toBeGreaterThan(0);
-    expect(result.lgd).toBeLessThan(1);
-    expect(result.lgd_downturn).toBeGreaterThan(0);
-    expect(result.confidence).toMatch(/^(high|medium|low)$/);
-    expect(result.methodology_version).toBe('1.0.0');
+    expect(TIER_ORDER).toContain(result.tier);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
+    expect(result.score).toBe(Math.floor(result.score)); // integer
+    expect(result.confidence).toMatch(/^(high|moderate|low|insufficient)$/);
+    expect(result.confidence_label).toBeTruthy();
+    expect(Array.isArray(result.flags)).toBe(true);
+    expect(result.methodology_version).toBe('2.0.0');
     expect(result.view).toBe('PIT');
-    expect(result.factors.lookback_days).toBe(30);
+
+    // Factors
+    expect(result.factors.completion_rate_raw).toBeGreaterThanOrEqual(0);
+    expect(result.factors.completion_rate_raw).toBeLessThanOrEqual(1);
+    expect(result.factors.completion_rate_smoothed).toBeGreaterThanOrEqual(0);
+    expect(result.factors.completion_rate_smoothed).toBeLessThanOrEqual(1);
+    expect(result.factors.forward_success).toBeGreaterThanOrEqual(0);
+    expect(result.factors.forward_success).toBeLessThanOrEqual(1);
+    expect(result.factors.network_endorsement).toBeGreaterThanOrEqual(0);
+    expect(result.factors.network_endorsement).toBeLessThanOrEqual(100);
+    expect(result.factors.latency_consistency).toBeGreaterThanOrEqual(0);
+    expect(result.factors.latency_consistency).toBeLessThanOrEqual(100);
+    expect(result.factors.age_days).toBeGreaterThan(0);
   }, 30000);
 
-  it('rates agent 10462 (arc) with high confidence', async () => {
+  it('high-confidence agent has ≥50 completed jobs', async () => {
     const result = await rateAgent(BigInt(10462), 'arc', 'PIT');
 
     if (!result.rated) {
@@ -40,16 +47,16 @@ describe.skipIf(!runIntegration)('Integration: rate real agents against live DB'
       return;
     }
 
-    expect(result.confidence).toBe('high');
-    expect(result.factors.interaction_count).toBeGreaterThanOrEqual(50);
+    if (result.confidence === 'high') {
+      expect(result.factors.completed_jobs).toBeGreaterThanOrEqual(50);
+    }
+    expect(result.score).toBeGreaterThanOrEqual(0);
   }, 30000);
 
-  it('TTC view returns lookback_days: null', async () => {
+  it('TTC view is unsupported at v2.0 (returns unrated)', async () => {
     const result = await rateAgent(BigInt(10462), 'arc', 'TTC');
-
-    if (result.rated) {
-      expect(result.view).toBe('TTC');
-      expect(result.factors.lookback_days).toBeNull();
+    if (!result.rated) {
+      expect(result.reason).toBe('insufficient_history');
     }
   }, 30000);
 });

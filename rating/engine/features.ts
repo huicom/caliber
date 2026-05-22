@@ -119,6 +119,12 @@ export async function buildFeatures(
   const jobMapped = jobRowsInWindow.map((j) => ({
     jobId: j.jobId,
     status: j.status,
+    // v2.0: clientAddress is needed for counterparty-concentration flag.
+    // For gated jobs the on-chain client is the RatingGateway contract; the
+    // actual human poster lives off-chain in job_drafts. The flag treats
+    // the on-chain client as the unit, which is correct for "who paid the
+    // escrow that this agent is exposed to."
+    clientAddress: j.clientAddress,
     budgetUsdc: j.budgetUsdc,
     completionReason: j.completionReason,
     createdAtBlock: j.createdAtBlock,

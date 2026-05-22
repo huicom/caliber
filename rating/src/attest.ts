@@ -2,27 +2,26 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { rateAgent } from '../engine/rating';
 import { METHODOLOGY_VERSION } from '../engine/version';
+import { TIER_ORDINAL, flagsToBitfield, type CaliberTier, type ConfidenceLabel } from '../engine/types';
 import { db, agents, indexerState } from '@arc-agents/db';
 import { eq } from 'drizzle-orm';
 import { bytesToHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
-const TIER_MAP: Record<string, number> = {
-  'Caliber-AAA': 0,
-  'Caliber-AA': 1,
-  'Caliber-A': 2,
-  'Caliber-BBB': 3,
-  'Caliber-BB': 4,
-  'Caliber-B': 5,
-  'Caliber-CCC': 6,
-  'Caliber-CC': 7,
-  'Caliber-D': 8,
-};
+// Caliber v2.0 attestation. The on-chain RatingVerifier struct is
+// extended with `tier`, `score`, `interactionCount`, `flags` and drops
+// `pdBps`, `lgdBps`, `confidence`. This file signs the new struct.
+//
+// Contract redeploy (Stage C) is required for these signatures to verify.
+// Until then the live deployment runs against the v1 contracts with the
+// v1 attest endpoint shape — this file is the v2 future state and is
+// not yet wired to a deployed verifier.
 
-const CONFIDENCE_MAP: Record<string, number> = {
+const CONFIDENCE_ORDINAL: Record<ConfidenceLabel, number> = {
   high: 0,
-  medium: 1,
+  moderate: 1,
   low: 2,
+  insufficient: 3,
 };
 
 const CHAIN_ID_MAP: Record<string, number> = {
@@ -35,16 +34,18 @@ const paramsSchema = z.object({
   id: z.string().regex(/^\d+$/, 'Agent ID must be numeric'),
 });
 
+const TIER_NAMES = [
+  'Established',
+  'Proven',
+  'Emerging',
+  'Provisional',
+  'Watch',
+  'Inactive',
+] as const satisfies readonly CaliberTier[];
+
 const bodySchema = z.object({
-  minTier: z
-    .enum([
-      'Caliber-AAA', 'Caliber-AA', 'Caliber-A',
-      'Caliber-BBB', 'Caliber-BB', 'Caliber-B',
-      'Caliber-CCC', 'Caliber-CC', 'Caliber-D',
-    ])
-    .optional()
-    .default('Caliber-D'),
-  minConfidence: z.enum(['high', 'medium', 'low']).optional().default('medium'),
+  minTier: z.enum(TIER_NAMES).optional().default('Provisional'),
+  minConfidence: z.enum(['high', 'moderate', 'low']).optional().default('moderate'),
   validForSeconds: z.number().int().min(60).max(3600).optional().default(600),
 });
 
@@ -93,8 +94,11 @@ async function getAgentAddress(chain: string, agentId: bigint): Promise<string> 
 
 /**
  * POST /v1/agents/:chain/:id/attest
- * Signs an EIP-712 RatingAttestation the on-chain RatingVerifier can verify.
- * Domain `name="Caliber"` matches the redeployed verifier contract.
+ *
+ * Caliber v2.0 attestation. Signs an EIP-712 RatingAttestation that the
+ * deployed v2 RatingVerifier can verify. Struct:
+ *   { chain, agentId, agentAddress, tier, score,
+ *     interactionCount, flags, methodologyVersion, asOf, validUntil, nonce }
  */
 export async function attestRoute(req: Request, res: Response): Promise<void> {
   const paramsResult = paramsSchema.safeParse(req.params);
@@ -117,8 +121,8 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
 
   const { chain, id } = paramsResult.data;
   const { minTier, minConfidence, validForSeconds } = bodyResult.data;
-  const minTierNum = TIER_MAP[minTier] ?? 8;
-  const minConfNum = CONFIDENCE_MAP[minConfidence] ?? 2;
+  const minTierOrdinal = TIER_ORDINAL[minTier];
+  const minConfOrdinal = CONFIDENCE_ORDINAL[minConfidence];
 
   try {
     const agentId = BigInt(id);
@@ -133,21 +137,21 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    if ((TIER_MAP[result.rating] ?? 8) > minTierNum) {
+    if (TIER_ORDINAL[result.tier] > minTierOrdinal) {
       res.status(422).json({
         rated: true,
-        rating: result.rating,
+        tier: result.tier,
         confidence: result.confidence,
         reason: 'rating_below_threshold',
-        detail: `Agent rating ${result.rating} does not meet minimum ${minTier}`,
+        detail: `Agent tier ${result.tier} does not meet minimum ${minTier}`,
       });
       return;
     }
 
-    if ((CONFIDENCE_MAP[result.confidence] ?? 2) > minConfNum) {
+    if (CONFIDENCE_ORDINAL[result.confidence] > minConfOrdinal) {
       res.status(422).json({
         rated: true,
-        rating: result.rating,
+        tier: result.tier,
         confidence: result.confidence,
         reason: 'confidence_below_threshold',
         detail: `Agent confidence ${result.confidence} does not meet minimum ${minConfidence}`,
@@ -170,7 +174,7 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
     ) {
       res.status(422).json({
         rated: true,
-        rating: result.rating,
+        tier: result.tier,
         confidence: result.confidence,
         reason: 'unknown_identity',
         detail: `Agent ${id} on ${chain} has aggregate stats but no verified on-chain owner address. Cannot issue an attestation.`,
@@ -182,14 +186,12 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
 
     const attestation = {
       chain: chainBytes32,
-      agentId: agentId,
+      agentId,
       agentAddress: agentAddress as `0x${string}`,
-      tier: TIER_MAP[result.rating] ?? 8,
-      pdBps: Math.round(result.ppd_30d * 10000),
-      // Wave 2: lgdBps signed in the attestation so CaliberEscrow can price
-      // bond = budget × pd × lgd from this single signed payload.
-      lgdBps: Math.round(result.lgd * 10000),
-      confidence: CONFIDENCE_MAP[result.confidence] ?? 2,
+      tier: TIER_ORDINAL[result.tier],
+      score: result.score,
+      interactionCount: Math.min(result.interaction_count, 65535),
+      flags: flagsToBitfield(result.flags),
       methodologyVersion: stringToBytes32(METHODOLOGY_VERSION),
       asOf: BigInt(now),
       validUntil: BigInt(validUntil),
@@ -201,8 +203,7 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       '0x0000000000000000000000000000000000000000') as `0x${string}`;
     const chainId = CHAIN_ID_MAP[chain] ?? 5042002;
 
-    // EIP-712 domain — `name="Caliber"` matches the on-chain RatingVerifier
-    // redeployed 2026-05-21 with `EIP712("Caliber", "1")` in the constructor.
+    // EIP-712 domain — `name="Caliber"` matches the on-chain RatingVerifier.
     const domain = {
       name: 'Caliber',
       version: '1',
@@ -216,9 +217,9 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
         { name: 'agentId', type: 'uint256' },
         { name: 'agentAddress', type: 'address' },
         { name: 'tier', type: 'uint8' },
-        { name: 'pdBps', type: 'uint16' },
-        { name: 'lgdBps', type: 'uint16' },
-        { name: 'confidence', type: 'uint8' },
+        { name: 'score', type: 'uint8' },
+        { name: 'interactionCount', type: 'uint16' },
+        { name: 'flags', type: 'uint8' },
         { name: 'methodologyVersion', type: 'bytes32' },
         { name: 'asOf', type: 'uint64' },
         { name: 'validUntil', type: 'uint64' },
@@ -233,9 +234,6 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       message: attestation,
     });
 
-    // Express's res.json() routes through JSON.stringify, which can't
-    // serialize BigInts. Convert all uint-typed fields to strings on the
-    // wire (the client re-wraps with BigInt() before signing/sending).
     res.json({
       attestation: {
         ...attestation,
@@ -247,6 +245,10 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       signature,
       validUntil,
       methodologyVersion: METHODOLOGY_VERSION,
+      tier: result.tier,
+      score: result.score,
+      confidence: result.confidence,
+      flags: result.flags,
     });
   } catch (err) {
     console.error('Attestation error:', err);

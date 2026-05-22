@@ -58,20 +58,28 @@ async function main() {
         continue;
       }
 
+      // v2.0 column reuse:
+      //   ppd_30d  → completion_rate_smoothed (was probability of default)
+      //   lgd      → forward_success           (was loss given default)
+      //   ead_usdc → active_escrow_usdc        (was funded EAD)
+      // Schema kept stable for now; column-rename migration is a separate
+      // follow-up so existing snapshots in the table remain queryable while
+      // the dashboards update. The semantic shift is captured in code +
+      // methodology Appendix F v2.0 entry.
       await db
         .insert(ratingSnapshots)
         .values({
           chainId: CHAIN,
           agentId: BigInt(agentId),
           computedAt: now,
-          tier: result.rating,
-          ppd30d: String(result.ppd_30d),
-          lgd: String(result.lgd),
-          eadUsdc: result.ead_usdc,
+          tier: result.tier,
+          ppd30d: String(result.factors.completion_rate_smoothed),
+          lgd: String(result.factors.forward_success),
+          eadUsdc: result.factors.active_escrow_usdc,
           confidence: result.confidence,
           view: 'PIT',
           methodologyVersion: METHODOLOGY_VERSION,
-          interactionCount: result.factors.interaction_count,
+          interactionCount: result.interaction_count,
         });
 
       written++;

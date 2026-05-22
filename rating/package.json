@@ -10,7 +10,7 @@
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
     "spike:base": "tsx scripts/base-spike.ts",
-    "spike:pd": "tsx scripts/pd-sanity.ts",
+    "spike:score": "tsx scripts/score-sanity.ts",
     "rate-one": "tsx scripts/rate-one.ts",
     "backfill-registered-at": "tsx scripts/backfill-registered-at.ts",
     "snapshot:daily": "tsx scripts/snapshot-daily.ts"
