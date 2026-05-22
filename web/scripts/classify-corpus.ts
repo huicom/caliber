@@ -14,11 +14,12 @@ import path from 'node:path';
 export type Category =
   | 'trading'
   | 'validation'
-  | 'defi'
+  | 'assistants'
   | 'payments'
   | 'research'
   | 'content'
   | 'services'
+  | 'utility'
   | 'identity'
   | 'other';
 
@@ -64,13 +65,16 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    slug: 'defi',
-    title: 'DeFi Operations',
-    blurb: 'Agents that help with on-chain DeFi — swaps, liquidity pools, yield strategies, onboarding flows.',
+    slug: 'assistants',
+    title: 'On-chain Assistants',
+    blurb: "Co-pilot agents that help users act on-chain — swaps, pools, onboarding, reputation. The friendly guide layer, where 'DeFi assistant' lives.",
     rules: [
       { where: 'type', match: /^defi_assistant$/i, weight: 5 },
+      { where: 'name', match: /\b(pilot|copilot|co-pilot|assistant|guide)\b/i, weight: 3 },
       { where: 'desc', match: /\bdefi\b/i, weight: 2 },
       { where: 'desc', match: /\b(liquidity|pool[s]?|yield)\b/i, weight: 2 },
+      { where: 'desc', match: /\bonboarding\b/i, weight: 2 },
+      { where: 'desc', match: /\bonchain (guide|copilot|assistant)\b/i, weight: 3 },
       { where: 'cap', match: /pool_discovery|swap_guidance|liquidity_monitoring|onboarding_support/i, weight: 3 },
     ],
   },
@@ -92,9 +96,10 @@ export const CATEGORIES: CategoryDef[] = [
     title: 'Research & Analysis',
     blurb: 'Agents that gather data, run analyses, produce reports, or monitor on-chain activity for insight.',
     rules: [
-      { where: 'name', match: /\b(research|analyst|analysis)\b/i, weight: 3 },
+      { where: 'name', match: /\b(research|analyst|analysis|sentiment)\b/i, weight: 3 },
       { where: 'type', match: /^(research|analytical|analyst)$/i, weight: 5 },
       { where: 'desc', match: /\b(research|analysis|analytics)\b/i, weight: 2 },
+      { where: 'desc', match: /\bsentiment\b/i, weight: 3 },
       { where: 'cap', match: /\b(research|data-analysis|statistics|event-monitoring)\b/i, weight: 3 },
     ],
   },
@@ -107,6 +112,21 @@ export const CATEGORIES: CategoryDef[] = [
       { where: 'type', match: /^(copywriter|content)/i, weight: 5 },
       { where: 'desc', match: /\b(tweets?|threads?|posts?|community|social media)\b/i, weight: 3 },
       { where: 'cap', match: /\b(social|content[- ]generation)\b/i, weight: 3 },
+    ],
+  },
+  {
+    slug: 'utility',
+    title: 'Utility & Workflow',
+    blurb: 'Agents that move information around — read documents, send notifications, orchestrate other agents, run general workflows.',
+    rules: [
+      { where: 'name', match: /\b(orchestrator|workflow|digest|email|sender|notifier|relay|composer)\b/i, weight: 4 },
+      { where: 'name', match: /\b(copilot|co-pilot|co pilot)\b/i, weight: 4 },
+      { where: 'desc', match: /\b(workflow|orchestrat|summariz|summary)\b/i, weight: 3 },
+      { where: 'desc', match: /\bcopilot|\bco[- ]pilot\b/i, weight: 3 },
+      { where: 'desc', match: /\b(email|inbox|notification)\b/i, weight: 3 },
+      { where: 'desc', match: /\breads? (whitepapers?|docs?|documents?|long[- ]form)\b/i, weight: 4 },
+      { where: 'desc', match: /\b(convert|deliver|forward|route)s? (the )?(result|output|message)\b/i, weight: 3 },
+      { where: 'cap', match: /\b(webhook-relay|task-planning|coordination)\b/i, weight: 3 },
     ],
   },
   {
