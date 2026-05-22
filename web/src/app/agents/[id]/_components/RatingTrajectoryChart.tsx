@@ -11,19 +11,7 @@ import {
   CartesianGrid,
   ReferenceLine,
 } from 'recharts';
-import { api, type CaliberTier, type RatingHistoryPoint } from '@/lib/api';
-
-const TIER_ORDER: CaliberTier[] = [
-  'Caliber-AAA',
-  'Caliber-AA',
-  'Caliber-A',
-  'Caliber-BBB',
-  'Caliber-BB',
-  'Caliber-B',
-  'Caliber-CCC',
-  'Caliber-CC',
-  'Caliber-D',
-];
+import { api, TIER_ORDER, type CaliberTier, type RatingHistoryPoint } from '@/lib/api';
 
 const TIER_TO_Y: Record<CaliberTier, number> = Object.fromEntries(
   TIER_ORDER.map((t, i) => [t, TIER_ORDER.length - 1 - i]),
@@ -71,7 +59,7 @@ export function RatingTrajectoryChart({ chain, agentId }: Props) {
       ts: new Date(p.date).getTime(),
       pit: TIER_TO_Y[p.tier],
       tier: p.tier,
-      ppd: p.ppd_30d,
+      completion: p.completion_rate_smoothed,
       confidence: p.confidence,
     }));
 
@@ -91,7 +79,7 @@ export function RatingTrajectoryChart({ chain, agentId }: Props) {
       ts: p.ts,
       pit: p.pit,
       tier: p.tier,
-      ppd: p.ppd,
+      completion: p.completion,
       confidence: p.confidence,
     });
   }
@@ -180,13 +168,14 @@ export function RatingTrajectoryChart({ chain, agentId }: Props) {
               stroke="var(--color-hairline)"
               width={50}
             />
-            {/* Reference line for the BBB cluster center — most agents currently sit there */}
+            {/* Reference line for the Provisional band — most agents on a young
+                dataset cluster around insufficient-data tier */}
             <ReferenceLine
-              y={TIER_TO_Y['Caliber-BBB']}
+              y={TIER_TO_Y['Provisional']}
               stroke="var(--color-hairline)"
               strokeDasharray="1 4"
               label={{
-                value: 'BBB',
+                value: 'Provisional',
                 position: 'right',
                 fill: 'var(--color-mute)',
                 fontSize: 9,
@@ -204,11 +193,11 @@ export function RatingTrajectoryChart({ chain, agentId }: Props) {
               }}
               labelFormatter={(t) => new Date(Number(t)).toISOString().slice(0, 10)}
               formatter={(_value, name, item) => {
-                const payload = item.payload as { tier?: CaliberTier; ppd?: number; confidence?: string };
+                const payload = item.payload as { tier?: CaliberTier; completion?: number; confidence?: string };
                 if (name === 'pit') {
                   return [
                     payload.tier
-                      ? `${payload.tier} · pd ${(Number(payload.ppd ?? 0) * 100).toFixed(2)}% · ${payload.confidence ?? '?'}`
+                      ? `${payload.tier} · completion ${(Number(payload.completion ?? 0) * 100).toFixed(1)}% · ${payload.confidence ?? '?'}`
                       : '—',
                     'PIT',
                   ];

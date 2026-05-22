@@ -23,32 +23,26 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatUSDC } from '@/lib/format';
 
-// Same ordinal ↔ tier mapping the contract and PostJobForm use. Lower
-// ordinal = stronger tier. A row's provider is "currently ineligible" when
-// the provider's live tier ordinal is greater than the job's recorded
+// Same ordinal ↔ tier mapping the contract and PostJobForm use (v2.0).
+// Lower ordinal = stronger tier. A row's provider is "currently ineligible"
+// when the provider's live tier ordinal is greater than the job's recorded
 // min_tier ordinal.
 const TIER_ORDINAL_TO_NAME: Record<number, CaliberTier> = {
-  0: 'Caliber-AAA',
-  1: 'Caliber-AA',
-  2: 'Caliber-A',
-  3: 'Caliber-BBB',
-  4: 'Caliber-BB',
-  5: 'Caliber-B',
-  6: 'Caliber-CCC',
-  7: 'Caliber-CC',
-  8: 'Caliber-D',
+  0: 'Established',
+  1: 'Proven',
+  2: 'Emerging',
+  3: 'Provisional',
+  4: 'Watch',
+  5: 'Inactive',
 };
 
 const TIER_NAME_TO_ORDINAL: Record<CaliberTier, number> = {
-  'Caliber-AAA': 0,
-  'Caliber-AA': 1,
-  'Caliber-A': 2,
-  'Caliber-BBB': 3,
-  'Caliber-BB': 4,
-  'Caliber-B': 5,
-  'Caliber-CCC': 6,
-  'Caliber-CC': 7,
-  'Caliber-D': 8,
+  Established: 0,
+  Proven: 1,
+  Emerging: 2,
+  Provisional: 3,
+  Watch: 4,
+  Inactive: 5,
 };
 
 type GatedFilter = 'all' | 'gated' | 'open';
@@ -132,7 +126,7 @@ function JobList() {
         if (cancelled) return;
         const map: Record<string, CaliberTier | null> = {};
         for (const r of data.ratings) {
-          map[r.agent_id] = r.rated && r.rating ? r.rating : null;
+          map[r.agent_id] = r.rated && r.tier ? r.tier : null;
         }
         setProviderRatings(map);
       })

@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { type RatingSnapshot } from '@arc-agents/db';
+import { type CaliberTier } from '@/lib/api';
 
-// Mirrors the registry-wide //active_exposure panel on /stats, but with the
-// agent itself as the unit and the agent's in-flight jobs as the breakdown.
-// Renders only when the agent has a current snapshot — without PD/LGD there's
-// nothing to multiply the budgets against.
+// Caliber Rating v2.0 — Active Escrow breakdown per agent.
+// Replaces the v1 EAD/EL panel. Shows each in-flight job's contribution
+// to current escrow, plus the tier-stepped bond rate that would apply.
+// No PD × LGD math — Caliber v2.0 doesn't multiply that way.
 
 interface InFlightJob {
   jobId: bigint;
@@ -18,6 +19,18 @@ interface Props {
   snapshot: RatingSnapshot | null;
   inFlightJobs: InFlightJob[];
 }
+
+// Tier-stepped bond rates in basis points. Mirrors the CaliberEscrow v2
+// initial configuration; these are admin-settable on-chain so the UI
+// displays them as "current bond rate" rather than as fixed law.
+const BOND_BPS_BY_TIER: Record<CaliberTier, number> = {
+  Established: 50,    // 0.5%
+  Proven: 150,        // 1.5%
+  Emerging: 500,      // 5%
+  Provisional: 1500,  // 15%
+  Watch: 0,           // refused at gate
+  Inactive: 0,        // refused at gate
+};
 
 function formatUsdc(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
@@ -42,11 +55,10 @@ const ROW_CAP = 20;
 export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
   if (!snapshot) return null;
 
-  const pd = snapshot.ppd30d ? Number(snapshot.ppd30d) : 0;
-  const lgd = snapshot.lgd ? Number(snapshot.lgd) : 0;
-  const pdLgd = pd * lgd;
+  const tier = snapshot.tier as CaliberTier;
+  const bondBps = BOND_BPS_BY_TIER[tier] ?? 0;
+  const bondPctLabel = bondBps > 0 ? `${(bondBps / 100).toFixed(2)}%` : 'refused';
 
-  // Sort by budget desc so the highest contributors land at the top.
   const sortedJobs = [...inFlightJobs].sort((a, b) => {
     const aB = Number(a.budgetUsdc ?? 0);
     const bB = Number(b.budgetUsdc ?? 0);
@@ -57,7 +69,7 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
     (acc, j) => acc + Number(j.budgetUsdc ?? 0),
     0,
   );
-  const totalEl = totalBudget * pdLgd;
+  const totalBond = (totalBudget * bondBps) / 10_000;
   const hiddenCount = Math.max(0, sortedJobs.length - ROW_CAP);
   const visibleJobs = sortedJobs.slice(0, ROW_CAP);
 
@@ -66,16 +78,16 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
         <div>
           <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
-            //exposure_breakdown
+            //active_escrow_breakdown
           </h2>
           <p className="text-xs text-[var(--color-mute)] mt-1 leading-snug">
-            Where this agent&apos;s current escrow exposure comes from.
-            EAD is the sum of all in-flight jobs; expected loss is each
-            job&apos;s budget × this agent&apos;s PD × LGD.
+            Where this agent&apos;s current escrow exposure comes from, with the
+            tier-stepped Caliber bond that would apply to each job (bond ={' '}
+            budget × tier bond rate; <Link href="/methodology#on-chain-consumption-attestations-and-bonds" className="text-[var(--color-copper)] hover:underline">§On-chain consumption</Link>).
           </p>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
-          as of {new Date().toISOString().slice(0, 10)}
+          tier {tier} · bond rate {bondPctLabel}
         </span>
       </div>
 
@@ -90,15 +102,19 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
           }
         />
         <Stat
-          label="current ead"
+          label="active escrow"
           value={formatUsdc(totalBudget)}
-          hint="funded USDC across all in-flight jobs (§6.2)"
+          hint="funded USDC across all in-flight jobs"
           copper
         />
         <Stat
-          label="expected loss"
-          value={formatUsdc(totalEl)}
-          hint={`PD × LGD × EAD · ${(pdLgd * 100).toFixed(2)}% of EAD`}
+          label="bond if posted on all"
+          value={bondBps > 0 ? formatUsdc(totalBond) : '—'}
+          hint={
+            bondBps > 0
+              ? `at the current ${bondPctLabel} rate for ${tier}`
+              : `${tier} tier is refused at the escrow gate`
+          }
         />
       </div>
 
@@ -118,16 +134,16 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                   <th className="text-left pb-2 font-normal">job</th>
                   <th className="text-left pb-2 font-normal">status</th>
                   <th className="text-left pb-2 font-normal">age</th>
-                  <th className="text-right pb-2 font-normal">budget (ead)</th>
-                  <th className="text-right pb-2 font-normal">pd × lgd</th>
-                  <th className="text-right pb-2 font-normal">expected loss</th>
+                  <th className="text-right pb-2 font-normal">budget (escrow)</th>
+                  <th className="text-right pb-2 font-normal">bond rate</th>
+                  <th className="text-right pb-2 font-normal">bond if posted</th>
                   <th className="text-right pb-2 font-normal">share</th>
                 </tr>
               </thead>
               <tbody className="text-[var(--color-ink)]">
                 {visibleJobs.map((j) => {
                   const budget = Number(j.budgetUsdc ?? 0);
-                  const el = budget * pdLgd;
+                  const bond = (budget * bondBps) / 10_000;
                   const share = totalBudget > 0 ? (budget / totalBudget) * 100 : 0;
                   return (
                     <tr
@@ -148,9 +164,9 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                       </td>
                       <td className="py-1.5 text-right">{formatUsdc(budget)}</td>
                       <td className="py-1.5 text-right text-[var(--color-mute)]">
-                        {(pdLgd * 100).toFixed(2)}%
+                        {bondBps > 0 ? `${(bondBps / 100).toFixed(2)}%` : '—'}
                       </td>
-                      <td className="py-1.5 text-right">{formatUsdc(el)}</td>
+                      <td className="py-1.5 text-right">{bondBps > 0 ? formatUsdc(bond) : '—'}</td>
                       <td className="py-1.5 text-right text-[var(--color-mute)]">
                         {share.toFixed(1)}%
                       </td>
@@ -171,12 +187,14 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                     </td>
                     <td className="pt-2 pb-1"></td>
                     <td className="pt-2 pb-1 text-right font-medium">
-                      {formatUsdc(
-                        visibleJobs.reduce(
-                          (a, j) => a + Number(j.budgetUsdc ?? 0) * pdLgd,
-                          0,
-                        ),
-                      )}
+                      {bondBps > 0
+                        ? formatUsdc(
+                            visibleJobs.reduce(
+                              (a, j) => a + (Number(j.budgetUsdc ?? 0) * bondBps) / 10_000,
+                              0,
+                            ),
+                          )
+                        : '—'}
                     </td>
                     <td className="pt-2 pb-1"></td>
                   </tr>
@@ -194,10 +212,10 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
       )}
 
       <p className="text-[10px] text-[var(--color-mute)] mt-4 leading-snug">
-        EAD includes only actually-funded ERC-8183 escrow per methodology §6.2.
-        Unfunded commitments and CCF-style modeling are deferred to v2.
-        Per-agent PD and LGD are read from the latest daily snapshot
-        (computed {snapshot.computedAt.toISOString().slice(0, 10)}).
+        Bond rates are configurable on-chain (event-logged, ≤50% cap). Caliber
+        v2.0 does not publish an expected-loss claim — the column previously
+        labeled "expected loss" has been removed because the underlying data
+        does not support a credit-rating-grade probability of default.
       </p>
     </section>
   );

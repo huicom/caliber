@@ -253,27 +253,21 @@ function StatCard({
 }
 
 const TIER_ORDER: Array<keyof RatingDistribution['by_tier']> = [
-  'Caliber-AAA',
-  'Caliber-AA',
-  'Caliber-A',
-  'Caliber-BBB',
-  'Caliber-BB',
-  'Caliber-B',
-  'Caliber-CCC',
-  'Caliber-CC',
-  'Caliber-D',
+  'Established',
+  'Proven',
+  'Emerging',
+  'Provisional',
+  'Watch',
+  'Inactive',
 ];
 
 const TIER_COLOR: Record<string, string> = {
-  'Caliber-AAA': '#00D4A8',
-  'Caliber-AA': '#00D4A8',
-  'Caliber-A': '#00D4A8',
-  'Caliber-BBB': '#FFB547',
-  'Caliber-BB': '#FFB547',
-  'Caliber-B': '#FF9F45',
-  'Caliber-CCC': '#FF9F45',
-  'Caliber-CC': '#FF5C5C',
-  'Caliber-D': '#FF5C5C',
+  Established: '#00B894',
+  Proven:      '#0EA5E9',
+  Emerging:    '#14B8A6',
+  Provisional: '#94A3B8',
+  Watch:       '#F59E0B',
+  Inactive:    '#1F2937',
 };
 
 function RatingDistributionSection({
@@ -322,7 +316,7 @@ function RatingDistributionSection({
   }
 
   const data = TIER_ORDER.map((t) => ({
-    tier: t.replace('Caliber-', ''),
+    tier: t,
     fullTier: t,
     count: distribution.by_tier[t] ?? 0,
     color: TIER_COLOR[t],
@@ -331,7 +325,7 @@ function RatingDistributionSection({
   const total = distribution.total_agents;
   const rateable = distribution.rateable_agents;
   const ratedPct = total > 0 ? ((rateable / total) * 100).toFixed(1) : '0';
-  const meanPdPct = (distribution.mean_ppd_30d * 100).toFixed(2);
+  const meanScore = distribution.mean_score?.toFixed(1) ?? '—';
 
   return (
     <Card className="mb-8">
@@ -370,23 +364,24 @@ function RatingDistributionSection({
 
           <div className="space-y-3 lg:min-w-[200px]">
             <DistStat
-              label="Mean 30d PPD"
-              value={`${meanPdPct}%`}
+              label="Mean score"
+              value={meanScore}
+              sub="0-100"
             />
             <DistStat
               label="High confidence"
               value={distribution.by_confidence.high.toLocaleString()}
-              sub="≥50 interactions"
+              sub="≥75 completed jobs"
             />
             <DistStat
-              label="Medium"
-              value={distribution.by_confidence.medium.toLocaleString()}
-              sub="15-49 interactions"
+              label="Moderate"
+              value={distribution.by_confidence.moderate.toLocaleString()}
+              sub="25-74 completed"
             />
             <DistStat
               label="Low"
               value={distribution.by_confidence.low.toLocaleString()}
-              sub="5-14 interactions"
+              sub="5-24 completed"
             />
             <DistStat
               label="Unrated"

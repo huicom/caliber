@@ -17,10 +17,10 @@ interface AttestationResponse {
     chain: string;
     agentId: string;
     agentAddress: string;
-    tier: number;
-    pdBps: number;
-    lgdBps: number;
-    confidence: number;
+    tier: number;             // 0=Established, 5=Inactive
+    score: number;            // 0-100
+    interactionCount: number;
+    flags: number;            // bitfield
     methodologyVersion: string;
     asOf: string;
     validUntil: string;
@@ -29,7 +29,32 @@ interface AttestationResponse {
   signature: string;
   validUntil: number;
   methodologyVersion: string;
+  tier: string;
+  score: number;
+  confidence: string;
+  flags: string[];
 }
+
+// Tier-stepped bond rate (bps). Mirrors CaliberEscrow.bondBpsByTier initial
+// values. Used for UI preview only — the on-chain contract enforces the
+// real numbers (admin-settable).
+const BOND_BPS_BY_TIER_ORDINAL: Record<number, number> = {
+  0: 50,    // Established 0.5%
+  1: 150,   // Proven 1.5%
+  2: 500,   // Emerging 5%
+  3: 1500,  // Provisional 15%
+  4: 0,     // Watch — refused
+  5: 0,     // Inactive — refused
+};
+
+const TIER_NAME_BY_ORDINAL: Record<number, string> = {
+  0: 'Established',
+  1: 'Proven',
+  2: 'Emerging',
+  3: 'Provisional',
+  4: 'Watch',
+  5: 'Inactive',
+};
 
 interface Props {
   jobId: string;
@@ -89,7 +114,7 @@ export function CaliberBondPanel({
     fetch(`${RATING_API_BASE}/v1/agents/arc/${providerAgentId}/attest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ minTier: 'Caliber-D', minConfidence: 'low' }),
+      body: JSON.stringify({ minTier: 'Provisional', minConfidence: 'low' }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -112,9 +137,9 @@ export function CaliberBondPanel({
   const requiredBondAmount = (() => {
     if (!att || !budgetRaw) return null;
     const budget = BigInt(budgetRaw);
-    const pdBps = BigInt(att.attestation.pdBps);
-    const lgdBps = BigInt(att.attestation.lgdBps);
-    return (budget * pdBps * lgdBps) / BigInt(100_000_000);
+    const bps = BigInt(BOND_BPS_BY_TIER_ORDINAL[att.attestation.tier] ?? 0);
+    if (bps === BigInt(0)) return BigInt(0); // Watch/Inactive — refused
+    return (budget * bps) / BigInt(10_000);
   })();
 
   const [error, setError] = useState<string | null>(null);
@@ -147,9 +172,9 @@ export function CaliberBondPanel({
                   agentId: BigInt(a.agentId),
                   agentAddress: a.agentAddress as `0x${string}`,
                   tier: a.tier,
-                  pdBps: a.pdBps,
-                  lgdBps: a.lgdBps,
-                  confidence: a.confidence,
+                  score: a.score,
+                  interactionCount: a.interactionCount,
+                  flags: a.flags,
                   methodologyVersion: a.methodologyVersion as `0x${string}`,
                   asOf: BigInt(a.asOf),
                   validUntil: BigInt(a.validUntil),
@@ -298,13 +323,15 @@ export function CaliberBondPanel({
 
           {att && requiredBondAmount !== null && (
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono bg-[var(--color-bg-elev)] border border-[var(--color-hairline)] p-3 rounded-[2px]">
-              <span className="text-[var(--color-mute)]">rating</span>
+              <span className="text-[var(--color-mute)]">tier</span>
               <span className="text-right text-[var(--color-ink)] font-medium">
-                Caliber-{['AAA', 'AA', 'A', 'BBB', 'BB', 'B', 'CCC', 'CC', 'D'][att.attestation.tier]}
+                {TIER_NAME_BY_ORDINAL[att.attestation.tier] ?? `tier ${att.attestation.tier}`}
               </span>
-              <span className="text-[var(--color-mute)]">pd × lgd</span>
+              <span className="text-[var(--color-mute)]">score</span>
+              <span className="text-right text-[var(--color-ink)]">{att.attestation.score} / 100</span>
+              <span className="text-[var(--color-mute)]">bond rate</span>
               <span className="text-right text-[var(--color-ink)]">
-                {(att.attestation.pdBps / 100).toFixed(2)}% × {(att.attestation.lgdBps / 100).toFixed(1)}%
+                {((BOND_BPS_BY_TIER_ORDINAL[att.attestation.tier] ?? 0) / 100).toFixed(2)}%
               </span>
               <span className="text-[var(--color-mute)]">budget</span>
               <span className="text-right text-[var(--color-ink)]">

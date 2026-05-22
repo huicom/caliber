@@ -2,16 +2,18 @@ import Link from 'next/link';
 import { type RatingSnapshot } from '@arc-agents/db';
 import { type CaliberTier } from '@/lib/api';
 
+// Caliber Rating v2.0 — Track Record panel.
+// Replaces the v1 PD/LGD/EAD/EL exposure panel. The five cells now show
+// tier, score (0-100), completion %, forward-looking success %, and active
+// escrow. No expected-loss claim — Caliber v2.0 doesn't publish one.
+
 const TIER_COLOR: Record<CaliberTier, string> = {
-  'Caliber-AAA': '#00B894',
-  'Caliber-AA': '#1ABC9C',
-  'Caliber-A': '#7ED957',
-  'Caliber-BBB': '#C2A86A',
-  'Caliber-BB': '#E6A23C',
-  'Caliber-B': '#F39C12',
-  'Caliber-CCC': '#E07845',
-  'Caliber-CC': '#C0392B',
-  'Caliber-D': '#7E1B0F',
+  Established: '#00B894',
+  Proven:      '#0EA5E9',
+  Emerging:    '#14B8A6',
+  Provisional: '#94A3B8',
+  Watch:       '#F59E0B',
+  Inactive:    '#1F2937',
 };
 
 function formatUsdc(s: string | null | undefined, fallback = '—'): string {
@@ -30,20 +32,18 @@ interface Props {
 }
 
 export function RatingExposurePanel({ snapshot }: Props) {
-  // No snapshot yet — render an honest empty state. Agents that haven't been
-  // through a snapshot run (too new, or not rateable) get this.
   if (!snapshot) {
     return (
       <section className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-5">
         <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
-          //rating_exposure
+          //track_record
         </h2>
         <p className="text-xs text-[var(--color-mute)] mt-2 leading-snug">
           No Caliber snapshot for this agent yet. Either insufficient
           interactions for a public rating, or the agent will be captured in
           the next daily snapshot at 04:00 UTC.{' '}
-          <Link href="/methodology#15-minimum-data-requirement" className="text-[var(--color-copper)] hover:underline">
-            §1.5 minimum data requirement →
+          <Link href="/methodology#what-we-look-at-the-core-table" className="text-[var(--color-copper)] hover:underline">
+            see methodology →
           </Link>
         </p>
       </section>
@@ -51,21 +51,23 @@ export function RatingExposurePanel({ snapshot }: Props) {
   }
 
   const tier = snapshot.tier as CaliberTier;
-  const pd = snapshot.ppd30d ? Number(snapshot.ppd30d) : null;
-  const lgd = snapshot.lgd ? Number(snapshot.lgd) : null;
-  const eadNum = snapshot.eadUsdc ? Number(snapshot.eadUsdc) : 0;
-  const el = pd !== null && lgd !== null ? pd * lgd * eadNum : null;
+  // v2.0 column reuse (per snapshot-daily.ts + history.ts):
+  //   ppd_30d  storage → completion_rate_smoothed
+  //   lgd      storage → forward_success
+  //   ead_usdc storage → active_escrow_usdc
+  const completion = snapshot.ppd30d ? Number(snapshot.ppd30d) : null;
+  const forward = snapshot.lgd ? Number(snapshot.lgd) : null;
 
   return (
     <section className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-5">
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-3">
         <div>
           <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
-            //rating_exposure
+            //track_record
           </h2>
           <p className="text-xs text-[var(--color-mute)] mt-1 leading-snug">
-            Current Caliber rating + active escrow exposure. PD × LGD × EAD =
-            expected performance loss across this agent&apos;s in-flight book.
+            Caliber Rating v2.0 — tier, score, smoothed completion, and
+            current escrow under this agent&apos;s in-flight book.
           </p>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
@@ -78,24 +80,17 @@ export function RatingExposurePanel({ snapshot }: Props) {
         <Cell label="tier" copper>
           <span style={{ color: TIER_COLOR[tier] ?? 'var(--color-ink)' }}>{tier}</span>
         </Cell>
-        <Cell
-          label="ppd (30d)"
-          hint={`probability of performance default — ${snapshot.confidence} confidence`}
-        >
-          {pd !== null ? `${(pd * 100).toFixed(2)}%` : '—'}
+        <Cell label="confidence" hint={`based on ${snapshot.interactionCount ?? 0} interactions`}>
+          {snapshot.confidence}
         </Cell>
-        <Cell label="lgd" hint="loss given failure, segmented per §5.3">
-          {lgd !== null ? `${(lgd * 100).toFixed(1)}%` : '—'}
+        <Cell label="completion" hint="credibility-weighted, blended with population mean">
+          {completion !== null ? `${(completion * 100).toFixed(1)}%` : '—'}
         </Cell>
-        <Cell
-          label="ead"
-          hint="funded escrow currently in flight (§6)"
-          copper
-        >
+        <Cell label="forward success" hint="next-job estimate, recency-weighted">
+          {forward !== null ? `${(forward * 100).toFixed(1)}%` : '—'}
+        </Cell>
+        <Cell label="active escrow" hint="USDC currently funded for this agent (§v2.0 Step 1)" copper>
           {formatUsdc(snapshot.eadUsdc)}
-        </Cell>
-        <Cell label="expected loss" hint="pd × lgd × ead">
-          {el !== null ? formatUsdc(el.toFixed(2)) : '—'}
         </Cell>
       </div>
 

@@ -9,15 +9,17 @@ const querySchema = z.object({
 /**
  * GET /v1/ratings/exposure-summary?chain=arc
  *
- * Aggregates today's PIT snapshots into a registry-wide exposure view:
- *  - total_ead_usdc — sum of every rated agent's currently-funded escrow
- *  - total_el_usdc  — sum of PD × LGD × EAD across all rated agents
- *  - by_tier        — per-tier breakdown (agent count + EAD + EL)
+ * Caliber Rating v2.0 — registry-wide active escrow view.
  *
- * Source is the most recent calendar-day batch of snapshots so the number
- * matches the trajectory + distribution charts. Cached 5 minutes; the
- * snapshot cron only fires daily so longer cache windows are fine but
- * 5 min matches the other rating endpoints.
+ * Returns:
+ *  - total_active_escrow_usdc — sum of every rated agent's currently-funded
+ *    in-flight escrow (the on-chain truth of USDC at stake).
+ *  - by_tier — per-tier breakdown: agent count + active escrow under each
+ *    tier. The EL (expected loss) framing from v1 is intentionally dropped:
+ *    Caliber Rating v2.0 publishes a tier and a score, not a probability
+ *    of default, so there's no defensible EL number to multiply by.
+ *
+ * Cached 5 minutes.
  */
 
 interface CachedResult {
@@ -43,8 +45,10 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
   }
 
   try {
-    // Pull the per-tier roll-up from the freshest snapshot day. The ead_usdc
-    // column stores a stringified decimal; NULLIF + CAST handles empties.
+    // Per-tier roll-up from the freshest snapshot day. `ead_usdc` in the
+    // schema is now semantically "active escrow USDC" — column name kept
+    // stable so older clients don't break, but the methodology meaning
+    // changed at v2.0 (it no longer feeds an EL formula).
     const rows = (await rawSql.unsafe(
       `
       WITH latest_day AS (
@@ -55,15 +59,7 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
       SELECT
         tier,
         COUNT(*)::int AS agent_count,
-        COALESCE(SUM(CAST(NULLIF(ead_usdc, '') AS NUMERIC)), 0)::text AS total_ead,
-        COALESCE(
-          SUM(
-            CAST(NULLIF(ead_usdc, '') AS NUMERIC)
-            * COALESCE(ppd_30d, 0)
-            * COALESCE(lgd, 0)
-          ),
-          0
-        )::text AS total_el
+        COALESCE(SUM(CAST(NULLIF(ead_usdc, '') AS NUMERIC)), 0)::text AS active_escrow
       FROM rating_snapshots, latest_day
       WHERE rating_snapshots.chain_id = $1
         AND rating_snapshots.view = 'PIT'
@@ -72,7 +68,7 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
       ORDER BY tier
       `,
       [chain],
-    )) as Array<{ tier: string; agent_count: number; total_ead: string; total_el: string }>;
+    )) as Array<{ tier: string; agent_count: number; active_escrow: string }>;
 
     const computedAtRow = (await rawSql.unsafe(
       `SELECT MAX(computed_at)::text AS computed_at FROM rating_snapshots WHERE chain_id = $1 AND view = 'PIT'`,
@@ -80,25 +76,22 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
     )) as Array<{ computed_at: string | null }>;
 
     let totalAgents = 0;
-    let totalEadNum = 0;
-    let totalElNum = 0;
+    let totalEscrow = 0;
     for (const r of rows) {
       totalAgents += r.agent_count;
-      totalEadNum += Number(r.total_ead);
-      totalElNum += Number(r.total_el);
+      totalEscrow += Number(r.active_escrow);
     }
 
     const payload = {
       chain,
+      methodology_version: '2.0.0',
       computed_at: computedAtRow[0]?.computed_at ?? null,
       total_agents: totalAgents,
-      total_ead_usdc: totalEadNum.toFixed(2),
-      total_el_usdc: totalElNum.toFixed(2),
+      total_active_escrow_usdc: totalEscrow.toFixed(2),
       by_tier: rows.map((r) => ({
         tier: r.tier,
         agent_count: r.agent_count,
-        ead_usdc: Number(r.total_ead).toFixed(2),
-        el_usdc: Number(r.total_el).toFixed(2),
+        active_escrow_usdc: Number(r.active_escrow).toFixed(2),
       })),
     };
 

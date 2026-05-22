@@ -4,24 +4,25 @@ import type { CaliberTier } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 /*
- * Tier badge palette — contrast-tuned for the light theme.
+ * Caliber Rating v2.0 tier palette — contrast-tuned for the light theme.
  *
- * Each tier keeps its brand HUE (green / amber / orange / red) but the
- * TEXT color is a darker shade of that hue so WCAG-AA contrast holds on
- * a white background. The brand hue still lives in the border + a 22%
- * background wash, which gives the badge its identity without crushing
- * legibility. See globals.css `--tier-*` tokens.
+ *   Established → green (strong, proven)
+ *   Proven      → blue (reliable, decent sample)
+ *   Emerging    → teal (promising, limited)
+ *   Provisional → grey (insufficient data, anchored to mean)
+ *   Watch       → amber (risk flag triggered)
+ *   Inactive    → ink/dark (dormant)
+ *
+ * Each tier keeps a brand HUE on the border and a 14% background wash;
+ * text color is a darker shade of that hue so WCAG-AA contrast holds.
  */
 const TIER_STYLES: Record<CaliberTier, string> = {
-  'Caliber-AAA': 'border-[#00B894]/50 bg-[#00B894]/12 text-[#047857]',
-  'Caliber-AA':  'border-[#00B894]/50 bg-[#00B894]/12 text-[#047857]',
-  'Caliber-A':   'border-[#00B894]/50 bg-[#00B894]/12 text-[#047857]',
-  'Caliber-BBB': 'border-[#F59E0B]/55 bg-[#F59E0B]/14 text-[#B45309]',
-  'Caliber-BB':  'border-[#F59E0B]/55 bg-[#F59E0B]/14 text-[#B45309]',
-  'Caliber-B':   'border-[#FB923C]/55 bg-[#FB923C]/14 text-[#C2410C]',
-  'Caliber-CCC': 'border-[#FB923C]/55 bg-[#FB923C]/14 text-[#C2410C]',
-  'Caliber-CC':  'border-[#EF4444]/55 bg-[#EF4444]/14 text-[#B91C1C]',
-  'Caliber-D':   'border-[#EF4444]/55 bg-[#EF4444]/14 text-[#B91C1C]',
+  Established: 'border-[#00B894]/55 bg-[#00B894]/14 text-[#047857]',
+  Proven:      'border-[#0EA5E9]/55 bg-[#0EA5E9]/14 text-[#075985]',
+  Emerging:    'border-[#14B8A6]/55 bg-[#14B8A6]/14 text-[#0F766E]',
+  Provisional: 'border-[#94A3B8]/55 bg-[#94A3B8]/14 text-[#475569]',
+  Watch:       'border-[#F59E0B]/55 bg-[#F59E0B]/14 text-[#B45309]',
+  Inactive:    'border-[#1F2937]/55 bg-[#1F2937]/14 text-[#111827]',
 };
 
 interface Props {
@@ -79,7 +80,7 @@ export function RatingBadge({
   }
 
   const content = (
-    <span className={cn(base, TIER_STYLES[tier])}>{tier.replace('Caliber-', '')}</span>
+    <span className={cn(base, TIER_STYLES[tier])}>{tier}</span>
   );
 
   if (chain && agentId) {
