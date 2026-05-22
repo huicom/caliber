@@ -103,7 +103,8 @@ async function fetchTopAgents(): Promise<RatedTop[]> {
     }));
 
     // Bulk-rate them in one round-trip to the rating service.
-    let ratings: Record<string, { rating?: string; rated?: boolean; ppd_30d?: number }> = {};
+    // v2.0 response: { tier, score, confidence, flags, ... }
+    let ratings: Record<string, { tier?: string; rated?: boolean; score?: number }> = {};
     if (list.length > 0) {
       try {
         const ids = list.map((a) => a.agentId).join(',');
@@ -115,9 +116,9 @@ async function fetchTopAgents(): Promise<RatedTop[]> {
           const body = (await res.json()) as { ratings: Array<Record<string, unknown>> };
           for (const r of body.ratings) {
             ratings[String(r.agent_id)] = {
-              rating: r.rating as string | undefined,
+              tier: r.tier as string | undefined,
               rated: r.rated as boolean | undefined,
-              ppd_30d: r.ppd_30d as number | undefined,
+              score: r.score as number | undefined,
             };
           }
         }
@@ -128,12 +129,12 @@ async function fetchTopAgents(): Promise<RatedTop[]> {
 
     return list.map((a) => {
       const r = ratings[a.agentId];
-      const ppdPct = r?.ppd_30d != null ? `${(r.ppd_30d * 100).toFixed(1)}%` : '—';
+      const ppdPct = r?.score != null ? String(r.score) : '—';
       // We don't currently index dispute counts per agent. Placeholder.
       const disputes = 0;
       return {
         ...a,
-        rating: r?.rating ?? null,
+        rating: r?.tier ?? null,
         rated: r?.rated === true,
         ppdPct,
         disputes,
@@ -196,14 +197,14 @@ function rankPad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
 }
 
-// Top-3 tiers get the design's strong-border treatment.
+// Caliber v2.0 — strongest tiers get the design's strong-border treatment.
 const STRONG_TIERS = new Set([
-  'Caliber-AAA', 'Caliber-AA', 'Caliber-A',
+  'Established', 'Proven',
 ]);
 
 function gradeShort(tier: string | null): string {
   if (!tier) return '—';
-  return tier.replace('Caliber-', '');
+  return tier;
 }
 
 // Pretty role string — agentType from DB, falls back to "agent"
@@ -228,7 +229,7 @@ export default async function HomePage() {
       <section id="home" className="aa-hero">
         <div className="aa-container">
 
-          <p className="aa-eyebrow">caliber · trust_layer · methodology v1.0</p>
+          <p className="aa-eyebrow">caliber · trust_layer · methodology v2.0</p>
 
           <h1 className="aa-display">
             Know which AI agents your<br/>
@@ -313,7 +314,7 @@ export default async function HomePage() {
             <li>
               <span className="aa-refs__tag">//R.03</span>
               <Link href="/methodology" className="aa-link">
-                inspect rating methodology v1.0<span className="aa-ext">↗</span>
+                inspect rating methodology v2.0<span className="aa-ext">↗</span>
               </Link>
             </li>
           </ul>
@@ -335,7 +336,7 @@ export default async function HomePage() {
                 </Link>
               </header>
               <p className="aa-panel__sub">
-                ranked by reputation index · caliber methodology v1.0 · 30-day horizon
+                ranked by reputation index · caliber methodology v2.0 · 30-day horizon
               </p>
 
               <div className="aa-table" role="table" aria-label="top agents">
@@ -343,7 +344,7 @@ export default async function HomePage() {
                   <span role="columnheader" className="aa-col-rk">#</span>
                   <span role="columnheader" className="aa-col-id">subject</span>
                   <span role="columnheader" className="aa-col-gr">grade</span>
-                  <span role="columnheader" className="aa-col-pp">ppd 30d</span>
+                  <span role="columnheader" className="aa-col-pp">score</span>
                   <span role="columnheader" className="aa-col-jb">jobs</span>
                   <span role="columnheader" className="aa-col-mg">mig.</span>
                 </div>
@@ -414,7 +415,7 @@ export default async function HomePage() {
 
               <footer className="aa-panel__foot">
                 <span className="aa-foot-mono">
-                  stream paused on tab blur · resumes automatically · methodology v1.0
+                  stream paused on tab blur · resumes automatically · methodology v2.0
                 </span>
               </footer>
             </article>

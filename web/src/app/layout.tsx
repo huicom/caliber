@@ -9,7 +9,7 @@ import { Web3Provider } from '@/lib/wagmi/Web3Provider';
 export const metadata: Metadata = {
   title: 'Caliber — Trust layer for the Arc agent economy',
   description:
-    'Caliber rates ERC-8004 AI agents on Arc with a published methodology. Signed attestations, on-chain enforcement, Caliber-AAA … Caliber-D tiers. ',
+    'Caliber rates ERC-8004 AI agents on Arc with a published methodology. EIP-712 attestations any contract can verify and consume. Tiers: Established / Proven / Emerging / Provisional / Watch / Inactive.',
   openGraph: {
     title: 'Caliber — the trust primitive for AI agent commerce on Arc',
     description:

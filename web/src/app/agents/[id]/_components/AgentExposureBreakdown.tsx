@@ -81,17 +81,16 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
             //active_escrow_breakdown
           </h2>
           <p className="text-xs text-[var(--color-mute)] mt-1 leading-snug">
-            Where this agent&apos;s current escrow exposure comes from, with the
-            tier-stepped Caliber bond that would apply to each job (bond ={' '}
-            budget × tier bond rate; <Link href="/methodology#on-chain-consumption-attestations-and-bonds" className="text-[var(--color-copper)] hover:underline">§On-chain consumption</Link>).
+            Where this agent&apos;s current ERC-8183 escrow exposure comes from.
+            Each row is one funded in-flight job assigned to this agent.
           </p>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
-          tier {tier} · bond rate {bondPctLabel}
+          tier {tier}
         </span>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-3 mb-5">
+      <div className="grid sm:grid-cols-2 gap-3 mb-5">
         <Stat
           label="in-flight jobs"
           value={String(inFlightJobs.length)}
@@ -106,15 +105,6 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
           value={formatUsdc(totalBudget)}
           hint="funded USDC across all in-flight jobs"
           copper
-        />
-        <Stat
-          label="bond if posted on all"
-          value={bondBps > 0 ? formatUsdc(totalBond) : '—'}
-          hint={
-            bondBps > 0
-              ? `at the current ${bondPctLabel} rate for ${tier}`
-              : `${tier} tier is refused at the escrow gate`
-          }
         />
       </div>
 
@@ -135,15 +125,12 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                   <th className="text-left pb-2 font-normal">status</th>
                   <th className="text-left pb-2 font-normal">age</th>
                   <th className="text-right pb-2 font-normal">budget (escrow)</th>
-                  <th className="text-right pb-2 font-normal">bond rate</th>
-                  <th className="text-right pb-2 font-normal">bond if posted</th>
                   <th className="text-right pb-2 font-normal">share</th>
                 </tr>
               </thead>
               <tbody className="text-[var(--color-ink)]">
                 {visibleJobs.map((j) => {
                   const budget = Number(j.budgetUsdc ?? 0);
-                  const bond = (budget * bondBps) / 10_000;
                   const share = totalBudget > 0 ? (budget / totalBudget) * 100 : 0;
                   return (
                     <tr
@@ -164,10 +151,6 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                       </td>
                       <td className="py-1.5 text-right">{formatUsdc(budget)}</td>
                       <td className="py-1.5 text-right text-[var(--color-mute)]">
-                        {bondBps > 0 ? `${(bondBps / 100).toFixed(2)}%` : '—'}
-                      </td>
-                      <td className="py-1.5 text-right">{bondBps > 0 ? formatUsdc(bond) : '—'}</td>
-                      <td className="py-1.5 text-right text-[var(--color-mute)]">
                         {share.toFixed(1)}%
                       </td>
                     </tr>
@@ -186,17 +169,6 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                       )}
                     </td>
                     <td className="pt-2 pb-1"></td>
-                    <td className="pt-2 pb-1 text-right font-medium">
-                      {bondBps > 0
-                        ? formatUsdc(
-                            visibleJobs.reduce(
-                              (a, j) => a + (Number(j.budgetUsdc ?? 0) * bondBps) / 10_000,
-                              0,
-                            ),
-                          )
-                        : '—'}
-                    </td>
-                    <td className="pt-2 pb-1"></td>
                   </tr>
                 </tfoot>
               )}
@@ -212,10 +184,20 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
       )}
 
       <p className="text-[10px] text-[var(--color-mute)] mt-4 leading-snug">
-        Bond rates are configurable on-chain (event-logged, ≤50% cap). Caliber
-        v2.0 does not publish an expected-loss claim — the column previously
-        labeled "expected loss" has been removed because the underlying data
-        does not support a credit-rating-grade probability of default.
+        If a{' '}
+        <Link href="/integrate" className="text-[var(--color-copper)] hover:underline">
+          CaliberEscrow-style bond
+        </Link>{' '}
+        applied at this agent&apos;s tier ({tier}, {bondPctLabel} rate), the bond
+        across these jobs would be{' '}
+        <strong className="font-mono text-[var(--color-ink)]">
+          {bondBps > 0 ? formatUsdc(totalBond) : 'not bondable'}
+        </strong>
+        . The bond is a separate commitment device — see{' '}
+        <Link href="/integrate" className="text-[var(--color-copper)] hover:underline">
+          /integrate
+        </Link>{' '}
+        for the full schedule and other reference implementations.
       </p>
     </section>
   );

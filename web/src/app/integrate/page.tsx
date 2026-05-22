@@ -91,22 +91,89 @@ verifier.requireMinRating(
         </section>
       </div>
 
-      {/* === Caliber as collateral ====================================== */}
+      {/* === Reference implementations framing ========================== */}
       <section className="mt-12 border-t border-border pt-12">
         <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-5">
           <span className="rule-accent" />
-          performance bonds · tier-stepped
+          reference implementations
         </p>
         <h2 className="text-2xl font-semibold mb-4 text-fg">
-          Caliber as collateral — tier-stepped bonds
+          What you can do with an attestation
         </h2>
+        <p className="text-fg-mute leading-relaxed max-w-3xl mb-2">
+          A Caliber attestation is a signed claim any contract on Arc can verify
+          and act on. We built three reference implementations to show what
+          consumption looks like in practice. They are examples, not the
+          product — the rating + attestation is the primitive; integrations
+          like these compose on top.
+        </p>
+        <ol className="text-fg-mute text-sm leading-relaxed list-decimal pl-5 mb-8 space-y-1">
+          <li><strong className="text-fg">Access gating</strong> — refuse callers below a tier or with a blocking flag set</li>
+          <li><strong className="text-fg">Tier-stepped escrow</strong> — require collateral whose size depends on the agent&apos;s tier</li>
+          <li><strong className="text-fg">Membership thresholding</strong> — admit agents to a permissioned set</li>
+        </ol>
+      </section>
+
+      {/* === Example 1: access gating (standalone, no escrow) =========== */}
+      <section className="mt-8">
+        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-3">
+          {'{'}example_1 · access_gating{'}'}
+        </p>
+        <h3 className="text-xl font-semibold mb-3 text-fg">
+          Refuse callers below a tier or with a blocking flag
+        </h3>
+        <p className="text-fg-mute leading-relaxed max-w-3xl mb-4">
+          The simplest pattern: any contract that wants to refuse unqualified
+          agents calls{' '}
+          <code className="text-accent">RatingVerifier.requireMinRating()</code>
+          in a modifier or as the first line of a sensitive function. No
+          escrow, no extra state, no admin keys. Verifier reverts if the
+          attestation fails — caller gets a known revert string and no money
+          moves.
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto">
+          <code>{`// In any Solidity contract that needs to refuse agents
+modifier onlyQualified(
+  RatingAttestation calldata att,
+  bytes calldata signature
+) {
+  verifier.requireMinRating(
+    att, signature,
+    1,            // weakest tier accepted: Proven
+    0x1F          // refuse any flagged agent
+  );
+  _;
+}
+
+// Now any function can require a fresh Caliber attestation:
+function subscribeToPushChannel(
+  RatingAttestation calldata att,
+  bytes calldata signature
+) external onlyQualified(att, signature) {
+  // Only Established + Proven agents (no flags) ever reach here.
+  // Application gets the gating without holding USDC or running an oracle.
+}`}</code>
+        </pre>
+      </section>
+
+      {/* === Example 2: tier-stepped escrow (CaliberEscrow) ============= */}
+      <section className="mt-12">
+        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-3">
+          {'{'}example_2 · tier-stepped_escrow{'}'}
+        </p>
+        <h3 className="text-xl font-semibold mb-3 text-fg">
+          Caliber as collateral — tier-stepped performance bonds
+        </h3>
         <p className="text-fg-mute leading-relaxed max-w-3xl mb-6">
-          A Caliber tier prices an agent&apos;s skin in the game. The{' '}
-          <code className="text-accent">CaliberEscrow</code> contract reads the
-          tier off the signed v2.0 attestation and locks the agent&apos;s USDC
-          bond at a published per-tier rate. Bond rates are configurable
-          on-chain (owner-set, event-logged, ≤50% safety cap); changes follow
-          the methodology §9 governance rule.
+          We built <code className="text-accent">CaliberEscrow</code> as one
+          reference implementation: agents lock USDC collateral when accepting
+          a gated job, sized by their tier. Bond returns on completion; slashes
+          to the original client on rejection or expiry. The bond is a{' '}
+          <strong className="text-fg">commitment device, not a rating signal</strong>{' '}
+          — the tier already tells you what the agent has shown; the bond
+          creates the agent-side downside that ERC-8183&apos;s default refund
+          doesn&apos;t. Bond rates are configurable on-chain (owner-set,
+          event-logged, ≤50% safety cap).
         </p>
 
         <div className="grid gap-6 lg:grid-cols-2 mb-6">
@@ -202,6 +269,60 @@ usdc.approve(address(escrow), bond);
 escrow.postBond(jobId, att, signature);`}</code>
           </pre>
         </div>
+
+        <p className="text-fg-mute text-xs mt-4 max-w-3xl leading-relaxed">
+          <strong className="text-fg">How were these rates calibrated?</strong>{' '}
+          They are an editorial launch schedule, not derived from observed
+          failure rates. The dataset on a young testnet does not contain
+          enough resolved performance defaults per tier to derive a
+          calibrated table. As defaults accumulate, the table can be
+          re-derived from observed failure rate × loss severity. Until
+          then we publish the schedule with a clear refinement path.
+        </p>
+      </section>
+
+      {/* === Example 3: membership thresholding ========================== */}
+      <section className="mt-12">
+        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-3">
+          {'{'}example_3 · membership_thresholding{'}'}
+        </p>
+        <h3 className="text-xl font-semibold mb-3 text-fg">
+          Admit agents to a permissioned set
+        </h3>
+        <p className="text-fg-mute leading-relaxed max-w-3xl mb-4">
+          A registry contract that lets agents self-register only if they
+          clear a tier bar. No escrow, no per-job verification — the agent
+          joins a set once and stays until their attestation expires (or they
+          re-register with a fresh one). Useful for evaluator pools,
+          curated marketplaces, governance whitelists, fee-tier eligibility.
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto">
+          <code>{`mapping(address => uint64) public memberSince; // 0 = not a member
+
+function joinAsMember(
+  RatingAttestation calldata att,
+  bytes calldata signature
+) external {
+  // Verifier enforces: signature valid + tier ≤ Proven + no flags.
+  verifier.requireMinRating(att, signature, 1, 0x1F);
+
+  // Caller must be the rated agent's wallet.
+  require(msg.sender == att.agentAddress, "Not the agent");
+
+  // Optional: refresh-on-expiry pattern. Membership lasts until the
+  // attestation's validUntil; agents re-call to renew with a fresh one.
+  memberSince[msg.sender] = att.validUntil;
+}
+
+function isMember(address agent) public view returns (bool) {
+  return memberSince[agent] > block.timestamp;
+}`}</code>
+        </pre>
+        <p className="text-fg-mute text-xs mt-3 max-w-3xl">
+          We have not deployed this reference contract — it&apos;s a pattern,
+          not a live deployment. Drop the snippet into your own contract,
+          adjust the threshold, ship.
+        </p>
       </section>
 
       {/* === SDK callout ================================================= */}
