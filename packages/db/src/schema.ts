@@ -34,6 +34,12 @@ export const agents = pgTable(
     name: text('name'),
     agentType: text('agent_type'),
     capabilities: jsonb('capabilities').$type<string[] | null>(),
+    // F2 (Phase 2): coarse-grained category assigned by the rule-based
+    // classifier in web/scripts/classify-corpus.ts. One of:
+    //   trading | validation | assistants | payments | research | content
+    //   utility | services | identity | other
+    // Nullable — only agents with enough metadata to classify are tagged.
+    category: text('category'),
     reputationScore: numeric('reputation_score', { precision: 10, scale: 2 }),
     feedbackCount: integer('feedback_count').default(0).notNull(),
     validationStatus: text('validation_status'),
@@ -53,6 +59,7 @@ export const agents = pgTable(
     nameIdx: index('idx_agents_name').on(table.name),
     capabilitiesGin: index('idx_agents_capabilities_gin').using('gin', table.capabilities),
     metadataGin: index('idx_agents_metadata_gin').using('gin', table.metadata),
+    categoryIdx: index('idx_agents_category').on(table.category),
   }),
 );
 
