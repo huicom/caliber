@@ -16,6 +16,16 @@ const envSchema = z.object({
 export const config = envSchema.parse(process.env);
 
 export const BATCH_SIZE = 5000n;
-export const IPFS_CONCURRENCY = 5;
-export const IPFS_TIMEOUT_MS = 5000;
+export const IPFS_CONCURRENCY = 10;
+export const IPFS_TIMEOUT_MS = 8000;
 export const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+// Race-fetch across these gateways; first 200 wins. ipfs.io is the canonical
+// public gateway, w3s.link is Web3.Storage's, pinata is large and well-cached.
+// (Cloudflare's cf-ipfs.com was retired — DNS no longer resolves.)
+export const IPFS_GATEWAYS: readonly string[] = [
+  'https://ipfs.io/ipfs/',
+  'https://w3s.link/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
+];
+// Number of full passes (race-all-gateways + backoff) per uri before giving up.
+export const IPFS_MAX_ATTEMPTS = 2;
