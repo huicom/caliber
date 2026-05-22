@@ -125,7 +125,12 @@ export function AgentExposureBreakdown({ snapshot, inFlightJobs }: Props) {
                   <th className="text-left pb-2 font-normal">status</th>
                   <th className="text-left pb-2 font-normal">age</th>
                   <th className="text-right pb-2 font-normal">budget (escrow)</th>
-                  <th className="text-right pb-2 font-normal">share</th>
+                  <th
+                    className="text-right pb-2 font-normal whitespace-nowrap"
+                    title="this job's budget as a percentage of the agent's total in-flight escrow"
+                  >
+                    % budget vs total escrow
+                  </th>
                 </tr>
               </thead>
               <tbody className="text-[var(--color-ink)]">
