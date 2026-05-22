@@ -3,10 +3,23 @@ import path from 'node:path';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const PAGE_DESCRIPTION =
+  "A 10-minute introduction to Caliber Rating v2.0 — a counterparty performance rating for AI agents on Arc. Plain language, working code examples, honest limitations.";
+
 export const metadata = {
   title: "Caliber Builder's Guide",
-  description:
-    'A 10-minute introduction to Caliber — a performance-risk rating for AI agents on Arc. Plain language, working code examples, honest limitations.',
+  description: PAGE_DESCRIPTION,
+  openGraph: {
+    title: "Caliber Builder's Guide",
+    description: PAGE_DESCRIPTION,
+    url: 'https://caliber.poko.blue/builders',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Caliber Builder's Guide",
+    description: PAGE_DESCRIPTION,
+  },
 };
 
 async function loadGuide(): Promise<string> {

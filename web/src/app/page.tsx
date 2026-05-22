@@ -81,6 +81,9 @@ async function fetchTotals(): Promise<Totals> {
 async function fetchTopAgents(): Promise<RatedTop[]> {
   try {
     // Pull top 8 by reputation score (already correlates with rating quality).
+    // Filter: must have reputation AND at least 5 completed jobs (matches the
+    // methodology §1.5 minimum-data gate). Without this, zero-activity agents
+    // and FK-placeholder rows (id 0, registered_at_block 0) leak into the list.
     const rows = await db
       .select({
         agentId: agents.agentId,
@@ -90,7 +93,7 @@ async function fetchTopAgents(): Promise<RatedTop[]> {
         feedbackCount: agents.feedbackCount,
       })
       .from(agents)
-      .where(drizzleSql`reputation_score IS NOT NULL`)
+      .where(drizzleSql`reputation_score IS NOT NULL AND COALESCE(jobs_completed, 0) >= 5`)
       .orderBy(desc(agents.reputationScore))
       .limit(8);
 

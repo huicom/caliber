@@ -206,17 +206,20 @@ Here's what you need:
 
 1. An Arc node — self-hosted or RPC provider
 2. The contract addresses for ERC-8004 and ERC-8183
-3. Our feature definitions (SQL views in the repo)
-4. Our math (open source in `rating/engine/`, TypeScript)
+3. Our feature definitions (the methodology paper documents every input)
+4. Our math (TypeScript engine in `rating/engine/`; source disclosed under CC BY 4.0 after the July 2026 hackathon close — reviewer access on request)
 5. Our rating composition rules from Step 3
 
-We publish:
-- ✅ Raw event data via API
-- ✅ Computed features per agent
-- ✅ The statistical parameters (so you can verify the math)
+We publish today:
+- ✅ Raw event data via the public API
+- ✅ Computed features per agent (factor breakdown in every rating response)
+- ✅ The composition weights (50/25/15/10 — documented above)
 - ✅ Final ratings with every component broken out
+- ✅ Methodology version stamped on every API response
 
-If you run the same inputs and get a different rating, **we want to hear about it**. That's the point.
+**Source code disclosure timeline:** the engine and contract source live in a private repository through the active hackathon window (closes July 2026). Reviewers — including grant assessors, security auditors, and integration partners — can request read access; reach out via the contact below. The repository will be made public under CC BY 4.0 (methodology) and MIT (code) after the hackathon submission deadline. Until then, the methodology paper plus the published factor breakdown is sufficient to reproduce any rating you can read from the API.
+
+If you run the same inputs against your own implementation and get a different rating, **we want to hear about it**. That's the point.
 
 ---
 
@@ -320,9 +323,9 @@ On the roadmap for v2.1:
 ## Want to dig deeper?
 
 - **Site:** [caliber.poko.blue](https://caliber.poko.blue)
-- **Code:** [github.com/huicom/arc-agents-explorer](https://github.com/huicom/arc-agents-explorer)
-- **Issues, disagreements, requests:** open an issue on GitHub
-- **DM:** @PokoBlue99 on Twitter
+- **Code:** source disclosed under CC BY 4.0 (methodology) and MIT (engine + contracts) after the July 2026 hackathon close — reviewer access on request via DM
+- **Issues, disagreements, requests:** DM or email PokoBlue
+- **DM:** [@PokoBlue99 on X](https://x.com/PokoBlue99)
 
 Built in Bangkok. Powered by a self-hosted Arc node. Standards-native, open methodology.
 
@@ -338,6 +341,12 @@ Built in Bangkok. Powered by a self-hosted Arc node. Standards-native, open meth
 | 1.0-rebrand | 2026-05-21 | Brand renamed from ArcAgents to **Caliber**. Tier scale strings renamed `Arc-*` → `Caliber-*`. Scope narrowed to Arc-only. EIP-712 domain redeployed with `name="Caliber"`. No methodological change. |
 | 1.0.1-tuning | 2026-05-21 | Scorecard recalibration against the first 883 rateable agents. PD coefficient and tier-band cutoff adjustments. Same formula, no methodological change. **This was the last v1.x version.** Archive tag: `methodology-v1.0.1-final`. |
 | **2.0** | **2026-05-22** | **Pivot to counterparty performance rating.** Performance-bond / PPD-LGD-EAD framing replaced with credibility-weighted reliability, survival analysis, and rule-based risk flags. Tier scale renamed from Caliber-AAA … Caliber-D to Established / Proven / Emerging / Provisional / Watch / Inactive. Score 0–100 replaces PD probability as the central published number. Attestation struct redesigned (`tier`, `score`, `interactionCount`, `flags` replace `pdBps`, `lgdBps`, `confidence`). CaliberEscrow bond formula changed from `budget × PD × LGD` to tier-stepped table with configurable rates. Three contracts redeployed on Arc Testnet. Provenance: the v1.x framing was rejected as overclaiming for the data available; v2.0 is the honest fit. |
+
+### Stability statement
+
+**v2.0 is the first version intended to be stable for at least 30 days.** The pre-v2.0 versions (1.0, 1.0-rebrand, 1.0.1-tuning) shipped during a 36-hour calibration window in which both the framing and the tier scale were under active revision; ratings issued under those versions are preserved at the git tag `methodology-v1.0.1-final` for audit, but **should not be referenced operationally**. The v1.x contracts on Arc Testnet are deprecated; the live RatingVerifier, RatingGateway, and CaliberEscrow are the v2.0 deployments (addresses listed under §The Attestation Primitive).
+
+Material changes from v2.0 forward follow the 30-day notice rule in §Versioning. Any future tier rename, factor add/remove, default-definition change, or composition-weight adjustment requires a new minor version with 30 days of dual-version reporting before the old version is retired.
 
 ---
 
