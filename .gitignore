@@ -6,3 +6,7 @@ dist/
 *.log
 .DS_Store
 pg-data/
+
+# editor swap files
+*.swp
+*.swo
