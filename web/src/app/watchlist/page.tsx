@@ -154,13 +154,17 @@ export default async function WatchlistPage({
           an alarm clock for the agents you depend on.
         </p>
         <p className="text-sm text-[var(--color-mute)] mt-3">
-          Machine-readable:{' '}
-          <Link href="/api/watchlist" className="text-[var(--color-copper)] hover:underline font-mono text-xs">
-            /api/watchlist
+          Subscribe:{' '}
+          <Link href="/watchlist/subscribe" className="text-[var(--color-copper)] hover:underline">
+            via Discord →
           </Link>{' '}
           ·{' '}
           <Link href="/watchlist.rss" className="text-[var(--color-copper)] hover:underline font-mono text-xs">
             RSS
+          </Link>{' '}
+          ·{' '}
+          <Link href="/api/watchlist" className="text-[var(--color-copper)] hover:underline font-mono text-xs">
+            /api/watchlist
           </Link>
         </p>
       </section>
