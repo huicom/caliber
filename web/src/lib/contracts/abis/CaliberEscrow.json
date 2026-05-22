@@ -21,6 +21,11 @@
         "name": "ratingGateway_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "owner_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -34,6 +39,19 @@
         "name": "",
         "type": "uint8",
         "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "BOND_BPS_REFUSED",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -66,13 +84,13 @@
   },
   {
     "type": "function",
-    "name": "BPS_SQUARED",
+    "name": "MAX_BOND_BPS",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "stateMutability": "view"
@@ -157,6 +175,97 @@
   },
   {
     "type": "function",
+    "name": "TIER_COUNT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_EMERGING",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_ESTABLISHED",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_INACTIVE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_PROVEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_PROVISIONAL",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "TIER_WATCH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "agenticCommerce",
     "inputs": [],
     "outputs": [
@@ -164,6 +273,38 @@
         "name": "",
         "type": "address",
         "internalType": "contract IERC8183"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bondBpsByTier",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bondTable",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint16[6]",
+        "internalType": "uint16[6]"
       }
     ],
     "stateMutability": "view"
@@ -204,6 +345,19 @@
   },
   {
     "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "postBond",
     "inputs": [
       {
@@ -237,17 +391,17 @@
             "internalType": "uint8"
           },
           {
-            "name": "pdBps",
+            "name": "score",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "interactionCount",
             "type": "uint16",
             "internalType": "uint16"
           },
           {
-            "name": "lgdBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "confidence",
+            "name": "flags",
             "type": "uint8",
             "internalType": "uint8"
           },
@@ -318,14 +472,9 @@
         "internalType": "uint256"
       },
       {
-        "name": "pdBps",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "lgdBps",
-        "type": "uint16",
-        "internalType": "uint16"
+        "name": "tier",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ],
     "outputs": [
@@ -335,7 +484,25 @@
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "pure"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "setBondBpsForTier",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "newBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -345,6 +512,19 @@
         "name": "jobId",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferOwner",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -375,6 +555,37 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BondBpsByTierUpdated",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "previousBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "newBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -417,16 +628,10 @@
         "internalType": "uint8"
       },
       {
-        "name": "pdBps",
-        "type": "uint16",
+        "name": "score",
+        "type": "uint8",
         "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "lgdBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
+        "internalType": "uint8"
       }
     ],
     "anonymous": false
@@ -477,6 +682,25 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnerTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false

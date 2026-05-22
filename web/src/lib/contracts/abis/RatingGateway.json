@@ -120,17 +120,17 @@
             "internalType": "uint8"
           },
           {
-            "name": "pdBps",
+            "name": "score",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "interactionCount",
             "type": "uint16",
             "internalType": "uint16"
           },
           {
-            "name": "lgdBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "confidence",
+            "name": "flags",
             "type": "uint8",
             "internalType": "uint8"
           },
@@ -167,7 +167,7 @@
         "internalType": "uint8"
       },
       {
-        "name": "minConfidenceAllowed",
+        "name": "blockingFlagMask",
         "type": "uint8",
         "internalType": "uint8"
       }
@@ -231,6 +231,18 @@
       },
       {
         "name": "tier",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "score",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "flags",
         "type": "uint8",
         "indexed": false,
         "internalType": "uint8"

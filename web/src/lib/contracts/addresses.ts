@@ -5,10 +5,11 @@
 export const AGENTIC_COMMERCE = '0x0747EEf0706327138c69792bF28Cd525089e4583';
 export const USDC_CONTRACT = '0x3600000000000000000000000000000000000000';
 
-// Redeployed 2026-05-21 (Wave 2). RatingAttestation struct now includes
-// uint16 lgdBps so CaliberEscrow can price the bond formula
-// (budget × pd × lgd) from a single signed attestation. Signer:
-// 0xbF017698BB2c936D54a74DCABF68Df42800bAA84. Methodology v1.0.0.
-export const RATING_VERIFIER = '0x32C554edA5CDD2eb94F242ebf3f38820d3C53E29';
-export const RATING_GATEWAY = '0xB4C1aF80Adb9F537985B93490a02eB229089259f';
-export const CALIBER_ESCROW = '0x0193CB604BC0B4B8853EA45Dfdcd062aa1dc3DF6';
+// Redeployed 2026-05-22 (Wave M, methodology v2.0). RatingAttestation struct
+// redesigned (tier+score+interactionCount+flags replace pdBps+lgdBps+confidence).
+// CaliberEscrow bond formula switched to configurable tier-stepped table.
+// Signer: 0xbF017698BB2c936D54a74DCABF68Df42800bAA84. Methodology v2.0.0.
+// Previous v1.x deployments preserved at git tag methodology-v1.0.1-final.
+export const RATING_VERIFIER = '0xE3b1e82f1A047BC5B41d8982EaC635EC61526EE8';
+export const RATING_GATEWAY = '0x003234AAd031242052d7e580d337386f1B261b78';
+export const CALIBER_ESCROW = '0xc76bb990E498ACace1ff6A83ea4CCDDa92485365';
