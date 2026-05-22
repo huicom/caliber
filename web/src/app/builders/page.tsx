@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { DocShell } from '@/components/site/DocShell';
 
 const PAGE_DESCRIPTION =
   "A 10-minute introduction to Caliber Rating v2.0 — a counterparty performance rating for AI agents on Arc. Plain language, working code examples, honest limitations.";
@@ -31,38 +30,27 @@ async function loadGuide(): Promise<string> {
     '01-builders-guide.md',
   );
   const raw = await fs.readFile(filePath, 'utf8');
-  // Strip YAML frontmatter so it doesn't render as text.
   return raw.replace(/^---\n[\s\S]*?\n---\n/, '');
 }
 
 export default async function BuildersGuidePage() {
   const markdown = await loadGuide();
   return (
-    <main className="mx-auto max-w-3xl px-5 py-16 sm:py-20">
-      <article
-        className="
-          prose prose-lg max-w-none
-          prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-[var(--color-fg)]
-          prose-h1:text-4xl prose-h1:mb-6 prose-h1:mt-0
-          prose-h2:text-2xl prose-h2:mt-12 prose-h2:mb-4 prose-h2:border-b prose-h2:border-[var(--color-border)] prose-h2:pb-3
-          prose-h3:text-xl prose-h3:mt-8
-          prose-h4:text-lg prose-h4:mt-6
-          prose-p:leading-relaxed prose-p:text-[var(--color-fg)]
-          prose-li:text-[var(--color-fg)] prose-li:leading-relaxed
-          prose-strong:text-[var(--color-fg)] prose-strong:font-semibold
-          prose-em:text-[var(--color-fg-mute)] prose-em:italic
-          prose-a:text-[var(--color-accent)] prose-a:no-underline hover:prose-a:underline
-          prose-blockquote:border-l-[var(--color-accent)] prose-blockquote:text-[var(--color-fg-mute)] prose-blockquote:not-italic prose-blockquote:font-normal
-          prose-code:text-[var(--color-accent)] prose-code:bg-[var(--color-bg-elev)] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-normal prose-code:before:hidden prose-code:after:hidden
-          prose-pre:bg-[var(--color-bg-elev)] prose-pre:border prose-pre:border-[var(--color-border)] prose-pre:text-[var(--color-fg)]
-          prose-hr:border-[var(--color-border)] prose-hr:my-10
-          prose-table:text-sm
-          prose-th:text-[var(--color-fg)] prose-th:border-b-[var(--color-border-hi)]
-          prose-td:text-[var(--color-fg)] prose-td:border-[var(--color-border)]
-        "
-      >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
-      </article>
-    </main>
+    <DocShell
+      crumbs={[
+        { href: '/', label: 'caliber' },
+        { label: 'builders' },
+      ]}
+      eyebrow="//builders_guide"
+      title="Build with Caliber in 10 minutes"
+      kicker="Plain-language tour of what Caliber is, why it matters, and three concrete things you can build with it today. For the deep technical reference, see /developers."
+      markdown={markdown}
+      seeAlso={[
+        { href: '/developers', label: 'developer guide' },
+        { href: '/integrate', label: 'integrate (code samples)' },
+        { href: '/methodology', label: 'methodology paper' },
+        { href: '/guide', label: 'user guide' },
+      ]}
+    />
   );
 }
