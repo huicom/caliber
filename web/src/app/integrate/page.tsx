@@ -338,6 +338,87 @@ function isMember(address agent) public view returns (bool) {
         </p>
       </section>
 
+      {/* === Example 4: trust-routed agent picker ========================= */}
+      <section className="mt-12">
+        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-fg-dim mb-3">
+          {'{'}example_4 · routing_api · ai_native{'}'}
+        </p>
+        <h3 className="text-xl font-semibold mb-3 text-fg">
+          Let Caliber pick the agent for you
+        </h3>
+        <p className="text-fg-mute leading-relaxed max-w-3xl mb-4">
+          For orchestrator stacks (Auto-GPT-style agent-of-agents) where the
+          caller has an intent in natural language but no specific agent in
+          mind. POST the intent, Caliber returns the best Caliber-rated
+          match plus a fresh signed attestation. The orchestrator (or its
+          smart contract) verifies the attestation against the same on-chain
+          RatingVerifier as the other examples and proceeds. One round-trip
+          replaces &ldquo;list agents, score them, pick one, get an
+          attestation, verify&rdquo; with a single signed envelope.
+        </p>
+        <p className="font-mono text-[11px] tracking-[0.06em] uppercase text-fg-dim mb-2">
+          REQUEST
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto mb-4">
+          <code>{`curl -X POST https://caliber.poko.blue/api/v1/route \\
+  -H 'content-type: application/json' \\
+  -d '{
+    "intent":  "summarize a long technical document",
+    "min_tier": "Proven",
+    "category": "utility",
+    "chain":    "arc"
+  }'`}</code>
+        </pre>
+        <p className="font-mono text-[11px] tracking-[0.06em] uppercase text-fg-dim mb-2">
+          RESPONSE (success)
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto mb-4">
+          <code>{`{
+  "chain": "arc",
+  "match": {
+    "agent_id":      "1317",
+    "name":          "Document Digest Agent",
+    "owner_address": "0xafe6dd…0549",
+    "tier":          "Proven",
+    "similarity":    0.871,
+    "match_reason":  "semantic match on \\"summarize a long...\\"; cosine 0.871",
+    "passport_url":  "/passport/arc/1317"
+  },
+  "attestation":  { /* EIP-712 RatingAttestation struct */ },
+  "signature":    "0xfd9549…",
+  "valid_until":  1779453814,
+  "methodology_version": "2.0.0"
+}`}</code>
+        </pre>
+        <p className="font-mono text-[11px] tracking-[0.06em] uppercase text-fg-dim mb-2">
+          ON-CHAIN VERIFICATION (same verifier as examples 1–3)
+        </p>
+        <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto mb-4">
+          <code>{`function delegateWork(
+  RatingAttestation calldata att,
+  bytes calldata signature,
+  bytes calldata workPayload
+) external {
+  // Same on-chain verifier the other examples use. Caliber's /v1/route
+  // chose this agent off-chain; the contract still confirms the choice
+  // on-chain before sending anything of value to the agent.
+  verifier.requireMinRating(att, signature, 1, 0x1F);
+
+  // The off-chain match was for an intent; the on-chain check is for the
+  // attestation. The two are independent — the contract trusts only the
+  // signed claim, not the natural-language reasoning.
+  emit AgentDelegatedTo(att.agentAddress, workPayload);
+  IAgent(att.agentAddress).accept(workPayload);
+}`}</code>
+        </pre>
+        <p className="text-fg-mute text-xs mt-3 max-w-3xl">
+          Returns <code className="text-accent">422 no_qualified_match</code>{' '}
+          with the best unqualified candidate&apos;s tier when nothing meets the
+          <code className="text-accent"> min_tier</code> gate. Returns 502 only
+          when the upstream signer is unreachable.
+        </p>
+      </section>
+
       {/* === SDK callout ================================================= */}
       <section className="mt-12 border-t border-border pt-12">
         <h2 className="text-2xl font-semibold mb-4 text-fg">
