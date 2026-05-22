@@ -2,8 +2,8 @@ import 'dotenv/config';
 (BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
   return this.toString();
 };
-import { db, sql as rawSql, ratingSnapshots, tierTransitions } from '@arc-agents/db';
-import { eq, and, desc, lt } from 'drizzle-orm';
+import { db, sql as rawSql, ratingSnapshots, tierTransitions, watchlistWebhooks } from '@arc-agents/db';
+import { eq, and, desc, lt, gte } from 'drizzle-orm';
 import { rateAgent } from '../engine/rating';
 import { METHODOLOGY_VERSION } from '../engine/version';
 import { flagsToBitfield, TIER_ORDINAL, type CaliberTier } from '../engine/types';
@@ -229,6 +229,201 @@ async function main() {
   console.log(
     `[snapshot] done · written=${written} · skipped_unrated=${skippedUnrated} · errors=${errors} · ${elapsedSec}s`,
   );
+
+  // Phase B polish: fan today's new transitions out to subscribed Discord webhooks.
+  // Runs strictly AFTER snapshot insertion so we never dispatch from partial data.
+  await dispatchWebhooks(startedAt);
+}
+
+// ---------------------------------------------------------------------
+// Discord webhook dispatch (Track 3.5)
+// ---------------------------------------------------------------------
+
+const TIER_COLOR: Record<string, number> = {
+  Established: 0x00b894,
+  Proven:      0x0ea5e9,
+  Emerging:    0x14b8a6,
+  Provisional: 0x94a3b8,
+  Watch:       0xf59e0b,
+  Inactive:    0x1f2937,
+};
+
+const KIND_VERB: Record<string, string> = {
+  first_rating: 'received first Caliber rating',
+  tier_up: 'moved up to',
+  tier_down: 'moved down to',
+  enter_watch: 'entered Watch tier',
+  enter_inactive: 'went Inactive',
+  exit_watch: 'left Watch tier',
+  exit_inactive: 'reactivated to',
+  flag_added: 'gained risk flag while at',
+  flag_removed: 'cleared risk flag while at',
+};
+
+const FLAG_NAMES = [
+  'CounterpartyConcentration',
+  'ValidatorConcentration',
+  'SybilPattern',
+  'VolumeAnomaly',
+  'Dormancy',
+];
+
+function flagsToNames(mask: number | null): string[] {
+  if (mask == null) return [];
+  return FLAG_NAMES.filter((_, i) => (mask & (1 << i)) !== 0);
+}
+
+interface TransitionWithAgent {
+  id: string;
+  chain_id: string;
+  agent_id: string;
+  at: Date;
+  kind: string;
+  from_tier: string | null;
+  to_tier: string;
+  from_flags: number | null;
+  to_flags: number;
+  methodology_version: string;
+  agent_name: string | null;
+}
+
+function buildEmbeds(transitions: TransitionWithAgent[]): Array<Record<string, unknown>> {
+  return transitions.slice(0, 10).map((t) => {
+    const name = t.agent_name ?? `Agent #${t.agent_id}`;
+    const verb = KIND_VERB[t.kind] ?? t.kind;
+    const flagsAdded = flagsToNames(t.to_flags & ~(t.from_flags ?? 0));
+    const flagsRemoved = flagsToNames((t.from_flags ?? 0) & ~t.to_flags);
+    const detail: string[] = [];
+    if (t.from_tier) detail.push(`From: \`${t.from_tier}\``);
+    detail.push(`Now: \`${t.to_tier}\``);
+    if (flagsAdded.length) detail.push(`Flags + : ${flagsAdded.join(', ')}`);
+    if (flagsRemoved.length) detail.push(`Flags − : ${flagsRemoved.join(', ')}`);
+    return {
+      title: `${name} ${verb} ${t.to_tier}`,
+      url: `https://caliber.poko.blue/passport/${t.chain_id}/${t.agent_id}`,
+      description: detail.join(' · '),
+      color: TIER_COLOR[t.to_tier] ?? 0x94a3b8,
+      footer: { text: `caliber · methodology v${t.methodology_version} · ${t.kind}` },
+      timestamp: t.at.toISOString(),
+    };
+  });
+}
+
+async function postToDiscord(
+  webhookUrl: string,
+  embeds: Array<Record<string, unknown>>,
+): Promise<{ ok: boolean; status: number; body?: string }> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        content: `**Caliber Watchlist** · ${embeds.length} new event${embeds.length === 1 ? '' : 's'}`,
+        embeds,
+      }),
+      signal: ctrl.signal,
+    });
+    if (res.status === 429) {
+      // Honor Discord's rate-limit retry hint
+      const retryAfter = Number(res.headers.get('retry-after') ?? '5');
+      await new Promise((r) => setTimeout(r, retryAfter * 1000));
+      return { ok: false, status: 429, body: 'rate-limited; will retry next run' };
+    }
+    if (res.status >= 200 && res.status < 300) return { ok: true, status: res.status };
+    const body = await res.text().catch(() => '');
+    return { ok: false, status: res.status, body: body.slice(0, 200) };
+  } catch (e) {
+    return { ok: false, status: 0, body: e instanceof Error ? e.message : 'fetch failed' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function dispatchWebhooks(snapshotStartedAt: Date): Promise<void> {
+  // Pull all transitions written during this snapshot run + the agent name for each.
+  const rows = (await rawSql.unsafe(
+    `
+    SELECT
+      t.id::text AS id,
+      t.chain_id AS chain_id,
+      t.agent_id::text AS agent_id,
+      t.at AS at,
+      t.kind AS kind,
+      t.from_tier AS from_tier,
+      t.to_tier AS to_tier,
+      t.from_flags AS from_flags,
+      t.to_flags AS to_flags,
+      t.methodology_version AS methodology_version,
+      a.name AS agent_name
+    FROM tier_transitions t
+    LEFT JOIN agents a ON a.agent_id = t.agent_id
+    WHERE t.at >= $1
+    ORDER BY t.at, t.id;
+  `,
+    [snapshotStartedAt.toISOString()],
+  )) as TransitionWithAgent[];
+
+  if (rows.length === 0) {
+    console.log('[dispatch] no new transitions to fan out');
+    return;
+  }
+
+  const subscribers = await db
+    .select()
+    .from(watchlistWebhooks)
+    .where(eq(watchlistWebhooks.status, 'active'));
+
+  if (subscribers.length === 0) {
+    console.log(`[dispatch] ${rows.length} transitions, 0 subscribers — nothing to send`);
+    return;
+  }
+
+  console.log(`[dispatch] ${rows.length} transitions × ${subscribers.length} active subscribers`);
+
+  for (const sub of subscribers) {
+    const filter = sub.kindFilter;
+    const kinds = filter === '*' ? null : new Set(filter.split(',').map((s) => s.trim()));
+    const filtered = rows.filter((r) => !kinds || kinds.has(r.kind));
+    if (filtered.length === 0) continue;
+
+    // Send in 10-embed chunks (Discord's per-message embed cap).
+    let dispatched = 0;
+    let lastResult: Awaited<ReturnType<typeof postToDiscord>> | null = null;
+    for (let i = 0; i < filtered.length; i += 10) {
+      const chunk = filtered.slice(i, i + 10);
+      const res = await postToDiscord(sub.webhookUrl, buildEmbeds(chunk));
+      lastResult = res;
+      if (!res.ok) break;
+      dispatched += chunk.length;
+      // Tiny pause between chunks to be a polite Discord client.
+      if (i + 10 < filtered.length) await new Promise((r) => setTimeout(r, 800));
+    }
+
+    if (lastResult?.ok) {
+      await db
+        .update(watchlistWebhooks)
+        .set({ lastFiredAt: new Date(), consecutiveFailures: 0, lastError: null, lastErrorAt: null })
+        .where(eq(watchlistWebhooks.id, sub.id));
+      console.log(`[dispatch] webhook=${sub.id} sent=${dispatched}`);
+    } else {
+      const fails = (sub.consecutiveFailures ?? 0) + 1;
+      const shouldPause = fails >= 3;
+      await db
+        .update(watchlistWebhooks)
+        .set({
+          consecutiveFailures: fails,
+          lastErrorAt: new Date(),
+          lastError: `${lastResult?.status ?? 0} ${lastResult?.body ?? 'unknown'}`,
+          status: shouldPause ? 'paused' : 'active',
+        })
+        .where(eq(watchlistWebhooks.id, sub.id));
+      console.warn(
+        `[dispatch] webhook=${sub.id} failed (${fails} consecutive)${shouldPause ? ' — paused' : ''}`,
+      );
+    }
+  }
 }
 
 // Only auto-run when invoked directly. When this file is imported (e.g. by

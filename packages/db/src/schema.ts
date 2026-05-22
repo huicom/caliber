@@ -317,3 +317,31 @@ export const tierTransitions = pgTable(
 
 export type TierTransition = typeof tierTransitions.$inferSelect;
 export type NewTierTransition = typeof tierTransitions.$inferInsert;
+
+// Phase B polish: Discord webhook subscriptions for the Watchlist feed.
+// Anyone can paste a Discord webhook URL + filter mask; the daily snapshot
+// fans new tier_transitions out to each active subscription. No email
+// confirmation flow — the URL itself is the secret. Auto-pauses a webhook
+// after consecutive_failures >= 3 so a dead/private channel can't burn
+// our delivery budget forever.
+export const watchlistWebhooks = pgTable(
+  'watchlist_webhooks',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    webhookUrl: text('webhook_url').notNull().unique(),
+    // Comma-separated transition kinds, or '*' for all. e.g. 'tier_down,enter_watch,flag_added'
+    kindFilter: text('kind_filter').notNull().default('*'),
+    status: text('status').notNull().default('active'), // 'active' | 'paused'
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    lastFiredAt: timestamp('last_fired_at', { withTimezone: true }),
+    lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    statusIdx: index('idx_webhooks_status').on(table.status),
+  }),
+);
+
+export type WatchlistWebhook = typeof watchlistWebhooks.$inferSelect;
+export type NewWatchlistWebhook = typeof watchlistWebhooks.$inferInsert;
