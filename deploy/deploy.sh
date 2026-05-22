@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Always run from the repo root, no matter where the user invoked us from.
+# Without this, `cd deploy && ./deploy.sh` resolves `deploy/*.service`
+# paths against `deploy/deploy/*` and bails with "no such file".
+cd "$(dirname "$0")/.."
+
 export PATH="$HOME/.npm-global/bin:$PATH"
 
 echo "🏗️  Building..."
