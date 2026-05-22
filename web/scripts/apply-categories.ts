@@ -10,9 +10,9 @@
 //
 // Run from web/:  pnpm exec tsx --env-file=../.env scripts/apply-categories.ts
 
-import { db, agents } from '../src/lib/db';
-import { eq, sql } from 'drizzle-orm';
-import { classify } from './classify-corpus';
+import { db } from '../src/lib/db';
+import { sql } from 'drizzle-orm';
+import { classify } from '@arc-agents/db';
 
 interface Row {
   agent_id: string;

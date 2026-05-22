@@ -7,6 +7,7 @@ import { applyEvents } from './lib/handlers';
 import { getLastIndexedBlock, setLastIndexedBlock } from './lib/state';
 import { notifyEvents } from './lib/notify';
 import { fetchTokenURI, fetchMetadataFromUri } from './lib/ipfs';
+import { classify } from '@arc-agents/db';
 import { logger } from './lib/logger';
 import { db, agents } from '@arc-agents/db';
 import { eq } from 'drizzle-orm';
@@ -65,6 +66,21 @@ async function processNewAgentMetadata(
       if (!uri) continue;
 
       const metadata = await fetchMetadataFromUri(uri);
+      // F2 categorization runs inline. Returns 'other' when score below
+      // threshold; we store NULL for 'other' so the Discover queries treat
+      // it the same as "uncategorized" (already the convention).
+      // Write 'other' literally when classify scores below threshold —
+      // mirrors the offline backfill convention (NULL = never classified,
+      // 'other' = tried and didn't fit any rule).
+      let category: string | null = null;
+      if (metadata) {
+        category = classify({
+          name: metadata.name,
+          agent_type: metadata.agent_type,
+          description: (metadata as Record<string, unknown>).description as string | undefined,
+          capabilities: metadata.capabilities,
+        }).category;
+      }
       await db
         .update(agents)
         .set({
@@ -73,6 +89,7 @@ async function processNewAgentMetadata(
           name: metadata?.name ?? null,
           agentType: metadata?.agent_type ?? null,
           capabilities: metadata?.capabilities ?? null,
+          category,
           updatedAt: new Date(),
         })
         .where(eq(agents.agentId, e.agentId));

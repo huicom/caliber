@@ -1,0 +1,16 @@
+[Unit]
+Description=Caliber — run embed-pending every 15 min to fill new agents' embeddings
+Documentation=man:systemd.timer(5)
+
+[Timer]
+# Fires the first time 5 min after boot, then every 15 min thereafter.
+# At our current Arc Testnet volume (~10-50 new agents/day), this means
+# any newly-categorized agent shows up in /discover free-text search
+# within 15 min of getting metadata.
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

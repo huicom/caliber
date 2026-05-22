@@ -18,6 +18,8 @@ sudo cp deploy/arc-web.service /etc/systemd/system/
 sudo cp deploy/arc-rating.service /etc/systemd/system/
 sudo cp deploy/caliber-snapshot.service /etc/systemd/system/
 sudo cp deploy/caliber-snapshot.timer /etc/systemd/system/
+sudo cp deploy/caliber-embed-pending.service /etc/systemd/system/
+sudo cp deploy/caliber-embed-pending.timer /etc/systemd/system/
 
 echo "📋 Installing nginx config (for arcagents.poko.blue only — rating uses Cloudflare Tunnel)..."
 sudo cp deploy/nginx-arcagents.conf /etc/nginx/sites-available/arcagents
@@ -29,7 +31,8 @@ sudo touch /var/log/arc-indexer.log /var/log/arc-indexer-err.log
 sudo touch /var/log/arc-web.log     /var/log/arc-web-err.log
 sudo touch /var/log/arc-rating.log  /var/log/arc-rating-err.log
 sudo touch /var/log/caliber-snapshot.log /var/log/caliber-snapshot-err.log
-sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log
+sudo touch /var/log/caliber-embed-pending.log /var/log/caliber-embed-pending-err.log
+sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log /var/log/caliber-embed-pending*.log
 
 echo "🔧 Reloading systemd..."
 sudo systemctl daemon-reload
@@ -46,6 +49,9 @@ sudo systemctl restart arc-indexer-live arc-web arc-rating
 
 echo "▶️  Enabling Caliber daily snapshot timer (Wave 3)..."
 sudo systemctl enable --now caliber-snapshot.timer
+
+echo "▶️  Enabling Caliber embed-pending timer (Phase 2 / Track 4) — fires every 15 min..."
+sudo systemctl enable --now caliber-embed-pending.timer
 
 echo ""
 echo "✅  Deploy complete. Check status:"
