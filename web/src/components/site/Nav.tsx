@@ -20,21 +20,25 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { label: 'home', href: '/' },
-  { label: 'agents', href: '/agents' },
+  { label: 'discover', href: '/discover' },
   {
     label: 'jobs',
     children: [
       { href: '/jobs', label: 'jobs' },
       { href: '/jobs/new', label: 'post a job' },
+      { href: '/watchlist', label: 'watchlist' },
       { href: '/live', label: 'live feed' },
     ],
   },
   { label: 'methodology', href: '/methodology' },
   {
-    label: 'stats',
+    label: 'build',
     children: [
+      { href: '/developers', label: 'developer guide' },
+      { href: '/integrate', label: 'integrate (code)' },
+      { href: '/guide', label: 'user guide' },
       { href: '/stats', label: 'stats' },
-      { href: '/integrate', label: 'integrate' },
+      { href: '/agents', label: 'agent list (raw)' },
     ],
   },
 ];
