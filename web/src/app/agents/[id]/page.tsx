@@ -28,6 +28,7 @@ import {
 import { formatUSDC, arcscanTxUrl } from '@/lib/format';
 import { CheckCircle, Clock, ExternalLink, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { RatingTrajectoryChart } from './_components/RatingTrajectoryChart';
 
 export default async function AgentDetailPage({
   params,
@@ -155,6 +156,10 @@ export default async function AgentDetailPage({
               : '—'
           }
         />
+      </div>
+
+      <div className="mb-8">
+        <RatingTrajectoryChart chain="arc" agentId={id} />
       </div>
 
       <div className="grid md:grid-cols-[1fr_320px] gap-8">

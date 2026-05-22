@@ -11,9 +11,9 @@
 | **W0** | Land in-flight working tree (engine, service, components, migration) | **✓ Shipped** — commit `915c6f2` |
 | **W1** | Job Marketplace at `/jobs/new`, tier-gated | **✓ Shipped** — form + draft API + insufficient-confidence guard + tier-gap pre-check + `/jobs` "Gated by Caliber" filter + per-row gate badge + ineligible audit signal |
 | **W2** | Caliber Escrow (bond = budget × LGD × PD) | **✓ Shipped** — CaliberEscrow at 0x0193…3DF6 on Arc Testnet, lgdBps added to signed attestation, 25/25 forge tests pass, /integrate has bond math + lifecycle |
-| **W3** | Rating Trajectory (daily snapshots + chart) | Not started |
-| **W4** | Validator Scoreboard (predictiveness-weighted) | Not started — blocks on W3 |
-| **W5** | Watchlist + Downgrade Alerts | Not started — blocks on W3 |
+| **W3** | Rating Trajectory (daily snapshots + chart) | **✓ Shipped** — `rating_snapshots` table + cron + 2 API endpoints + trajectory chart on `/agents/[id]` + stacked-area on `/stats` |
+| **W4** | Validator Scoreboard (predictiveness-weighted) | Not started — unblocked by W3 |
+| **W5** | Watchlist + Downgrade Alerts | Not started — unblocked by W3 |
 | **W6** | Per-factor Audit Drill-down | Not started — independent of W2-W5 |
 
 ### Hard corrections vs the originating plan
@@ -266,10 +266,42 @@ verifier/gateway are deprecated.
 
 ---
 
-## Wave 3 — Rating Trajectory (snapshots + chart)
+## Wave 3 — Rating Trajectory (snapshots + chart) ✓ shipped
 
-The rating is more credible when its history is durable. Also a
-prerequisite for W4 (calibration) and W5 (downgrade detection).
+**Status: ✓ Done** (2026-05-22). 625 seed snapshots written for today; cron
+takes over from tomorrow at 04:00 UTC.
+
+**What landed:**
+- `packages/db/src/schema.ts` — `rating_snapshots` table; migration
+  `0003_talented_karma.sql` applied
+- `rating/scripts/snapshot-daily.ts` — idempotent daily seeder (`pnpm
+  snapshot:daily`)
+- `deploy/caliber-snapshot.service` + `.timer` — systemd timer at
+  04:00 UTC daily; `deploy.sh` enables it on next deploy
+- `rating/src/history.ts` — `GET /v1/agents/:chain/:id/rating/history`
+- `rating/src/distribution-history.ts` — `GET /v1/ratings/distribution/history`
+  with 5-min cache, pivots to wide format for the area chart
+- `web/src/app/agents/[id]/_components/RatingTrajectoryChart.tsx` —
+  step-line, PIT solid copper + TTC dashed ink overlay (when available),
+  30/90/180-day toggle, BBB reference line
+- `web/src/app/stats/_components/TierDistributionHistoryChart.tsx` —
+  stacked area, full tier palette, 30/90/180-day toggle
+- `web/src/lib/api.ts` — `ratingHistory()` + `distributionHistory()` helpers
+
+**Seed result:**
+625 snapshots written across the 727 rateable agents on Arc (102 skipped
+as unrated by the engine; same 14-second runtime as `pd-sanity`). Today's
+distribution: AAA=1, AA=2, A=69, BBB=469, BB=67, B=6, D=11 (matches the
+live `/v1/ratings/distribution` headline within drift).
+
+**Notes & known limits:**
+- Backfilling real historical snapshots would require an `asOf` parameter
+  on `rateAgent()` so features filter events by timestamp. Deferred —
+  forward-only history grows by one day at a time starting tomorrow.
+- TTC view (methodology §3.3) needs ≥180 days of history; no agent
+  qualifies yet. The schema and chart support it for when they do.
+
+**Original design (kept for reference):**
 
 **Schema** (`packages/db/src/schema.ts` + new migration):
 ```ts
