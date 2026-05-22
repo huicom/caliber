@@ -12,15 +12,29 @@ import type { CompletionFeatures } from './completion-rate';
 // Configurable thresholds. Surfaced as named constants so methodology
 // revisions are findable + reviewable.
 export const FLAG_THRESHOLDS = {
-  // Counterparty concentration: top client share > 60%, AND fewer than 5
-  // unique clients (don't fire on agents whose top-client share is high but
-  // who have a wide client base for the rest).
-  COUNTERPARTY_TOP_SHARE: 0.6,
-  COUNTERPARTY_MIN_CLIENTS: 5,
+  // Counterparty concentration: top client share > 80%, AND fewer than 3
+  // unique clients. Tightened from the initial 60% / <5 after the v2.0
+  // Stage B sanity check showed the looser threshold firing on most
+  // testnet agents (which typically have 1–2 test clients each) —
+  // overstating concentration risk on a young dataset.
+  // The flag still catches genuine concentration; it no longer fires on
+  // every agent-with-three-clients pattern.
+  COUNTERPARTY_TOP_SHARE: 0.8,
+  COUNTERPARTY_MIN_CLIENTS: 3,
 
-  // Validator concentration: same shape.
-  VALIDATOR_TOP_SHARE: 0.6,
-  VALIDATOR_MIN_VALIDATORS: 5,
+  // Validator concentration: same shape, tightened symmetrically.
+  VALIDATOR_TOP_SHARE: 0.8,
+  VALIDATOR_MIN_VALIDATORS: 3,
+
+  // Sybil pattern (v2.0 launch): require self-dealing to DOMINATE the
+  // agent's behaviour, not just appear once. Self-deal share > 30% AND
+  // fewer than 5 unique clients. Tightened from the initial "any single
+  // self-deal" rule after the v2.0 Stage B sanity check showed it firing
+  // on developer test agents who'd self-hired once among many real jobs.
+  // A genuine sybil pattern has self-deal share much higher than 30%;
+  // a one-off test job by a developer does not.
+  SYBIL_SELF_DEAL_SHARE: 0.3,
+  SYBIL_MIN_CLIENTS: 5,
 
   // Volume anomaly: recent activity is 10× the agent's lifetime average.
   // Requires ≥ 30 days of history to compute meaningfully — otherwise we
@@ -65,17 +79,29 @@ export function computeFlags(
     details.ValidatorConcentration = `${Math.round(completion.topValidatorShare * 100)}% of validations from one validator (${completion.uniqueValidators} unique validators)`;
   }
 
-  // 3. Sybil pattern — v2.0 launch ships a conservative check only:
-  //    the agent's ownerAddress appears as a clientAddress on one of its
-  //    own jobs (self-dealing). Full graph cycle detection is v2.1.
+  // 3. Sybil pattern — fires when self-dealing dominates the behavior, not
+  //    when it merely appears once. A genuine sybil agent has most of its
+  //    "jobs" from its own wallet; a developer testing their agent has one
+  //    or two self-deals among real jobs. Threshold: self-deal share > 30%
+  //    AND fewer than 5 unique clients (so high-volume agents with many
+  //    real clients aren't flagged even if they have some self-test history).
+  //    Full graph cycle detection is v2.1.
+  let selfDealCount = 0;
+  const ownerLower = features.ownerAddress.toLowerCase();
   for (const j of features.jobs) {
+    if (j.clientAddress && j.clientAddress.toLowerCase() === ownerLower) {
+      selfDealCount++;
+    }
+  }
+  const totalJobs = features.jobs.length;
+  if (totalJobs > 0) {
+    const selfDealShare = selfDealCount / totalJobs;
     if (
-      j.clientAddress &&
-      j.clientAddress.toLowerCase() === features.ownerAddress.toLowerCase()
+      selfDealShare > FLAG_THRESHOLDS.SYBIL_SELF_DEAL_SHARE &&
+      completion.uniqueClients < FLAG_THRESHOLDS.SYBIL_MIN_CLIENTS
     ) {
       flags.push('SybilPattern');
-      details.SybilPattern = 'agent appears as its own client on at least one job (self-deal)';
-      break;
+      details.SybilPattern = `${Math.round(selfDealShare * 100)}% of jobs are self-deals (${selfDealCount}/${totalJobs}, ${completion.uniqueClients} unique clients)`;
     }
   }
 

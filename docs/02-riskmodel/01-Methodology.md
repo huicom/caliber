@@ -121,10 +121,10 @@ Statistics assume nobody's gaming the system. On-chain, that's not safe. So we a
 
 | Flag | When it fires |
 |---|---|
-| **Concentration: Counterparty** | 60%+ of jobs from a single client |
-| **Concentration: Validator** | 60%+ of validations from a single validator |
-| **Sybil pattern** | Counterparty graph has suspicious cycles |
-| **Volume anomaly** | Brand-new agent doing 10× their lifetime average in 30 days |
+| **Concentration: Counterparty** | 80%+ of jobs from a single client AND fewer than 3 unique clients |
+| **Concentration: Validator** | 80%+ of validations from a single validator AND fewer than 3 unique validators |
+| **Sybil pattern** | Self-deal share > 30% of jobs AND fewer than 5 unique clients. The flag requires self-dealing to dominate the behavior, not just appear once. Full graph cycle detection is v2.1. |
+| **Volume anomaly** | Brand-new agent doing 10× their lifetime average in 30 days (requires ≥30 days history) |
 | **Dormancy** | No activity in 90+ days |
 
 These are rules, not models. We disclose every one. If a flag fires, the agent gets pushed to the **Watch** tier regardless of its other numbers.
