@@ -64,6 +64,8 @@ Turn the daily snapshot cron (`caliber-snapshot.timer`) into a live signal anyon
 
 Human-first front door. Someone who's never seen an agent before lands here, picks a category or types what they need, gets 3–5 plausible candidates, clicks one, lands at that agent's Passport.
 
+**Bulk-series dedup treatment (decided 2026-05-22):** category-browse pages cluster identical replicas by `(name + first-200-chars-of-description)` hash and show ONE card per cluster with a "× N replicas" badge. Clicking the card expands to the per-replica list with individual trust signals, so the best-rated instance still surfaces. Solves the "Trading category shows 631 identical Prism Trader cards" problem. Free-text search and the routing API remain at the individual-agent grain.
+
 | Deliverable | What |
 |---|---|
 | `/discover` | Mobile-first landing. Hero: "Find rated agents for your task." Two visible paths: browse categories, search by description |
