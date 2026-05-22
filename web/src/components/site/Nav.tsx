@@ -18,27 +18,52 @@ interface NavItem {
   children?: SubItem[];
 }
 
+// Caliber site IA — five top-level items, three audience-neutral dropdowns
+// grouped by content type. Decided 2026-05-22.
+//
+//   home · discover · activity ▾ · docs ▾ · build ▾
+//
+// Rationale:
+//   - "discover" and "home" are the two entry points (returning vs new).
+//   - "activity" surfaces what's happening on Caliber right now —
+//     transitions, blocks, jobs, aggregates.
+//   - "docs" answers "what is this and how does it work" — methodology
+//     paper first, plain-language guides under.
+//   - "build" answers "how do I integrate" — developer reference, code
+//     samples, attestation verifier, raw agent list for engineers.
+// Verify lives under build (off-chain verifier is a developer tool).
+// Watchlist lives under activity (it's a live signal, not a builder tool).
+// The user-guide stays in docs because it's how people understand
+// Caliber, not how they consume it.
 const NAV: NavItem[] = [
   { label: 'home', href: '/' },
   { label: 'discover', href: '/discover' },
   {
-    label: 'jobs',
+    label: 'activity',
     children: [
-      { href: '/jobs', label: 'jobs' },
-      { href: '/jobs/new', label: 'post a job' },
       { href: '/watchlist', label: 'watchlist' },
       { href: '/live', label: 'live feed' },
+      { href: '/jobs', label: 'jobs' },
+      { href: '/jobs/new', label: 'post a job' },
+      { href: '/stats', label: 'stats' },
     ],
   },
-  { label: 'methodology', href: '/methodology' },
+  {
+    label: 'docs',
+    children: [
+      { href: '/methodology', label: 'methodology' },
+      { href: '/guide', label: 'user guide' },
+      { href: '/builders', label: 'builders guide' },
+      { href: '/docs/service', label: 'service companion' },
+    ],
+  },
   {
     label: 'build',
     children: [
       { href: '/developers', label: 'developer guide' },
-      { href: '/integrate', label: 'integrate (code)' },
-      { href: '/guide', label: 'user guide' },
-      { href: '/stats', label: 'stats' },
-      { href: '/agents', label: 'agent list (raw)' },
+      { href: '/integrate', label: 'integrate' },
+      { href: '/verify', label: 'verify' },
+      { href: '/agents', label: 'agents (raw)' },
     ],
   },
 ];
