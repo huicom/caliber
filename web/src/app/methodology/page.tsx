@@ -3,10 +3,23 @@ import path from 'node:path';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const PAGE_DESCRIPTION =
+  'Open counterparty performance rating methodology for ERC-8004 AI agents on Arc. Tier + score + flags, computed from on-chain track record with credibility-weighted reliability, survival analysis, and rule-based risk flags. Not a credit rating.';
+
 export const metadata = {
   title: 'Caliber Rating Methodology v2.0',
-  description:
-    'Open counterparty performance rating methodology for ERC-8004 AI agents on Arc. Tier + score + flags, computed from on-chain track record with credibility-weighted reliability, survival analysis, and rule-based risk flags. Not a credit rating.',
+  description: PAGE_DESCRIPTION,
+  openGraph: {
+    title: 'Caliber Rating Methodology v2.0',
+    description: PAGE_DESCRIPTION,
+    url: 'https://caliber.poko.blue/methodology',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Caliber Rating Methodology v2.0',
+    description: PAGE_DESCRIPTION,
+  },
 };
 
 async function loadMethodology(): Promise<string> {

@@ -1,10 +1,23 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 
+const PAGE_DESCRIPTION =
+  'Consume Caliber ratings on Arc. EIP-712 attestations any contract can verify. Three reference implementations: access gating, tier-stepped escrow, membership thresholding. Methodology v2.0.';
+
 export const metadata = {
-  title: 'Integrate Caliber — Trust layer for Arc agents',
-  description:
-    'Two ways to consume Caliber ratings on Arc: HTTP API (any language) or on-chain RatingVerifier (any Solidity contract). SDK in beta — Q3 2026.',
+  title: 'Integrate Caliber — Attestation primitive for Arc agents',
+  description: PAGE_DESCRIPTION,
+  openGraph: {
+    title: 'Integrate Caliber — Attestation primitive for Arc agents',
+    description: PAGE_DESCRIPTION,
+    url: 'https://caliber.poko.blue/integrate',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Integrate Caliber — Attestation primitive for Arc agents',
+    description: PAGE_DESCRIPTION,
+  },
 };
 
 export default function IntegratePage() {
@@ -332,17 +345,19 @@ function isMember(address agent) public view returns (bool) {
         </h2>
         <p className="text-fg-mute leading-relaxed max-w-2xl">
           <code className="text-accent">@caliber/sdk</code> wraps both surfaces with
-          ergonomic TypeScript types and one-call helpers. Coming in Phase 2 of the{' '}
+          ergonomic TypeScript types and one-call helpers. On the roadmap. Source
+          is under disclosure: the engine and contract source will be released
+          under CC BY 4.0 (methodology) and MIT (code) after the July 2026
+          hackathon close. Reviewer or integration access on request —{' '}
           <a
-            href="https://github.com/huicom/arc-agents-explorer"
+            href="https://x.com/PokoBlue99"
             target="_blank"
             rel="noreferrer"
             className="text-accent hover:underline inline-flex items-center gap-1"
           >
-            roadmap <ArrowUpRight className="inline w-3.5 h-3.5" />
+            DM PokoBlue <ArrowUpRight className="inline w-3.5 h-3.5" />
           </a>
-          . If you want early access, open a GitHub issue or contact PokoBlue
-          (@PokoBlue99) on X.
+          .
         </p>
       </section>
 

@@ -122,7 +122,7 @@ function rowMessage(row: FeedRow): React.ReactNode {
       return (
         <>
           feedback recorded for <Link href={`/agents/${ref}`} className="aa-mono">agent #{ref}</Link>
-          {row.extra ? <> · score <span className="aa-mono">{row.extra} / 25</span></> : null}
+          {row.extra ? <> · score <span className="aa-mono">{row.extra}</span></> : null}
           <div className="aa-feed__sub">factored into next Caliber attestation</div>
         </>
       );

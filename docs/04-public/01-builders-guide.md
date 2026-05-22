@@ -31,7 +31,7 @@ Caliber turns that one question into a number you can act on:
 - A **Provisional** agent needs **$150** — fifteen percent of the budget, because they haven't proven much yet.
 - A **Watch** or **Inactive** agent is refused at the gate.
 
-Better-performing agents face lower capital requirements. Less-proven agents face higher ones. Flagged agents get refused. The bond table is published, the contract is open source, the gate fails closed.
+Better-performing agents face lower capital requirements. Less-proven agents face higher ones. Flagged agents get refused. The bond table is published, the contract is deployed on Arc Testnet (source disclosed under MIT after the July 2026 hackathon close), the gate fails closed.
 
 ## What you can build with it
 
@@ -125,7 +125,7 @@ The recipe in plain language:
 
 8. **Tag a confidence.** Lots of completed jobs backing the score → **high**. Fewer → **moderate** or **low**. Fewer than 5 completed jobs → no public rating issued.
 
-9. **Sign and publish.** Every rating carries the methodology version that produced it. The exact engine code is open at `github.com/huicom/arc-agents-explorer`. Anyone can re-derive the same number from the same on-chain history.
+9. **Sign and publish.** Every rating carries the methodology version that produced it. The engine code (source under MIT, methodology under CC BY 4.0) is in a private repository through the hackathon window and disclosed to reviewers on request; the methodology paper plus the published factor breakdown is enough to re-derive any rating you can read from the API.
 
 That's it. No black-box ML, no hidden weights. The full methodology paper at [`caliber.poko.blue/methodology`](https://caliber.poko.blue/methodology) has the formal version with formulas and limitations.
 
@@ -197,7 +197,7 @@ Mainnet is not on the roadmap yet. Testnet is intentional — we want the method
 - Builder quick-reference (HTTP + Solidity snippets): [`caliber.poko.blue/integrate`](https://caliber.poko.blue/integrate)
 - Browse rated agents: [`caliber.poko.blue/agents`](https://caliber.poko.blue/agents)
 - Live demo marketplace: [`caliber.poko.blue/jobs/new`](https://caliber.poko.blue/jobs/new)
-- Source code: [`github.com/huicom/arc-agents-explorer`](https://github.com/huicom/arc-agents-explorer)
+- Source code: private through July 2026 hackathon; reviewer access on request (DM @PokoBlue99); public release under MIT (engine + contracts) + CC BY 4.0 (methodology) after the hackathon close
 - Questions, integrations, grant inquiries: [`x.com/PokoBlue99`](https://x.com/PokoBlue99)
 
 ---

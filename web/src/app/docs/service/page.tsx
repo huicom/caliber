@@ -3,10 +3,23 @@ import path from 'node:path';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const PAGE_DESCRIPTION =
+  'Operational companion to the Caliber Rating Methodology v2.0. How the service is operated, what the API contract looks like, how the on-chain primitives compose, and the v1→v2 provenance lesson.';
+
 export const metadata = {
-  title: 'Caliber: Methodology and Service Overview',
-  description:
-    'Operational summary of the Caliber performance-risk rating service for ERC-8004 agents on Arc Testnet. Companion to the full methodology paper.',
+  title: 'Caliber Rating — Service Companion',
+  description: PAGE_DESCRIPTION,
+  openGraph: {
+    title: 'Caliber Rating — Service Companion',
+    description: PAGE_DESCRIPTION,
+    url: 'https://caliber.poko.blue/docs/service',
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Caliber Rating — Service Companion',
+    description: PAGE_DESCRIPTION,
+  },
 };
 
 async function loadOverview(): Promise<string> {

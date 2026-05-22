@@ -185,7 +185,7 @@ The v1.x code is preserved at the git tag `methodology-v1.0.1-final` for archaeo
 
 **Licensing.** Methodology under **CC BY 4.0**. Engine and contract source under **MIT**. Required attribution when reused: `Caliber by PokoBlue`, with a link to `caliber.poko.blue/methodology` where the medium supports it.
 
-**Operator.** Service operated by PokoBlue ([`x.com/PokoBlue99`](https://x.com/PokoBlue99)). Source: [`github.com/huicom/arc-agents-explorer`](https://github.com/huicom/arc-agents-explorer). The repository is private through the active hackathon window and will be opened for public review after the July 2026 submission deadline.
+**Operator.** Service operated by PokoBlue ([`x.com/PokoBlue99`](https://x.com/PokoBlue99)). The engine and contract source repository is **private through the active hackathon window**; reviewer / integration access on request via DM. The repository will be released publicly under **MIT (code) and CC BY 4.0 (methodology)** after the July 2026 hackathon submission deadline. Until then, the methodology paper plus the published factor breakdown in every rating response is sufficient to reproduce any published rating.
 
 ---
 
