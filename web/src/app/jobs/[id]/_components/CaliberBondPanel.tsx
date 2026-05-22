@@ -244,6 +244,18 @@ export function CaliberBondPanel({
   const canSlash =
     hasBond && bondStatus === 0 && (jobStatus === 'Rejected' || jobStatus === 'Expired');
 
+  // Hide the panel entirely on jobs where the bond is neither actionable
+  // nor historical. The contract refuses postBond once status > Funded, so
+  // showing an empty "no bond posted" panel on Completed/Rejected/Expired
+  // jobs that never had a bond is dead UI. We still render the panel when:
+  //   - a bond was actually posted (audit trail, release/slash actions), OR
+  //   - the job is in a bondable state (Open/Funded/Submitted) so the
+  //     provider could still post one.
+  const BONDABLE_STATUSES = new Set(['Open', 'Funded', 'Submitted', 'Created']);
+  if (!hasBond && !BONDABLE_STATUSES.has(jobStatus)) {
+    return null;
+  }
+
   return (
     <div className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-5 space-y-4">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
