@@ -1,0 +1,20 @@
+[Unit]
+Description=Caliber — embed agents whose metadata has been freshly fetched
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer/web
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+# embed-agents.ts is idempotent: it picks up rows where embedding IS NULL
+# AND name IS NOT NULL. With the indexer auto-categorizing new agents at
+# metadata-fetch time, the only thing left to fill in for /discover is
+# the 384-dim vector — exactly what this script does.
+ExecStart=/home/huicom/.npm-global/bin/pnpm exec tsx --env-file=../.env scripts/embed-agents.ts
+StandardOutput=append:/var/log/caliber-embed-pending.log
+StandardError=append:/var/log/caliber-embed-pending-err.log
+
+[Install]
+WantedBy=multi-user.target

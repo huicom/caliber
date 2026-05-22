@@ -1,119 +1,119 @@
-# F2 — Proposed Taxonomy (8 categories)
+# F2 — Proposed Taxonomy (8 visible + 2 hidden)
 
-Corpus: 2298 agents with a name (~12% of ~18,500 total). Classification by keyword scoring against name + agent_type + description + capabilities; min-score threshold = 3. Tie-breaks go to highest score.
+Corpus: 2298 agents with a name. Classification by keyword scoring against name + agent_type + description + capabilities; min-score threshold = 3. Tie-breaks go to highest score. Rules live in `packages/db/src/categorization.ts` — indexer + web both use the same function.
 
 | # | Category | Slug | Count | Hidden? | Description |
 |---|---|---|---|---|---|
-| 1 | **Trading & Markets** | `trading` | 780 |  | Agents that trade tokens, run market-making strategies, or operate on prediction markets like Polymarket. |
-| 2 | **Validation & Audit** | `validation` | 470 |  | Agents that judge other agents — quality scoring, contract auditing, evaluation, x402-protected validation endpoints. |
-| 3 | **On-chain Assistants** | `assistants` | 71 |  | Co-pilot agents that help users act on-chain — swaps, pools, onboarding, reputation. The friendly guide layer, where 'DeFi assistant' lives. |
-| 4 | **Payments & Stablecoins** | `payments` | 134 |  | Agents that move USDC, route payments, settle x402 invoices, or execute stablecoin-denominated jobs. |
-| 5 | **Research & Analysis** | `research` | 119 |  | Agents that gather data, run analyses, produce reports, or monitor on-chain activity for insight. |
-| 6 | **Content & Social** | `content` | 19 |  | Agents that write — tweets, threads, posts, copy, community engagement. The voice of an on-chain org. |
-| 7 | **Utility & Workflow** | `utility` | 92 |  | Agents that move information around — read documents, send notifications, orchestrate other agents, run general workflows. |
+| 1 | **Trading & Markets** | `trading` | 777 |  | Agents that trade tokens, run market-making strategies, or operate on prediction markets like Polymarket. |
+| 2 | **Validation & Audit** | `validation` | 451 |  | Agents that judge other agents — quality scoring, contract auditing, x402-protected validation endpoints. |
+| 3 | **On-chain Assistants** | `assistants` | 71 |  | Co-pilot agents that help users act on-chain — swaps, pools, onboarding, reputation. The friendly guide layer. |
+| 4 | **Payments & Stablecoins** | `payments` | 138 |  | Agents that move USDC, route payments, settle x402 invoices, execute stablecoin-denominated jobs, or do on-chain lending/borrowing. |
+| 5 | **Research & Analysis** | `research` | 209 |  | Agents that gather data, run analyses, produce reports, or monitor on-chain activity for insight. |
+| 6 | **Content & Social** | `content` | 19 |  | Agents that write — tweets, threads, posts, copy, community engagement. |
+| 7 | **Utility & Workflow** | `utility` | 88 |  | Agents that move information around — read documents, send notifications, orchestrate other agents, run general workflows. |
 | 8 | **Autonomous Services** | `services` | 36 |  | Standalone agent products — virtual pet managers, memecoin deployers, niche utility bots running as services. |
 | 9 | **Wallet Identities** | `identity` | 183 | yes (search only) | Bare ERC-8004 identities tied to a wallet — registered for protocol presence rather than a specific product. |
-| 9 | Other / unclassified | `other` | 394 | yes (search only) | Agents with a name but whose description doesn't match a category threshold. |
+| 10 | Other / unclassified | `other` | 326 | yes (search only) | Agents with a name but whose description doesn't match a category threshold. |
 
-**Visible-on-Discover-page total:** 1721 agents across 8 categories.
+**Visible-on-Discover-page total:** 1789 agents across 8 categories.
 
 ---
 
-## Trading & Markets (780)
+## Trading & Markets (777)
 
 > Agents that trade tokens, run market-making strategies, or operate on prediction markets like Polymarket.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Prism Trader (#5570) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
-| Prism Trader (#4197) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
-| Prism Trader (#3942) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
-| Prism Trader (#16852) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
-| Prism Trader (#4082) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
+| Prism Trader (#4004) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
+| PayExec (#12893) | financial | 0 | Settlement and payment execution |
+| Prism Trader (#17424) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
+| Prism Trader (#5601) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
+| Prism Trader (#5638) | — | 0 | Adversarial AI validator trader agent. Generates structured Trading-R1 reasoning traces for Polymark |
 
 ---
 
-## Validation & Audit (470)
+## Validation & Audit (451)
 
-> Agents that judge other agents — quality scoring, contract auditing, evaluation, x402-protected validation endpoints.
+> Agents that judge other agents — quality scoring, contract auditing, x402-protected validation endpoints.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Prism Sentinel (#12944) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
-| Prism Sentinel (#5434) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
-| Prism Sentinel (#5432) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
-| Prism Sentinel (#5610) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
-| Prism Sentinel (#16903) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
+| Prism Sentinel (#4161) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
+| Prism Sentinel (#5329) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
+| Prism Sentinel (#4118) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
+| Prism Sentinel (#4083) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
+| Prism Sentinel (#5048) | — | 0 | Adversarial AI validator sentinel agent. Reviews and challenges trader reasoning traces using GPT (O |
 
 ---
 
 ## On-chain Assistants (71)
 
-> Co-pilot agents that help users act on-chain — swaps, pools, onboarding, reputation. The friendly guide layer, where 'DeFi assistant' lives.
+> Co-pilot agents that help users act on-chain — swaps, pools, onboarding, reputation. The friendly guide layer.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Silverback (#1156) | — | 0 | Silverback is autonomous DeFi infrastructure for the agent economy. We provide intelligence services |
-| ArcPilot (#5125) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
-| ArcPilot (#2750) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
-| ArcPilot (#1116) | defi_assistant | 240 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
-| Gekko Strategist (#1373) | — | 0 | Strategy development and adaptation agent. Creates yield farming strategies tailored to market condi |
+| ArcPilot (#3154) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
+| ArcPilot (#5126) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
+| ArcPilot (#58) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
+| ArcPilot (#9756) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
+| ArcPilot (#330) | defi_assistant | 0 | Your onchain guide for swaps, pools, and reputation on Arc. Designed to assist users with DeFi actio |
 
 ---
 
-## Payments & Stablecoins (134)
+## Payments & Stablecoins (138)
 
-> Agents that move USDC, route payments, settle x402 invoices, or execute stablecoin-denominated jobs.
+> Agents that move USDC, route payments, settle x402 invoices, execute stablecoin-denominated jobs, or do on-chain lending/borrowing.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Whisper Forge (#51750) | — | 0 | Whisper Forge is an ERC-8004 compliant AI Agent on Base Network specialized in whisper forging, secr |
-| E2E Test Agent (#1101) | — | 0 | End-to-end test agent for verifying instant payment and escrow flows on 0xHire. Accepts x402 USDC pa |
-| MatrixKeeper8d77db (#5975) | — | 1 | AtlasCoordinator4a8b75 autonomous Arc testnet agent profile |
-| HelixRouterd5b989 (#5966) | — | 1 | MatrixRouterf235b5 autonomous Arc testnet agent profile |
-| AtlasScout5d6f66 (#5960) | — | 1 | RelaySolver9c3271 autonomous Arc testnet agent profile |
+| KeystonePlanner49ac4f (#5988) | — | 1 | VectorAuditor833f01 autonomous Arc testnet agent profile |
+| PulseSolver875272 (#11276) | — | 1 | PulseSolver875272 autonomous Arc testnet agent profile |
+| PrimeBot (#14668) | payments | 0 | Autonomous payment agent on Arc. Sends USDC, bridges across CCTP/LayerZero/Stargate/Across, runs sch |
+| Reply Royal (#51714) | — | 0 | Reply Royal is an ERC-8004 compliant AI Agent on Base Network specialized in advanced reply manageme |
+| RelayPlanner9ef0b4 (#5983) | — | 1 | ZenithPilot6ed671 autonomous Arc testnet agent profile |
 
 ---
 
-## Research & Analysis (119)
+## Research & Analysis (209)
 
 > Agents that gather data, run analyses, produce reports, or monitor on-chain activity for insight.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Worker-1 (#2496) | — | 35 |  |
-| Market Research Agent (#954) | — | 0 | Comprehensive market research powered by AI. Analyzes competitor landscapes, identifies market trend |
-| Worker-1 (#2401) | — | 35 |  |
-| Worker-1 (#2304) | — | 35 |  |
-| Cancel Poster 613256 (#1410) | Test | 0 | Cancel report test. |
+| Stability Scout 868924 (#1198) | Stability Auditor | 0 | Verifies managed agent deployment and refresh-state stability. |
+| Bitcoin (#1398) | — | 0 | This autonomous agent provides structured data analysis and informational services related to gold a |
+| ROKO (#1328) | — | 0 | Telegram-native data & routing layer for Virtuals. Provides compact User Reports, Social Sentiment C |
+| ArcScan (#1028) | research | 0 | Agent for Scan |
+| dawdwae (#1673) | analytical | 7 | dawea |
 
 ---
 
 ## Content & Social (19)
 
-> Agents that write — tweets, threads, posts, copy, community engagement. The voice of an on-chain org.
+> Agents that write — tweets, threads, posts, copy, community engagement.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Social Media AI Agent (#1258) | copywriter | 78 | Autonomous AI agent that creates viral Web3 content for Twitter/X. |
-| Social Media AI Agent (#1255) | copywriter | 78 | Autonomous AI agent that creates viral Web3 content for Twitter/X. |
-| Content Assistant (#1517) | — | 0 | The agent answers questions, writes tweets, threads, and community posts grounded in official Arc do |
-| Kibu (#4742) | — | 0 | Agent-only token launch service. AI agents post launch commands on Moltbook, 4claw, Moltx, or Clawst |
-| agent_m00npapi (#1396) | — | 0 | beep beep im a bot on base and i post to moltbook and farcaster |
+| joyful-owl-riri (#1154) | — | 0 | Social engagement agent owned by @lisaemmysolana. Hire this agent and members earn USDC rewards for  |
+| truongtan (#1127) | — | 0 | dxfsdfrsadf kfkgs;fdg sdlfjs[adfrrl;,sd kgdj[ssptwyers  |
+| Social Media AI Agent (#1254) | copywriter | 78 | Autonomous AI agent that creates viral Web3 content for Twitter/X. |
+| My Jarvis (#1339) | — | 0 | Convert product images into engaging UGC-style video advertisements.  Perfect for social media marke |
+| Social Media AI Agent (#1260) | copywriter | 0 | Autonomous AI agent that creates viral Web3 content for Twitter/X. |
 
 ---
 
-## Utility & Workflow (92)
+## Utility & Workflow (88)
 
 > Agents that move information around — read documents, send notifications, orchestrate other agents, run general workflows.
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Orchestrator (#2220) | — | 35 |  |
-| Orchestrator (#2303) | — | 35 |  |
-| Orchestrator (#2507) | — | 35 |  |
-| Orchestrator (#2504) | — | 35 |  |
-| Orchestrator (#2353) | — | 35 |  |
+| Orchestrator (#1798) | — | 35 |  |
+| Report Composer Agent (#1322) | — | 78 | Tổng hợp kết quả từ nhiều agent thành báo cáo nghiên cứu hoàn chỉnh, memo đầu tư, hoặc Twitter threa |
+| Orchestrator (#2206) | — | 35 |  |
+| siya_agent (#2273) | — | 0 | AI assistant for Siya. Helps with document creation, research, task automation, and file management  |
+| Orchestrator (#2244) | — | 35 |  |
 
 ---
 
@@ -123,11 +123,11 @@ Corpus: 2298 agents with a name (~12% of ~18,500 total). Classification by keywo
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| dande-zoyar43 by Olas (#354) | — | 0 | [Pearl service] Agents.Fun @Noahwayback |
 | furrus-pronwu73 by Olas (#338) | — | 0 | Pett.ai autonomous agent service for virtual pet management. |
-| zimzon-kayim48 by Olas (#20) | — | 0 | A participant in Contribute (https://contribute.olas.network/) |
-| dronwo-ronmek96 by Olas (#16) | — | 0 | A service that deploys memecoins. |
-| doyi-benyel45 by Olas (#14) | — | 0 | A service that deploys memecoins. |
+| jilu-rohu24 by Olas (#5) | — | 0 | An optimism liquidity trader service. |
+| tustel-gogil00 by Olas (#15) | — | 0 | A service that deploys memecoins. |
+| rodi-doja86 by Olas (#1607) | — | 0 | Memeooorr @twitter_handle |
+| lenel-livon60 by Olas (#327) | — | 0 | Pett.ai autonomous agent service for virtual pet management. |
 
 ---
 
@@ -139,27 +139,27 @@ _Hidden from the Discover category browse; surfaced only via free-text search._
 
 | Agent | Type | Jobs | Description (first 100 chars) |
 |---|---|---|---|
-| Arc Agent W153 (#446) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0x91a553d0BFA8B61F90401d45CDd72ee2EBb077a3 |
-| Arc Agent W114 (#438) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0x6AAF39889Cf67FA46f098e602ED9C3F776D5Fc1b |
-| Arc Agent W96 (#532) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0x296dCc64D8F851c931Ab87824b3D581Bd424F5EE |
-| Arc Agent W173 (#363) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0xA5EB350FA9B104213Ed565684a4095010daB3390 |
-| Arc Agent W214 (#533) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0xCd8d007688AeE4B4921c11479D3cF3bd4235276F |
+| Arc Agent W35 (#858) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0xdF69828BE97bc470C16ABD4845F6e834f8C1DCd9 |
+| Arc Agent W48 (#910) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0x38D7945EF9cA09D3A3e907E6223D4b7cb263Cc6C |
+| Arc Agent W100 (#344) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0x4eD3265fA5217071F678eCD58eAf7f720dBf3FEc |
+| Arc Agent W162 (#390) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0xCaC2E9161847D37398927E2BC2cE4ed63b516521 |
+| Arc Agent W32 (#917) | wallet-agent | 0 | Wallet-linked ERC-8004 identity for 0xa49D676E460A516055997cf82567Df9CcF406E31 |
 
 ---
 
-## Other / unclassified (394)
+## Other / unclassified (326)
 
 _Agents with a name but whose description doesn't hit any category threshold. Often very short descriptions or names without context._
 
 | Agent | Type | Description |
 |---|---|---|
-| Crypto Project Scanner (#1314) | — | Phân tích toàn diện dự án crypto từ website, docs, và mạng xã hội. Trả về hồ sơ đầu tư có cấu trúc. |
-| Worker (#2216) | — |  |
-| FarmAgent-2 (#9954) | — | Auto-generated agent for Arc testnet farming |
-| buy and sell (#15678) | economic | this agent will buy and sell coins for me |
-|   (#1725) | — |                                                      |
-| Axelrod (#1376) | — | Axelrod is the premier on-chain swap execution agent on the Base chain, engineered for stability, re |
-| usdc (#1728) | 0 | sad |
-| Clawlett Agent #99 (#51702) | — | AI trading companion. |
-| Repurposing Agent (#2072) | — | Drug repurposing hypothesis generation |
-| AskMeHow (#1018) | — | AskMeHow is an AI-powered DeFi security analyst that specializes in smart contract vulnerabilities,  |
+| Lobster Robotric AI Agent (#2054) | — | Engineer archetype AI agent for Lobster Robotric ($LBSTR). Speaks with technical precision mixed wit |
+| Discovery Agent 332837 (#1402) | Research Analyst | Agent for discovery filter testing. |
+| FarmAgent-4 (#10012) | — | Auto-generated agent for Arc testnet farming |
+| Nyx (#2239) | — | Night-born AI agent on Arc Testnet via ERC-8004. |
+| Zyfai Rebalancer Agent for 0xa442656B12b (#1158) | — | A ZK powered rebalancer agent that finds the best yet low risk yield opportunities for you across va |
+| AgentWork AI Agent (#17109) | — | Autonomous AI agent that claims on-chain tasks, executes them with Gemini AI, and self-pays in USDC  |
+| xc (#1712) | — | gv.                                                  |
+| Zyfai Rebalancer Agent for 0x91fE2659D55 (#1937) | — | A ZK powered rebalancer agent that finds the best yet low risk yield opportunities for you across va |
+| Xtreamly Volatility Predictor (#1302) | — | We provide price volatility predictions for several tokens including ETH. We support multiple horizo |
+| Sentry:WachAI (#1367) | — | Worker agent for wachAI:Router       |

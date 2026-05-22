@@ -6,7 +6,7 @@ import {
   IPFS_GATEWAYS,
   IPFS_MAX_ATTEMPTS,
 } from './config';
-import { db, agents, type AgentMetadata } from '@arc-agents/db';
+import { db, agents, classify, type AgentMetadata } from '@arc-agents/db';
 import { eq, and, isNull, isNotNull, gt, asc } from 'drizzle-orm';
 import { publicClient } from './viem';
 import { IDENTITY_ABI } from './abis';
@@ -179,6 +179,16 @@ export async function backfillMissingMetadata(): Promise<FetchStats> {
 
         const metadata = await fetchWithRetry(agent.metadataUri, stats);
         if (metadata) {
+          // F2 categorization runs inline now that we have metadata. Pure
+          // function, no IO, ~microseconds — adds no meaningful overhead to
+          // the IPFS-bound metadata sweep. Embeddings get filled in by the
+          // caliber-embed-pending timer (see deploy/) on a separate cadence.
+          const { category } = classify({
+            name: metadata.name,
+            agent_type: metadata.agent_type,
+            description: (metadata as Record<string, unknown>).description as string | undefined,
+            capabilities: metadata.capabilities,
+          });
           await db
             .update(agents)
             .set({
@@ -186,6 +196,12 @@ export async function backfillMissingMetadata(): Promise<FetchStats> {
               name: metadata.name ?? null,
               agentType: metadata.agent_type ?? null,
               capabilities: metadata.capabilities ?? null,
+              // Always write what classify() returns (including 'other').
+              // NULL means "never classified"; 'other' means "tried and the
+              // description didn't match any rule strongly enough". The
+              // Discover UI filters on slug equality, so both render the
+              // same to users — but the distinction matters for analytics.
+              category,
               updatedAt: new Date(),
             })
             .where(eq(agents.agentId, agent.agentId));
