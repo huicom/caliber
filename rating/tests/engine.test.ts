@@ -258,7 +258,26 @@ describe('Completion features', () => {
 // ============================================================
 
 describe('Risk flags', () => {
-  it('CounterpartyConcentration fires when one client has >60% AND <5 unique clients', () => {
+  it('CounterpartyConcentration fires when one client has >80% AND <3 unique clients', () => {
+    // 5 jobs from 0xA, 1 from 0xB = 83.3% top share, 2 unique clients
+    const f = makeFeatures({
+      jobs: [
+        makeJob(1n, 'Completed', 1, '0xA'),
+        makeJob(2n, 'Completed', 2, '0xA'),
+        makeJob(3n, 'Completed', 3, '0xA'),
+        makeJob(4n, 'Completed', 4, '0xA'),
+        makeJob(5n, 'Completed', 5, '0xA'),
+        makeJob(6n, 'Completed', 6, '0xB'),
+      ],
+    });
+    const c = computeCompletionFeatures(f);
+    const { flags } = computeFlags(f, c);
+    expect(flags).toContain('CounterpartyConcentration');
+  });
+  it('CounterpartyConcentration does NOT fire on the looser-shape pattern (75% top, 2 unique)', () => {
+    // The previous (looser) threshold would fire on this; v2.0 launch
+    // threshold does not — the flag now requires both >80% top share AND
+    // <3 unique clients.
     const f = makeFeatures({
       jobs: [
         makeJob(1n, 'Completed', 1, '0xA'),
@@ -269,33 +288,84 @@ describe('Risk flags', () => {
     });
     const c = computeCompletionFeatures(f);
     const { flags } = computeFlags(f, c);
-    expect(flags).toContain('CounterpartyConcentration');
+    expect(flags).not.toContain('CounterpartyConcentration');
   });
-  it('CounterpartyConcentration does NOT fire when there are 5+ unique clients', () => {
+  it('CounterpartyConcentration does NOT fire when there are 3+ unique clients', () => {
+    // 5 jobs from 0xA, 1 from 0xB, 1 from 0xC = 71% top share, 3 unique
+    // — fails the <3 unique gate even though top share is high.
     const f = makeFeatures({
       jobs: [
         makeJob(1n, 'Completed', 1, '0xA'),
         makeJob(2n, 'Completed', 2, '0xA'),
         makeJob(3n, 'Completed', 3, '0xA'),
         makeJob(4n, 'Completed', 4, '0xA'),
-        makeJob(5n, 'Completed', 5, '0xB'),
-        makeJob(6n, 'Completed', 6, '0xC'),
-        makeJob(7n, 'Completed', 7, '0xD'),
-        makeJob(8n, 'Completed', 8, '0xE'),
+        makeJob(5n, 'Completed', 5, '0xA'),
+        makeJob(6n, 'Completed', 6, '0xB'),
+        makeJob(7n, 'Completed', 7, '0xC'),
       ],
     });
     const c = computeCompletionFeatures(f);
     const { flags } = computeFlags(f, c);
     expect(flags).not.toContain('CounterpartyConcentration');
   });
-  it('SybilPattern fires when agent appears as its own client', () => {
+  it('SybilPattern fires when self-deals dominate (>30% share, <5 unique clients)', () => {
+    // 3 self-deals + 2 real jobs = 60% self-deal share, 2 unique clients
     const f = makeFeatures({
       ownerAddress: '0xself',
-      jobs: [makeJob(1n, 'Completed', 1, '0xself')],
+      jobs: [
+        makeJob(1n, 'Completed', 1, '0xself'),
+        makeJob(2n, 'Completed', 2, '0xself'),
+        makeJob(3n, 'Completed', 3, '0xself'),
+        makeJob(4n, 'Completed', 4, '0xother'),
+        makeJob(5n, 'Completed', 5, '0xother'),
+      ],
     });
     const c = computeCompletionFeatures(f);
     const { flags } = computeFlags(f, c);
     expect(flags).toContain('SybilPattern');
+  });
+  it('SybilPattern does NOT fire on a single self-deal among many real jobs', () => {
+    // 1 self-deal + 9 real jobs = 10% self-deal share — below the 30% gate
+    const f = makeFeatures({
+      ownerAddress: '0xself',
+      jobs: [
+        makeJob(1n, 'Completed', 1, '0xself'),
+        makeJob(2n, 'Completed', 2, '0xA'),
+        makeJob(3n, 'Completed', 3, '0xA'),
+        makeJob(4n, 'Completed', 4, '0xB'),
+        makeJob(5n, 'Completed', 5, '0xB'),
+        makeJob(6n, 'Completed', 6, '0xC'),
+        makeJob(7n, 'Completed', 7, '0xC'),
+        makeJob(8n, 'Completed', 8, '0xD'),
+        makeJob(9n, 'Completed', 9, '0xD'),
+        makeJob(10n, 'Completed', 10, '0xD'),
+      ],
+    });
+    const c = computeCompletionFeatures(f);
+    const { flags } = computeFlags(f, c);
+    expect(flags).not.toContain('SybilPattern');
+  });
+  it('SybilPattern does NOT fire when self-deal share is high but ≥5 unique clients', () => {
+    // 4 self-deals + 1 each from 4 distinct clients = 50% self-deal share,
+    // but 5 unique clients. The wide client base is evidence the agent is
+    // doing real work; self-dealing is part of the operational picture but
+    // not the agent's primary business.
+    const f = makeFeatures({
+      ownerAddress: '0xself',
+      jobs: [
+        makeJob(1n, 'Completed', 1, '0xself'),
+        makeJob(2n, 'Completed', 2, '0xself'),
+        makeJob(3n, 'Completed', 3, '0xself'),
+        makeJob(4n, 'Completed', 4, '0xself'),
+        makeJob(5n, 'Completed', 5, '0xA'),
+        makeJob(6n, 'Completed', 6, '0xB'),
+        makeJob(7n, 'Completed', 7, '0xC'),
+        makeJob(8n, 'Completed', 8, '0xD'),
+      ],
+    });
+    const c = computeCompletionFeatures(f);
+    const { flags } = computeFlags(f, c);
+    expect(flags).not.toContain('SybilPattern');
   });
   it('Dormancy fires when no activity in 90+ days', () => {
     const f = makeFeatures({
@@ -367,11 +437,13 @@ describe('Flag thresholds', () => {
   it('Dormancy = 90 days', () => {
     expect(FLAG_THRESHOLDS.DORMANCY_DAYS).toBe(90);
   });
-  it('Counterparty top share = 60%', () => {
-    expect(FLAG_THRESHOLDS.COUNTERPARTY_TOP_SHARE).toBe(0.6);
+  it('Counterparty: top share > 80% AND < 3 unique clients', () => {
+    expect(FLAG_THRESHOLDS.COUNTERPARTY_TOP_SHARE).toBe(0.8);
+    expect(FLAG_THRESHOLDS.COUNTERPARTY_MIN_CLIENTS).toBe(3);
   });
-  it('Validator top share = 60%', () => {
-    expect(FLAG_THRESHOLDS.VALIDATOR_TOP_SHARE).toBe(0.6);
+  it('Validator: top share > 80% AND < 3 unique validators', () => {
+    expect(FLAG_THRESHOLDS.VALIDATOR_TOP_SHARE).toBe(0.8);
+    expect(FLAG_THRESHOLDS.VALIDATOR_MIN_VALIDATORS).toBe(3);
   });
   it('Volume anomaly multiplier = 10x', () => {
     expect(FLAG_THRESHOLDS.VOLUME_ANOMALY_MULTIPLIER).toBe(10);
