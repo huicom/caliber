@@ -30,7 +30,9 @@ const METHODOLOGY = [
 ];
 
 const BUILD = [
-  { href: '/integrate', label: 'integrate caliber' },
+  { href: '/integrate', label: 'integrate (quickstart)' },
+  { href: '/developers', label: 'developer guide' },
+  { href: '/guide', label: 'user guide' },
   { href: '/jobs/new', label: 'demo marketplace' },
   { href: 'https://eips.ethereum.org/EIPS/eip-8004', label: 'ERC-8004 spec ↗', external: true },
   { href: 'https://github.com/huicom/arc-agents-explorer', label: 'github ↗', external: true },
