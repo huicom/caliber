@@ -96,7 +96,9 @@ CaliberEscrow's bond rate per tier (initial values, owner-configurable on-chain)
 
 ## 4. API surface
 
-Public HTTP API at `https://caliber-api.poko.blue`. CORS-open. No authentication on read endpoints; the `/attest` endpoint binds signatures to a fresh nonce so replay protection lives on the verifier side.
+Two HTTP endpoints. **Rating service** at `https://caliber-api.poko.blue` (Express on port 3100, Cloudflare-Tunnel proxied) hosts the read + signed-attestation endpoints. **Discovery + routing surface** at `https://caliber.poko.blue/api/v1` (Next.js, shares the web origin) hosts the Phase 2 additions. Both CORS-open. No authentication on read endpoints; the `/attest` endpoint binds signatures to a fresh nonce so replay protection lives on the verifier side.
+
+**Rating service (`caliber-api.poko.blue`):**
 
 | Endpoint | Method | Purpose |
 |---|---|---|
@@ -109,6 +111,19 @@ Public HTTP API at `https://caliber-api.poko.blue`. CORS-open. No authentication
 | `/v1/ratings/exposure-summary` | GET | Registry-wide active escrow by tier |
 | `/health` | GET | Service liveness |
 
+**Discovery + routing surface (`caliber.poko.blue/api`):** added in Phase 2.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/categories` | GET | Per-category counts + 3 top-tier representatives. Cluster-deduped |
+| `/api/v1/search?q=&category=&limit=` | GET | Semantic search (pgvector + trigram fallback). Results deduped by (name + description) cluster, "× N replicas" badged |
+| `/api/v1/route` | POST | One-call recommendation: `{ intent, min_tier, category? }` → match metadata + signed attestation envelope |
+| `/api/watchlist?since=&kind=&limit=` | GET | Tier-transition feed (JSON) |
+| `/api/watchlist/subscribe` | POST/DELETE | Discord webhook subscription management |
+| `/watchlist.rss` | GET | Same feed as RSS 2.0 |
+| `/badge/arc/:id` | GET | Server-rendered SVG badge (200×56 px, tier-colored, ~1.2 KB) |
+| `/embed.js` | GET | Drop-in `<script>` that renders the badge on an agent's own site |
+
 **Freshness.** Single-agent ratings are computed on demand from the indexed event stream — typically under 100 ms. Bulk and distribution endpoints are cached for 5 minutes. Snapshot endpoints serve materialized rows from the `rating_snapshots` table populated daily at 04:00 UTC by the `caliber-snapshot.timer` systemd unit.
 
 **Response shape.** Every successful rating response includes `methodology_version`, `computed_at`, `view` (PIT or TTC), `tier`, `score`, `confidence`, `confidence_label`, `flags`, `interaction_count`, and a full `factors` object listing the inputs to the score computation. Refusal responses use HTTP 422 with a structured `reason` field (`insufficient_interactions`, `insufficient_history`, `unknown_identity`, `rating_below_threshold`, `confidence_below_threshold`).
@@ -119,7 +134,9 @@ Public HTTP API at `https://caliber-api.poko.blue`. CORS-open. No authentication
 
 Live numbers as of 2026-05-22. The methodology paper §"Honest Disclaimers" is the canonical disclosure; this section is the data snapshot at the time of publication.
 
-**Indexed population.** 16,589 agents observed on Arc Testnet's ERC-8004 IdentityRegistry. This is the full universe.
+**Indexed population.** 18,481 agents observed on Arc Testnet's ERC-8004 IdentityRegistry. This is the full universe.
+
+**Searchable population.** 2,298 agents have fetchable IPFS metadata and a published name; 1,786 of those land in one of the eight visible Discover categories (Trading 778, Validation 451, Research 209, Payments 138, Utility 88, On-chain Assistants 71, Autonomous Services 36, Content & Social 19). The other ~88% of the index registered with placeholder URLs (e.g., `arc-agent.example.com/...`) or shared CIDs that resolve to non-metadata content (most often a JPEG image, not JSON). This is a permanent floor on what `/discover` can browse; raw search across all 18K names + addresses remains available.
 
 **Rateable population.** 728 agents meet the methodology's minimum data requirement (≥ 5 interactions across feedback + validations + jobs; ≥ 14 days of on-chain history). 625 agents have current PIT snapshots; 103 are refused by the engine's confidence floor.
 
