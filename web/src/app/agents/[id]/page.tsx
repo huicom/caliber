@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { db, agents, feedbackEvents, validations, jobs } from '@/lib/db';
-import { eq, desc } from 'drizzle-orm';
+import { db, agents, feedbackEvents, validations, jobs, ratingSnapshots } from '@/lib/db';
+import { eq, desc, and } from 'drizzle-orm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import { formatUSDC, arcscanTxUrl } from '@/lib/format';
 import { CheckCircle, Clock, ExternalLink, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { RatingTrajectoryChart } from './_components/RatingTrajectoryChart';
+import { RatingExposurePanel } from './_components/RatingExposurePanel';
 
 export default async function AgentDetailPage({
   params,
@@ -45,7 +46,7 @@ export default async function AgentDetailPage({
     .limit(1);
   if (!agent) return notFound();
 
-  const [recentFeedback, allValidations, recentJobs] = await Promise.all([
+  const [recentFeedback, allValidations, recentJobs, latestSnapshotRows] = await Promise.all([
     db
       .select()
       .from(feedbackEvents)
@@ -63,7 +64,18 @@ export default async function AgentDetailPage({
       .where(eq(jobs.providerAddress, agent.ownerAddress))
       .orderBy(desc(jobs.createdAtBlock))
       .limit(20),
+    // W3.5a: latest PIT snapshot drives the //rating_exposure panel.
+    db
+      .select()
+      .from(ratingSnapshots)
+      .where(and(
+        eq(ratingSnapshots.agentId, agentId),
+        eq(ratingSnapshots.view, 'PIT'),
+      ))
+      .orderBy(desc(ratingSnapshots.computedAt))
+      .limit(1),
   ]);
+  const latestSnapshot = latestSnapshotRows[0] ?? null;
 
   const isVerified = agent.validationStatus === 'PASSED';
 
@@ -156,6 +168,10 @@ export default async function AgentDetailPage({
               : '—'
           }
         />
+      </div>
+
+      <div className="mb-8">
+        <RatingExposurePanel snapshot={latestSnapshot} />
       </div>
 
       <div className="mb-8">
