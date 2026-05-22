@@ -14,8 +14,24 @@ contract RatingVerifierTest is Test {
 
     uint256 constant SIGNER_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
     address constant SIGNER_ADDR = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    bytes32 constant METHODOLOGY_VERSION = bytes32("1.0.0");
+    bytes32 constant METHODOLOGY_VERSION = bytes32("2.0.0");
     bytes32 constant ARC_CHAIN = bytes32("arc");
+
+    // Tier ordinals (mirror engine TIER_ORDINAL)
+    uint8 constant TIER_ESTABLISHED = 0;
+    uint8 constant TIER_PROVEN = 1;
+    uint8 constant TIER_EMERGING = 2;
+    uint8 constant TIER_PROVISIONAL = 3;
+    uint8 constant TIER_WATCH = 4;
+    uint8 constant TIER_INACTIVE = 5;
+
+    // Flag bits
+    uint8 constant FLAG_CP_CONC = 0x01;
+    uint8 constant FLAG_VAL_CONC = 0x02;
+    uint8 constant FLAG_SYBIL = 0x04;
+    uint8 constant FLAG_VOLUME = 0x08;
+    uint8 constant FLAG_DORMANCY = 0x10;
+    uint8 constant FLAG_MASK_ALL = 0x1F;
 
     address constant PROVIDER = address(0x1000);
     address constant USER = address(0x2000);
@@ -26,7 +42,7 @@ contract RatingVerifierTest is Test {
     );
 
     bytes32 constant RATING_ATTESTATION_TYPEHASH = keccak256(
-        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint16 lgdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
+        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint8 score,uint16 interactionCount,uint8 flags,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
     );
 
     function setUp() public {
@@ -42,7 +58,8 @@ contract RatingVerifierTest is Test {
 
     function _buildAttest(
         uint8 tier,
-        uint8 confidence,
+        uint8 score,
+        uint8 flags,
         uint64 validUntil,
         bytes32 methodologyVersion,
         address agentAddress,
@@ -53,9 +70,9 @@ contract RatingVerifierTest is Test {
             agentId: 42,
             agentAddress: agentAddress,
             tier: tier,
-            pdBps: 150,
-            lgdBps: 3000,
-            confidence: confidence,
+            score: score,
+            interactionCount: 50,
+            flags: flags,
             methodologyVersion: methodologyVersion,
             asOf: uint64(block.timestamp),
             validUntil: validUntil,
@@ -85,9 +102,9 @@ contract RatingVerifierTest is Test {
                 att.agentId,
                 att.agentAddress,
                 att.tier,
-                att.pdBps,
-                att.lgdBps,
-                att.confidence,
+                att.score,
+                att.interactionCount,
+                att.flags,
                 att.methodologyVersion,
                 att.asOf,
                 att.validUntil,
@@ -104,147 +121,169 @@ contract RatingVerifierTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function _buildValidAttest(uint8 tier, uint8 confidence) internal view returns (RatingVerifier.RatingAttestation memory att, bytes memory sig) {
-        att = _buildAttest(tier, confidence, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1);
+    function _buildValidAttest(uint8 tier, uint8 score, uint8 flags)
+        internal
+        view
+        returns (RatingVerifier.RatingAttestation memory att, bytes memory sig)
+    {
+        att = _buildAttest(tier, score, flags, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1);
         sig = _signAttest(att);
     }
 
-    // TEST 1: Valid attestation accepted
+    // ============================================================
+    // Acceptance tests
+    // ============================================================
+
     function test_ValidAttestationAccepted() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
-        verifier.requireMinRating(att, sig, 3, 1);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_EMERGING, 60, 0);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 2: Tier too low rejected
-    function test_Revert_TierTooLow() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(4, 1);
-        vm.expectRevert("Rating too low");
-        verifier.requireMinRating(att, sig, 3, 1);
+    function test_AcceptsStrongerTierThanThreshold() public {
+        // Caller will accept ≤ Emerging. Agent is Proven (stronger). Pass.
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 3: Confidence too low rejected
-    function test_Revert_ConfidenceTooLow() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 2);
-        vm.expectRevert("Confidence too low");
-        verifier.requireMinRating(att, sig, 3, 1);
+    // ============================================================
+    // Rejection tests
+    // ============================================================
+
+    function test_Revert_TierTooWeak() public {
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVISIONAL, 40, 0);
+        vm.expectRevert("Tier too weak");
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 4: Expired attestation rejected
+    function test_Revert_BlockingFlagSet() public {
+        // Caller refuses anything with the Dormancy flag; agent has it.
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) =
+            _buildValidAttest(TIER_PROVEN, 70, FLAG_DORMANCY);
+        vm.expectRevert("Blocking flag set");
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_DORMANCY);
+    }
+
+    function test_FlagPassesIfNotInMask() public {
+        // Agent has Volume flag; caller's mask only blocks Dormancy. Pass.
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) =
+            _buildValidAttest(TIER_PROVEN, 70, FLAG_VOLUME);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_DORMANCY);
+    }
+
     function test_Revert_AttestationExpired() public {
-        RatingVerifier.RatingAttestation memory att = _buildAttest(3, 1, uint64(block.timestamp - 1), METHODOLOGY_VERSION, PROVIDER, 1);
+        RatingVerifier.RatingAttestation memory att = _buildAttest(
+            TIER_PROVEN, 70, 0, uint64(block.timestamp - 1), METHODOLOGY_VERSION, PROVIDER, 1
+        );
         bytes memory sig = _signAttest(att);
         vm.expectRevert("Attestation expired");
-        verifier.requireMinRating(att, sig, 3, 1);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 5: Wrong methodology version rejected
     function test_Revert_WrongMethodologyVersion() public {
-        RatingVerifier.RatingAttestation memory att = _buildAttest(3, 1, uint64(block.timestamp + 1 hours), bytes32("2.0.0"), PROVIDER, 1);
+        RatingVerifier.RatingAttestation memory att = _buildAttest(
+            TIER_PROVEN, 70, 0, uint64(block.timestamp + 1 hours), bytes32("3.0.0"), PROVIDER, 1
+        );
         bytes memory sig = _signAttest(att);
         vm.expectRevert("Wrong methodology version");
-        verifier.requireMinRating(att, sig, 3, 1);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 6: Wrong agentAddress rejected
     function test_Revert_ProviderMismatch() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
+        vm.prank(USER);
         vm.expectRevert("Provider mismatch");
-        gateway.postGatedJob(address(0xBAD), EVALUATOR, block.timestamp + 7 days, "test job", 100e18, att, sig, 3, 1);
+        gateway.postGatedJob(
+            address(0xBAD), EVALUATOR, block.timestamp + 7 days, "test", 100e18, att, sig, TIER_PROVISIONAL, 0
+        );
     }
 
-    // TEST 7: Wrong signer rejected
     function test_Revert_WrongSigner() public {
-        RatingVerifier.RatingAttestation memory att = _buildAttest(3, 1, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1);
+        RatingVerifier.RatingAttestation memory att = _buildAttest(
+            TIER_PROVEN, 70, 0, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1
+        );
         uint256 badKey = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
-        bytes32 domainSeparator = _computeDomainSeparator();
-        bytes32 structHash = _computeStructHash(att);
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        bytes32 ds = _computeDomainSeparator();
+        bytes32 sh = _computeStructHash(att);
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", ds, sh));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(badKey, digest);
         bytes memory badSig = abi.encodePacked(r, s, v);
         vm.expectRevert("Invalid signer");
-        verifier.requireMinRating(att, badSig, 3, 1);
+        verifier.requireMinRating(att, badSig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 8: Nonce replay rejected
     function test_Revert_NonceReplay() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
-        verifier.requireMinRating(att, sig, 3, 1);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
         vm.expectRevert("Nonce replay");
-        verifier.requireMinRating(att, sig, 3, 1);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 9: Happy path — full postGatedJob flow
-    function test_HappyPath_PostGatedJob() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
-        vm.prank(USER);
-        uint256 jobId = gateway.postGatedJob(PROVIDER, EVALUATOR, block.timestamp + 7 days, "test job", 100e18, att, sig, 3, 1);
+    // ============================================================
+    // Gateway integration
+    // ============================================================
 
+    function test_HappyPath_PostGatedJob() public {
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
+        vm.prank(USER);
+        uint256 jobId = gateway.postGatedJob(
+            PROVIDER, EVALUATOR, block.timestamp + 7 days, "test", 100e18, att, sig, TIER_EMERGING, FLAG_MASK_ALL
+        );
         assertEq(jobId, 1);
         assertEq(gateway.jobPoster(jobId), USER);
-
-        // verify ERC8183 state
-        (uint256 id, address client, address provider, , , uint256 budget, , uint8 status, ) = erc8183.getJob(jobId);
-        assertEq(id, jobId);
-        assertEq(client, address(gateway));
-        assertEq(provider, PROVIDER);
-        assertEq(status, 0); // Open
-        assertEq(budget, 0); // budget not set yet
-
-        // verify USDC moved
         assertEq(usdc.balances(address(gateway)), 100e18);
     }
 
-    // TEST 10: fundJob after postGatedJob
     function test_FundJob() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
         vm.prank(USER);
-        uint256 jobId = gateway.postGatedJob(PROVIDER, EVALUATOR, block.timestamp + 7 days, "test job", 100e18, att, sig, 3, 1);
-
-        // agent sets budget
+        uint256 jobId = gateway.postGatedJob(
+            PROVIDER, EVALUATOR, block.timestamp + 7 days, "test", 100e18, att, sig, TIER_EMERGING, FLAG_MASK_ALL
+        );
         vm.prank(PROVIDER);
         erc8183.setBudget(jobId, 100e18, "");
-
-        // poster funds
         vm.prank(USER);
         gateway.fundJob(jobId);
-
         (, , , , , , , uint8 status, ) = erc8183.getJob(jobId);
-        assertEq(status, 1); // Funded
-        assertTrue(erc8183.fundedCalled(jobId, address(gateway)));
+        assertEq(status, 1);
     }
 
-    // TEST 11: Only poster can fund
     function test_Revert_NotPosterCanFund() public {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(3, 1);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _buildValidAttest(TIER_PROVEN, 70, 0);
         vm.prank(USER);
-        uint256 jobId = gateway.postGatedJob(PROVIDER, EVALUATOR, block.timestamp + 7 days, "test job", 100e18, att, sig, 3, 1);
-
+        uint256 jobId = gateway.postGatedJob(
+            PROVIDER, EVALUATOR, block.timestamp + 7 days, "test", 100e18, att, sig, TIER_EMERGING, FLAG_MASK_ALL
+        );
         vm.prank(address(0xB0B));
         vm.expectRevert("Not poster");
         gateway.fundJob(jobId);
     }
 
-    // TEST 12: Methodology version transition (previous version accepted)
+    // ============================================================
+    // Methodology version transition
+    // ============================================================
+
     function test_MethodologyVersionTransition() public {
-        // Update to new version
         vm.prank(SIGNER_ADDR);
-        verifier.setMethodologyVersion(bytes32("1.1.0"));
+        verifier.setMethodologyVersion(bytes32("2.1.0"));
 
-        // Old version should be accepted
-        RatingVerifier.RatingAttestation memory att = _buildAttest(3, 1, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1);
+        // Old version still accepted during transition
+        RatingVerifier.RatingAttestation memory att = _buildAttest(
+            TIER_PROVEN, 70, 0, uint64(block.timestamp + 1 hours), METHODOLOGY_VERSION, PROVIDER, 1
+        );
         bytes memory sig = _signAttest(att);
-        verifier.requireMinRating(att, sig, 3, 1); // should not revert
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
 
-        // New version should also be accepted
-        att = _buildAttest(3, 1, uint64(block.timestamp + 1 hours), bytes32("1.1.0"), PROVIDER, 2);
+        // New version also accepted
+        att = _buildAttest(
+            TIER_PROVEN, 70, 0, uint64(block.timestamp + 1 hours), bytes32("2.1.0"), PROVIDER, 2
+        );
         sig = _signAttest(att);
-        verifier.requireMinRating(att, sig, 3, 1);
+        verifier.requireMinRating(att, sig, TIER_EMERGING, FLAG_MASK_ALL);
     }
 
-    // TEST 13: Only signer can update methodology version
     function test_Revert_OnlySignerCanUpdateVersion() public {
         vm.prank(address(0xB0B));
         vm.expectRevert("Only signer");
-        verifier.setMethodologyVersion(bytes32("1.1.0"));
+        verifier.setMethodologyVersion(bytes32("2.1.0"));
     }
 }

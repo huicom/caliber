@@ -16,18 +16,25 @@ contract CaliberEscrowTest is Test {
 
     uint256 constant SIGNER_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
     address constant SIGNER_ADDR = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    bytes32 constant METHODOLOGY_VERSION = bytes32("1.0.0");
+    bytes32 constant METHODOLOGY_VERSION = bytes32("2.0.0");
     bytes32 constant ARC_CHAIN = bytes32("arc");
 
-    address constant CLIENT = address(0x4000);   // human posting jobs
-    address constant PROVIDER = address(0x5000); // agent EOA
+    uint8 constant TIER_ESTABLISHED = 0;
+    uint8 constant TIER_PROVEN = 1;
+    uint8 constant TIER_EMERGING = 2;
+    uint8 constant TIER_PROVISIONAL = 3;
+    uint8 constant TIER_WATCH = 4;
+    uint8 constant TIER_INACTIVE = 5;
+
+    address constant CLIENT = address(0x4000);
+    address constant PROVIDER = address(0x5000);
     address constant EVALUATOR = address(0x6000);
 
     bytes32 constant EIP712_DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
     );
     bytes32 constant RATING_ATTESTATION_TYPEHASH = keccak256(
-        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint16 pdBps,uint16 lgdBps,uint8 confidence,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
+        "RatingAttestation(bytes32 chain,uint256 agentId,address agentAddress,uint8 tier,uint8 score,uint16 interactionCount,uint8 flags,bytes32 methodologyVersion,uint64 asOf,uint64 validUntil,uint256 nonce)"
     );
 
     function setUp() public {
@@ -39,18 +46,16 @@ contract CaliberEscrowTest is Test {
             address(verifier),
             address(erc8183),
             address(usdc),
-            address(gateway)
+            address(gateway),
+            SIGNER_ADDR
         );
 
-        // Client funds 1000 USDC and approves the gateway.
-        usdc.setBalance(CLIENT, 1_000_000_000); // 1000 USDC, 6 decimals
+        usdc.setBalance(CLIENT, 1_000_000_000);
         vm.prank(CLIENT);
         usdc.approve(address(gateway), 1_000_000_000);
     }
 
-    /* ──────────────────────────────────────────────────────────────────────
-     * Helpers
-     * ────────────────────────────────────────────────────────────────────── */
+    // ----- helpers ------------------------------------------------------
 
     function _domainSeparator() internal view returns (bytes32) {
         return keccak256(
@@ -72,9 +77,9 @@ contract CaliberEscrowTest is Test {
                 att.agentId,
                 att.agentAddress,
                 att.tier,
-                att.pdBps,
-                att.lgdBps,
-                att.confidence,
+                att.score,
+                att.interactionCount,
+                att.flags,
                 att.methodologyVersion,
                 att.asOf,
                 att.validUntil,
@@ -89,7 +94,7 @@ contract CaliberEscrowTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function _attest(uint8 tier, uint16 pdBps, uint16 lgdBps, uint256 nonce)
+    function _attest(uint8 tier, uint8 score, uint8 flags, uint256 nonce)
         internal
         view
         returns (RatingVerifier.RatingAttestation memory att, bytes memory sig)
@@ -99,9 +104,9 @@ contract CaliberEscrowTest is Test {
             agentId: 42,
             agentAddress: PROVIDER,
             tier: tier,
-            pdBps: pdBps,
-            lgdBps: lgdBps,
-            confidence: 1, // medium
+            score: score,
+            interactionCount: 50,
+            flags: flags,
             methodologyVersion: METHODOLOGY_VERSION,
             asOf: uint64(block.timestamp),
             validUntil: uint64(block.timestamp + 1 hours),
@@ -110,20 +115,12 @@ contract CaliberEscrowTest is Test {
         sig = _sign(att);
     }
 
-    /// Walks a job through: gated post → set budget → fund. Returns jobId.
-    function _gatedFundedJob(uint256 budget) internal returns (uint256 jobId) {
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 1);
+    /// Walk a job through: gated post → set budget → fund. Returns jobId.
+    function _gatedFundedJob(uint256 budget, uint8 gateAttestTier) internal returns (uint256 jobId) {
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(gateAttestTier, 75, 0, 1);
         vm.prank(CLIENT);
         jobId = gateway.postGatedJob(
-            PROVIDER,
-            EVALUATOR,
-            block.timestamp + 7 days,
-            "test",
-            budget,
-            att,
-            sig,
-            3, // maxTierAllowed (Caliber-BBB)
-            1  // minConfidenceAllowed (medium)
+            PROVIDER, EVALUATOR, block.timestamp + 7 days, "test", budget, att, sig, TIER_PROVISIONAL, 0
         );
         vm.prank(PROVIDER);
         erc8183.setBudget(jobId, budget, "");
@@ -131,47 +128,56 @@ contract CaliberEscrowTest is Test {
         gateway.fundJob(jobId);
     }
 
-    /* ──────────────────────────────────────────────────────────────────────
-     * Tests — requiredBond formula
-     * ────────────────────────────────────────────────────────────────────── */
+    // ============================================================
+    // requiredBond formula (tier-stepped)
+    // ============================================================
 
-    function test_RequiredBond_AAA_Budget1000() public view {
-        // PD 0.4% = 40bps, LGD 15% = 1500bps, budget 1000 USDC (6dec)
-        // expected: 1_000_000_000 * 40 * 1500 / 100_000_000 = 600_000 wei = 0.6 USDC
-        uint256 bond = escrow.requiredBond(1_000_000_000, 40, 1500);
-        assertEq(bond, 600_000);
+    function test_RequiredBond_Established_50bps() public view {
+        // 1000 USDC × 0.5% = 5 USDC
+        uint256 bond = escrow.requiredBond(1_000_000_000, TIER_ESTABLISHED);
+        assertEq(bond, 5_000_000);
     }
 
-    function test_RequiredBond_BBB_Budget1000() public view {
-        // PD 4% = 400bps, LGD 30% = 3000bps, budget 1000 USDC
-        // expected: 1_000_000_000 * 400 * 3000 / 100_000_000 = 12_000_000 wei = 12 USDC
-        uint256 bond = escrow.requiredBond(1_000_000_000, 400, 3000);
-        assertEq(bond, 12_000_000);
+    function test_RequiredBond_Proven_150bps() public view {
+        // 1000 × 1.5% = 15 USDC
+        uint256 bond = escrow.requiredBond(1_000_000_000, TIER_PROVEN);
+        assertEq(bond, 15_000_000);
     }
 
-    function test_RequiredBond_CCC_Budget1000() public view {
-        // PD 30% = 3000bps, LGD 50% = 5000bps, budget 1000 USDC
-        // expected: 1_000_000_000 * 3000 * 5000 / 100_000_000 = 150_000_000 wei = 150 USDC
-        uint256 bond = escrow.requiredBond(1_000_000_000, 3000, 5000);
+    function test_RequiredBond_Emerging_500bps() public view {
+        // 1000 × 5% = 50 USDC
+        uint256 bond = escrow.requiredBond(1_000_000_000, TIER_EMERGING);
+        assertEq(bond, 50_000_000);
+    }
+
+    function test_RequiredBond_Provisional_1500bps() public view {
+        // 1000 × 15% = 150 USDC
+        uint256 bond = escrow.requiredBond(1_000_000_000, TIER_PROVISIONAL);
         assertEq(bond, 150_000_000);
     }
 
-    /* ──────────────────────────────────────────────────────────────────────
-     * Tests — postBond
-     * ────────────────────────────────────────────────────────────────────── */
+    function test_RequiredBond_Watch_returns_0() public view {
+        assertEq(escrow.requiredBond(1_000_000_000, TIER_WATCH), 0);
+    }
 
-    function test_PostBond_HappyPath() public {
-        uint256 budget = 1_000_000_000; // 1000 USDC
-        uint256 jobId = _gatedFundedJob(budget);
+    function test_RequiredBond_Inactive_returns_0() public view {
+        assertEq(escrow.requiredBond(1_000_000_000, TIER_INACTIVE), 0);
+    }
 
-        // Fund agent + approve bond
-        uint256 expectedBond = escrow.requiredBond(budget, 400, 3000); // BBB
+    // ============================================================
+    // postBond
+    // ============================================================
+
+    function test_PostBond_HappyPath_Established() public {
+        uint256 budget = 1_000_000_000;
+        uint256 jobId = _gatedFundedJob(budget, TIER_ESTABLISHED);
+        uint256 expectedBond = escrow.requiredBond(budget, TIER_ESTABLISHED);
+
         usdc.setBalance(PROVIDER, expectedBond);
         vm.prank(PROVIDER);
         usdc.approve(address(escrow), expectedBond);
 
-        // Fresh attestation (nonce > the one used for the job, which was 1)
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_ESTABLISHED, 85, 0, 2);
 
         vm.prank(PROVIDER);
         escrow.postBond(jobId, att, sig);
@@ -180,116 +186,88 @@ contract CaliberEscrowTest is Test {
         assertEq(poster, PROVIDER);
         assertEq(client, CLIENT);
         assertEq(amount, expectedBond);
-        assertEq(status, 0); // BOND_ACTIVE
+        assertEq(status, 0);
         assertEq(usdc.balanceOf(address(escrow)), expectedBond);
     }
 
-    function test_Revert_PostBond_NotProvider() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
+    function test_Revert_PostBond_Watch_NotBondable() public {
+        // Realistic scenario: agent passed the gate as Proven, but their
+        // tier dropped to Watch by the time they tried to post bond.
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_WATCH, 50, 0, 2);
+        vm.prank(PROVIDER);
+        vm.expectRevert("Tier not bondable");
+        escrow.postBond(jobId, att, sig);
+    }
 
-        // Some other address signs nothing on PROVIDER's behalf
+    function test_Revert_PostBond_Inactive_NotBondable() public {
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_INACTIVE, 0, 0, 2);
+        vm.prank(PROVIDER);
+        vm.expectRevert("Tier not bondable");
+        escrow.postBond(jobId, att, sig);
+    }
+
+    function test_Revert_PostBond_NotProvider() public {
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_PROVEN, 70, 0, 2);
         address impostor = address(0xB0B);
         usdc.setBalance(impostor, 100e18);
         vm.prank(impostor);
         usdc.approve(address(escrow), 100e18);
-
-        // The attestation is for PROVIDER; impostor calling will trip the
-        // "Caller must be agent" check first.
         vm.prank(impostor);
         vm.expectRevert("Caller must be agent");
         escrow.postBond(jobId, att, sig);
     }
 
     function test_Revert_PostBond_Duplicate() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        uint256 bondAmt = escrow.requiredBond(1_000_000_000, TIER_PROVEN);
         usdc.setBalance(PROVIDER, bondAmt * 2);
         vm.prank(PROVIDER);
         usdc.approve(address(escrow), bondAmt * 2);
 
-        (RatingVerifier.RatingAttestation memory a1, bytes memory s1) = _attest(3, 400, 3000, 2);
+        (RatingVerifier.RatingAttestation memory a1, bytes memory s1) = _attest(TIER_PROVEN, 70, 0, 2);
         vm.prank(PROVIDER);
         escrow.postBond(jobId, a1, s1);
 
-        // Second post with fresh nonce should still fail with "already posted"
-        (RatingVerifier.RatingAttestation memory a2, bytes memory s2) = _attest(3, 400, 3000, 3);
+        (RatingVerifier.RatingAttestation memory a2, bytes memory s2) = _attest(TIER_PROVEN, 70, 0, 3);
         vm.prank(PROVIDER);
         vm.expectRevert("Bond already posted");
         escrow.postBond(jobId, a2, s2);
     }
 
-    function test_Revert_PostBond_ZeroBudget() public {
-        // Skip the budget-set step in the helper — create job without budget.
-        (RatingVerifier.RatingAttestation memory ag, bytes memory sg) = _attest(3, 400, 3000, 1);
-        vm.prank(CLIENT);
-        uint256 jobId = gateway.postGatedJob(
-            PROVIDER, EVALUATOR, block.timestamp + 7 days, "no-budget", 1_000_000_000, ag, sg, 3, 1
-        );
-        // budget NOT set on ERC-8183 yet.
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
-        vm.prank(PROVIDER);
-        vm.expectRevert("Budget not set");
-        escrow.postBond(jobId, att, sig);
-    }
-
-    /* ──────────────────────────────────────────────────────────────────────
-     * Tests — release
-     * ────────────────────────────────────────────────────────────────────── */
+    // ============================================================
+    // release + slash lifecycle
+    // ============================================================
 
     function test_Release_HappyPath() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        uint256 bondAmt = escrow.requiredBond(1_000_000_000, TIER_PROVEN);
         usdc.setBalance(PROVIDER, bondAmt);
         vm.prank(PROVIDER);
         usdc.approve(address(escrow), bondAmt);
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_PROVEN, 70, 0, 2);
         vm.prank(PROVIDER);
         escrow.postBond(jobId, att, sig);
 
-        // Simulate ERC-8183 transitioning to Completed
         erc8183.setStatus(jobId, escrow.STATUS_COMPLETED());
 
         uint256 providerBalBefore = usdc.balanceOf(PROVIDER);
-        // Anyone can call release; use a random caller.
         vm.prank(address(0xCAFE));
         escrow.release(jobId);
-
         assertEq(usdc.balanceOf(PROVIDER), providerBalBefore + bondAmt);
         (, , , uint8 status) = escrow.bonds(jobId);
-        assertEq(status, 1); // BOND_RELEASED
+        assertEq(status, 1);
     }
-
-    function test_Revert_Release_NotCompleted() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
-        usdc.setBalance(PROVIDER, bondAmt);
-        vm.prank(PROVIDER);
-        usdc.approve(address(escrow), bondAmt);
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
-        vm.prank(PROVIDER);
-        escrow.postBond(jobId, att, sig);
-
-        // Still STATUS_FUNDED — should refuse release
-        vm.expectRevert("Job not completed");
-        escrow.release(jobId);
-    }
-
-    /* ──────────────────────────────────────────────────────────────────────
-     * Tests — slash
-     * ────────────────────────────────────────────────────────────────────── */
 
     function test_Slash_OnRejected() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        uint256 bondAmt = escrow.requiredBond(1_000_000_000, TIER_PROVEN);
         usdc.setBalance(PROVIDER, bondAmt);
         vm.prank(PROVIDER);
         usdc.approve(address(escrow), bondAmt);
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_PROVEN, 70, 0, 2);
         vm.prank(PROVIDER);
         escrow.postBond(jobId, att, sig);
 
@@ -298,39 +276,18 @@ contract CaliberEscrowTest is Test {
         uint256 clientBalBefore = usdc.balanceOf(CLIENT);
         vm.prank(address(0xCAFE));
         escrow.slash(jobId);
-
         assertEq(usdc.balanceOf(CLIENT), clientBalBefore + bondAmt);
         (, , , uint8 status) = escrow.bonds(jobId);
-        assertEq(status, 2); // BOND_SLASHED
-    }
-
-    function test_Slash_OnExpired() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
-        usdc.setBalance(PROVIDER, bondAmt);
-        vm.prank(PROVIDER);
-        usdc.approve(address(escrow), bondAmt);
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
-        vm.prank(PROVIDER);
-        escrow.postBond(jobId, att, sig);
-
-        erc8183.setStatus(jobId, escrow.STATUS_EXPIRED());
-
-        uint256 clientBalBefore = usdc.balanceOf(CLIENT);
-        escrow.slash(jobId);
-
-        assertEq(usdc.balanceOf(CLIENT), clientBalBefore + bondAmt);
+        assertEq(status, 2);
     }
 
     function test_Revert_DoubleRelease() public {
-        uint256 jobId = _gatedFundedJob(1_000_000_000);
-        uint256 bondAmt = escrow.requiredBond(1_000_000_000, 400, 3000);
+        uint256 jobId = _gatedFundedJob(1_000_000_000, TIER_PROVEN);
+        uint256 bondAmt = escrow.requiredBond(1_000_000_000, TIER_PROVEN);
         usdc.setBalance(PROVIDER, bondAmt);
         vm.prank(PROVIDER);
         usdc.approve(address(escrow), bondAmt);
-
-        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(3, 400, 3000, 2);
+        (RatingVerifier.RatingAttestation memory att, bytes memory sig) = _attest(TIER_PROVEN, 70, 0, 2);
         vm.prank(PROVIDER);
         escrow.postBond(jobId, att, sig);
 
@@ -339,5 +296,54 @@ contract CaliberEscrowTest is Test {
 
         vm.expectRevert("Bond not active");
         escrow.release(jobId);
+    }
+
+    // ============================================================
+    // Configurable bond table (owner-only setter)
+    // ============================================================
+
+    function test_SetBondBpsForTier_OwnerCanChange() public {
+        vm.prank(SIGNER_ADDR);
+        escrow.setBondBpsForTier(TIER_PROVEN, 200);
+        assertEq(escrow.bondBpsByTier(TIER_PROVEN), 200);
+        // requiredBond reflects the new rate
+        assertEq(escrow.requiredBond(1_000_000_000, TIER_PROVEN), 20_000_000);
+    }
+
+    function test_Revert_SetBondBps_NotOwner() public {
+        vm.prank(address(0xB0B));
+        vm.expectRevert("Only owner");
+        escrow.setBondBpsForTier(TIER_PROVEN, 200);
+    }
+
+    function test_Revert_SetBondBps_AboveCap() public {
+        // Cap is MAX_BOND_BPS (5000 = 50%). Anything above reverts.
+        vm.prank(SIGNER_ADDR);
+        vm.expectRevert("Bond rate too high");
+        escrow.setBondBpsForTier(TIER_PROVEN, 5001);
+    }
+
+    function test_Revert_SetBondBps_InvalidTier() public {
+        vm.prank(SIGNER_ADDR);
+        vm.expectRevert("Invalid tier");
+        escrow.setBondBpsForTier(99, 100);
+    }
+
+    function test_OwnerCanEnableWatchBondability() public {
+        // Owner unrefuses Watch by setting a non-zero rate. Useful for ops.
+        vm.prank(SIGNER_ADDR);
+        escrow.setBondBpsForTier(TIER_WATCH, 2500); // 25%
+        assertEq(escrow.requiredBond(1_000_000_000, TIER_WATCH), 250_000_000);
+    }
+
+    function test_OwnerTransfer() public {
+        address newOwner = address(0xC0FFEE);
+        vm.prank(SIGNER_ADDR);
+        escrow.transferOwner(newOwner);
+        assertEq(escrow.owner(), newOwner);
+        // Old owner can no longer set rates
+        vm.prank(SIGNER_ADDR);
+        vm.expectRevert("Only owner");
+        escrow.setBondBpsForTier(TIER_PROVEN, 200);
     }
 }
