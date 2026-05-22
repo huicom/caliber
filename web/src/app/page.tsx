@@ -235,8 +235,6 @@ export default async function HomePage() {
           <p className="aa-eyebrow">caliber · trust primitive for arc · methodology v2.0</p>
 
           <h1 className="aa-display">
-            On Arc, agents coordinate, contract,<br/>
-            and settle in real time.<br/>
             Caliber tells you which to trust<span className="aa-display__dot">.</span>
           </h1>
 
