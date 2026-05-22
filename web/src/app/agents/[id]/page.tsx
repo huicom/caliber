@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { db, agents, feedbackEvents, validations, jobs, ratingSnapshots } from '@/lib/db';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc, and, inArray } from 'drizzle-orm';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +30,7 @@ import { CheckCircle, Clock, ExternalLink, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { RatingTrajectoryChart } from './_components/RatingTrajectoryChart';
 import { RatingExposurePanel } from './_components/RatingExposurePanel';
+import { AgentExposureBreakdown } from './_components/AgentExposureBreakdown';
 
 export default async function AgentDetailPage({
   params,
@@ -46,7 +47,7 @@ export default async function AgentDetailPage({
     .limit(1);
   if (!agent) return notFound();
 
-  const [recentFeedback, allValidations, recentJobs, latestSnapshotRows] = await Promise.all([
+  const [recentFeedback, allValidations, recentJobs, latestSnapshotRows, inFlightJobs] = await Promise.all([
     db
       .select()
       .from(feedbackEvents)
@@ -74,6 +75,22 @@ export default async function AgentDetailPage({
       ))
       .orderBy(desc(ratingSnapshots.computedAt))
       .limit(1),
+    // Funded in-flight jobs only — these are the EAD components per §6.2.
+    // Open jobs without a budget set are offers, not exposure.
+    db
+      .select({
+        jobId: jobs.jobId,
+        status: jobs.status,
+        budgetUsdc: jobs.budgetUsdc,
+        description: jobs.description,
+        createdAt: jobs.createdAt,
+      })
+      .from(jobs)
+      .where(and(
+        eq(jobs.providerAddress, agent.ownerAddress),
+        inArray(jobs.status, ['Funded', 'Submitted']),
+      ))
+      .orderBy(desc(jobs.createdAtBlock)),
   ]);
   const latestSnapshot = latestSnapshotRows[0] ?? null;
 
@@ -173,6 +190,21 @@ export default async function AgentDetailPage({
       <div className="mb-8">
         <RatingExposurePanel snapshot={latestSnapshot} />
       </div>
+
+      {latestSnapshot && (
+        <div className="mb-8">
+          <AgentExposureBreakdown
+            snapshot={latestSnapshot}
+            inFlightJobs={inFlightJobs.map((j) => ({
+              jobId: j.jobId,
+              status: j.status,
+              budgetUsdc: j.budgetUsdc,
+              description: j.description,
+              createdAt: j.createdAt,
+            }))}
+          />
+        </div>
+      )}
 
       <div className="mb-8">
         <RatingTrajectoryChart chain="arc" agentId={id} />
