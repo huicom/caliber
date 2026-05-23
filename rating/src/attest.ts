@@ -5,8 +5,7 @@ import { METHODOLOGY_VERSION } from '../engine/version';
 import { TIER_ORDINAL, flagsToBitfield, type CaliberTier, type ConfidenceLabel } from '../engine/types';
 import { db, agents, indexerState } from '@arc-agents/db';
 import { eq } from 'drizzle-orm';
-import { bytesToHex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { getSigner, stringToBytes32, caliberDomain } from './sign-utils';
 
 // Caliber v2.0 attestation. The on-chain RatingVerifier struct is
 // extended with `tier`, `score`, `interactionCount`, `flags` and drops
@@ -22,11 +21,6 @@ const CONFIDENCE_ORDINAL: Record<ConfidenceLabel, number> = {
   moderate: 1,
   low: 2,
   insufficient: 3,
-};
-
-const CHAIN_ID_MAP: Record<string, number> = {
-  arc: 5042002,
-  base: 8453,
 };
 
 const paramsSchema = z.object({
@@ -48,24 +42,6 @@ const bodySchema = z.object({
   minConfidence: z.enum(['high', 'moderate', 'low']).optional().default('moderate'),
   validForSeconds: z.number().int().min(60).max(3600).optional().default(600),
 });
-
-function stringToBytes32(str: string): `0x${string}` {
-  const encoded = new TextEncoder().encode(str);
-  const padded = new Uint8Array(32);
-  padded.set(encoded.slice(0, 32));
-  return bytesToHex(padded);
-}
-
-let _signerAccount: ReturnType<typeof privateKeyToAccount> | null = null;
-function getSigner() {
-  const key = process.env.RATING_SIGNER_PRIVATE_KEY;
-  if (!key) throw new Error('RATING_SIGNER_PRIVATE_KEY not set');
-  if (!_signerAccount) {
-    const pk = (key.startsWith('0x') ? key : `0x${key}`) as `0x${string}`;
-    _signerAccount = privateKeyToAccount(pk);
-  }
-  return _signerAccount;
-}
 
 async function getNextNonce(chain: string, agentId: string): Promise<bigint> {
   const key = `attest_nonce:${chain}:${agentId}`;
@@ -199,17 +175,8 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
     };
 
     const signer = getSigner();
-    const verifyingContract = (process.env.RATING_VERIFIER_ADDRESS ||
-      '0x0000000000000000000000000000000000000000') as `0x${string}`;
-    const chainId = CHAIN_ID_MAP[chain] ?? 5042002;
-
     // EIP-712 domain — `name="Caliber"` matches the on-chain RatingVerifier.
-    const domain = {
-      name: 'Caliber',
-      version: '1',
-      chainId,
-      verifyingContract,
-    };
+    const domain = caliberDomain(chain);
 
     const types = {
       RatingAttestation: [

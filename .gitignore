@@ -8,6 +8,13 @@ dist/
 pg-data/
 .cache/
 
+# Circle Programmable Wallets — Entity Secret recovery files are the
+# only way to recover developer-controlled wallets if the entity secret
+# is lost. Never commit them.
+circle-recovery-*.dat
+circle-recovery-*.bin
+recoveryFile*
+
 # editor swap files
 *.swp
 *.swo

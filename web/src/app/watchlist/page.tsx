@@ -2,22 +2,23 @@ import Link from 'next/link';
 import { db } from '@/lib/db';
 import { sql as drizzleSql } from 'drizzle-orm';
 import type { CaliberTier } from '@/lib/api';
+import { describePolicy } from '@/lib/sentinel/policy';
 
 const PAGE_DESCRIPTION =
-  'Track 3 of Caliber Phase 2: a live feed of agent tier movements and flag firings on Arc Testnet. Caliber-rated agents that move up, move down, enter Watch/Inactive, or trigger a risk flag show up here.';
+  'Caliber Sentinel decision log: every tier movement, flag firing, and rating reissue produced by the autonomous daily snapshot — annotated with the methodology policy that fired.';
 
 export const metadata = {
-  title: 'Watchlist — Caliber tier transitions',
+  title: 'Sentinel — Caliber decision log',
   description: PAGE_DESCRIPTION,
   openGraph: {
-    title: 'Watchlist — Caliber tier transitions',
+    title: 'Sentinel — Caliber decision log',
     description: PAGE_DESCRIPTION,
     url: 'https://caliber.poko.blue/watchlist',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Watchlist — Caliber tier transitions',
+    title: 'Sentinel — Caliber decision log',
     description: PAGE_DESCRIPTION,
   },
 };
@@ -143,15 +144,20 @@ export default async function WatchlistPage({
         <nav className="font-mono text-[11px] text-[var(--color-mute)] mb-4">
           <Link href="/" className="hover:text-[var(--color-copper)]">caliber</Link>
           <span className="mx-2 opacity-50">/</span>
-          <span>watchlist</span>
+          <span>sentinel</span>
         </nav>
+        <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--color-copper)] mb-2">
+          //caliber_sentinel
+        </p>
         <h1 className="text-3xl sm:text-4xl font-semibold text-[var(--color-ink)] tracking-tight mb-3">
-          Watchlist
+          Decision log
         </h1>
         <p className="text-[15px] text-[var(--color-ink)] leading-relaxed max-w-prose">
-          A live feed of tier movements and risk-flag firings across Caliber-rated agents on Arc.
-          When an agent moves up, drops down, enters Watch, or trips a flag — it lands here. Use as
-          an alarm clock for the agents you depend on.
+          <strong>Caliber Sentinel</strong> is the autonomous job that runs daily at 04:00 UTC. It
+          recomputes every agent&rsquo;s rating from the latest on-chain interactions, diffs
+          against yesterday&rsquo;s snapshot, and writes one row here for every interesting change
+          &mdash; tier moves, flag firings, first ratings, recoveries. Each entry cites the
+          methodology section that drove the decision.
         </p>
         <p className="text-sm text-[var(--color-mute)] mt-3">
           Subscribe:{' '}
@@ -165,9 +171,30 @@ export default async function WatchlistPage({
           ·{' '}
           <Link href="/api/watchlist" className="text-[var(--color-copper)] hover:underline font-mono text-xs">
             /api/watchlist
+          </Link>{' '}
+          · Policy:{' '}
+          <Link href="/methodology" className="text-[var(--color-copper)] hover:underline">
+            methodology v2.0
           </Link>
         </p>
       </section>
+
+      {/* Authorship chip — names the agent, schedule, and execution model so
+          the feed reads as an audit log of an autonomous job's decisions. */}
+      <div className="border border-[var(--color-hairline)] bg-[var(--color-bg-elev)] rounded-[2px] px-3 py-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)] leading-relaxed">
+          agent: caliber-sentinel · runs daily 04:00 UTC · pure function over (yesterday, today) ·
+          deterministic · signer{' '}
+          <a
+            href="https://testnet.arcscan.app/address/0xbF017698BB2c936D54a74DCABF68Df42800bAA84"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--color-copper)] hover:underline normal-case tracking-normal"
+          >
+            0xbF01…bAA84
+          </a>
+        </p>
+      </div>
 
       {/* Filter chips */}
       <nav className="flex flex-wrap gap-2 -mt-2">
@@ -269,10 +296,36 @@ export default async function WatchlistPage({
                         ))}
                       </div>
                     )}
-                    <p className="font-mono text-[10px] text-[var(--color-mute)] mt-1.5">
-                      #{e.agent_id} ·{' '}
-                      {e.agent_jobs_completed != null ? `${e.agent_jobs_completed} jobs · ` : ''}
-                      methodology v{e.methodology_version}
+                    {(() => {
+                      const policy = describePolicy({
+                        kind: e.kind,
+                        from_tier: e.from_tier,
+                        to_tier: e.to_tier,
+                        from_flags: e.from_flags,
+                        to_flags: e.to_flags,
+                        from_score: null,
+                        to_score: e.to_score,
+                      });
+                      return policy ? (
+                        <p className="text-[11px] text-[var(--color-ink)] mt-1.5 italic leading-snug max-w-prose">
+                          <span className="not-italic text-[var(--color-mute)] font-mono mr-1">policy ›</span>
+                          {policy}
+                        </p>
+                      ) : null;
+                    })()}
+                    <p className="font-mono text-[10px] text-[var(--color-mute)] mt-1.5 flex flex-wrap items-center gap-x-2">
+                      <span>
+                        #{e.agent_id} ·{' '}
+                        {e.agent_jobs_completed != null ? `${e.agent_jobs_completed} jobs · ` : ''}
+                        methodology v{e.methodology_version}
+                      </span>
+                      <Link
+                        href={`/verify?type=transition&id=${e.id}`}
+                        className="text-[var(--color-copper)] hover:underline"
+                        title="Fetch the EIP-712 signed attestation for this decision and verify the signer matches the on-chain RatingVerifier.signer()"
+                      >
+                        verify decision →
+                      </Link>
                     </p>
                   </div>
                   <span className="font-mono text-[11px] text-[var(--color-mute)] shrink-0 whitespace-nowrap">
@@ -285,15 +338,22 @@ export default async function WatchlistPage({
         )}
       </section>
 
-      <section className="border-t border-[var(--color-hairline)] pt-6 text-sm text-[var(--color-mute)] leading-relaxed">
+      <section className="border-t border-[var(--color-hairline)] pt-6 text-sm text-[var(--color-mute)] leading-relaxed space-y-2">
         <p>
-          Transitions are computed by the daily snapshot cron from diffs against the previous day&rsquo;s
-          Caliber rating. First-rating events appear on the day Caliber first publishes a rating for an
-          agent. Methodology and code:{' '}
+          Sentinel is deterministic: same input data + same methodology version produces the same
+          row. The policy citation under each entry refers to a section of the published
+          methodology paper &mdash; click through to see the exact threshold and rationale.
+        </p>
+        <p>
+          Source:{' '}
           <Link href="/methodology" className="text-[var(--color-copper)] hover:underline">
-            /methodology
+            methodology v2.0
           </Link>
-          .
+          {' · '}engine:{' '}
+          <code className="font-mono text-xs">rating/engine/flags.ts</code>,{' '}
+          <code className="font-mono text-xs">rating/engine/rating.ts</code>
+          {' · '}snapshot job:{' '}
+          <code className="font-mono text-xs">rating/scripts/snapshot-daily.ts</code>
         </p>
       </section>
     </main>

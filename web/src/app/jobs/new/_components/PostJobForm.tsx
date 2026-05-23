@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useWriteContract, useChainId, usePublicClient } from 'wagmi';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { ConnectKitButton } from 'connectkit';
 import {
   USDC_CONTRACT,
   RATING_GATEWAY,
@@ -13,6 +12,9 @@ import USDC_ABI from '@/lib/contracts/abis/USDC.json';
 import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
 import { type Abi, decodeEventLog } from 'viem';
 import { api, type CaliberTier } from '@/lib/api';
+import { AgentPicker } from './AgentPicker';
+import { useCaliberWallet } from '@/lib/wallet/useCaliberWallet';
+import { useCircleAuth } from '@/lib/circle/AuthContext';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Caliber-gated job-posting form. Three-popup flow:
@@ -102,6 +104,10 @@ export function PostJobForm() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const wrongChain = isConnected && chainId !== arcTestnet.id;
+  // Unified wallet state (MetaMask via wagmi OR Circle Google). The Hire
+  // button below dispatches by wallet.type to the right signing flow.
+  const wallet = useCaliberWallet();
+  const circle = useCircleAuth();
   const { writeContract: writeUsdcApprove, isPending: approvePending } = useWriteContract();
   const { writeContract: writeGateway, isPending: postPending } = useWriteContract();
   const publicClient = usePublicClient();
@@ -143,6 +149,34 @@ export function PostJobForm() {
   const [draftHash, setDraftHash] = useState<string | null>(null);
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
   const [targetCheck, setTargetCheck] = useState<TargetCheck>({ status: 'idle' });
+
+  // Basic mode hides advanced inputs (deadline, min tier, min confidence,
+  // evaluator) and uses sensible defaults. Toggle reveals everything for
+  // power users / integrators who need to override.
+  const [mode, setMode] = useState<'basic' | 'advanced'>('basic');
+
+  // Form-data getter used by the Circle Hire dispatcher. Returns null until
+  // the four essentials are filled. Server applies defaults for deadline /
+  // evaluator when omitted in basic mode.
+  const getJobFormData = useCallback(() => {
+    if (!title || !description || !budget || !targetAgentId) return null;
+    const tierName = (['Established', 'Proven', 'Emerging', 'Provisional'][minTier] ??
+      'Provisional') as 'Established' | 'Proven' | 'Emerging' | 'Provisional';
+    const confName = (['high', 'moderate', 'low'][minConfidence] ?? 'moderate') as
+      | 'high'
+      | 'moderate'
+      | 'low';
+    return {
+      title,
+      description,
+      budgetUsdc: budget,
+      minTier: tierName,
+      minConfidence: confName,
+      targetAgentId,
+      evaluatorAddress: evaluatorAddress || undefined,
+      deadline: mode === 'advanced' ? deadline : undefined,
+    };
+  }, [title, description, budget, minTier, minConfidence, targetAgentId, evaluatorAddress, deadline, mode]);
 
   // Pre-flight tier-gap check: as soon as the user picks an agent + tier,
   // hit /v1/ratings/bulk to surface "agent is Caliber-BB, requires Caliber-A"
@@ -186,8 +220,15 @@ export function PostJobForm() {
   }, [targetAgentId, minTier]);
 
   const tierGapBlocked = targetCheck.status === 'rated' && !targetCheck.meetsTier;
-  const submitDisabled =
-    !title || !description || !budget || !targetAgentId || !evaluatorAddress || !isConnected || wrongChain || tierGapBlocked;
+  // Disabled until the four essentials are filled + tier check is passing.
+  // Wallet-connection state is rendered via the Hire button text instead of
+  // disabling the button — clicking when disconnected opens the wallet picker.
+  const formIncomplete =
+    !title || !description || !budget || !targetAgentId || tierGapBlocked;
+  // MetaMask needs evaluator + correct chain; Circle handles both server-side.
+  const metamaskBlocked =
+    wallet.type === 'metamask' && (!evaluatorAddress || wrongChain);
+  const submitDisabled = formIncomplete || metamaskBlocked;
   const budgetWei = budget ? String(Math.floor(parseFloat(budget) * 1e6)) : '0';
 
   const handleAttest = useCallback(async () => {
@@ -400,15 +441,92 @@ export function PostJobForm() {
   const labelClass = 'block text-sm font-medium mb-1 text-[var(--color-ink)]';
   const noteClass = 'mt-1.5 text-xs text-[var(--color-mute)] leading-snug';
 
+  // === Circle Google → run gated job via Circle SDK challenges ===========
+  const handleCircleHire = useCallback(async () => {
+    if (!wallet.address || wallet.type !== 'circle') return;
+    const form = getJobFormData();
+    if (!form) {
+      setError('Fill in the form first — title, description, budget, agent.');
+      setStep('error');
+      return;
+    }
+    setError(null);
+    try {
+      setStep('approving');
+      const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
+      const approveRes = await circle.runChallenge(approveChallengeId);
+      if (approveRes.errorMessage) throw new Error(`approve: ${approveRes.errorMessage}`);
+
+      setStep('posting');
+      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
+      setDraftHash(dh);
+      // Capture the block height BEFORE the post tx so we can scan forward.
+      const beforeBlock = publicClient ? await publicClient.getBlockNumber() : BigInt(0);
+      const postRes = await circle.runChallenge(postChallengeId);
+      if (postRes.errorMessage) throw new Error(`post: ${postRes.errorMessage}`);
+
+      // Circle's challenge result for CREATE_TRANSACTION challenges doesn't
+      // expose txHash directly (only SIGN_TRANSACTION does). Instead, scan
+      // the chain forward from the pre-post block for our wallet's most
+      // recent JobPostedWithRating event.
+      if (publicClient && wallet.address) {
+        const posterLower = wallet.address.toLowerCase();
+        for (let attempt = 0; attempt < 15; attempt++) {
+          try {
+            const current = await publicClient.getBlockNumber();
+            if (current >= beforeBlock) {
+              const logs = await publicClient.getLogs({
+                address: RATING_GATEWAY as `0x${string}`,
+                fromBlock: beforeBlock,
+                toBlock: current,
+              });
+              for (const log of logs) {
+                try {
+                  const decoded = decodeEventLog({
+                    abi: RatingGateway_ABI as Abi,
+                    data: log.data,
+                    topics: log.topics,
+                  });
+                  if (decoded.eventName === 'JobPostedWithRating') {
+                    const args = decoded.args as unknown as {
+                      jobId: bigint;
+                      poster: string;
+                    };
+                    if (args.poster?.toLowerCase() === posterLower) {
+                      const id = args.jobId.toString();
+                      setCreatedJobId(id);
+                      setStep('success');
+                      router.push(`/jobs/${id}`);
+                      return;
+                    }
+                  }
+                } catch { /* not our event */ }
+              }
+            }
+          } catch { /* RPC hiccup; retry */ }
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
+      // Fallthrough: tx succeeded but we couldn't pin down jobId. User can
+      // still navigate to /jobs to find their post.
+      setStep('success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'circle hire failed');
+      setStep('error');
+    }
+  }, [wallet, circle, getJobFormData, publicClient, router]);
+
+  // Dispatcher: routes the Hire click to the right signing flow.
+  const handleHire = useCallback(() => {
+    if (wallet.type === 'metamask') {
+      handleAttest();
+    } else if (wallet.type === 'circle') {
+      void handleCircleHire();
+    }
+  }, [wallet.type, handleAttest, handleCircleHire]);
+
   return (
     <div className="space-y-6">
-
-      {!isConnected && (
-        <div className="border border-[var(--color-hairline)] bg-[var(--color-bg-elev)] rounded-[2px] p-5 text-center">
-          <p className="text-[var(--color-mute)] mb-3 text-sm">Connect your wallet to post a job.</p>
-          <ConnectKitButton />
-        </div>
-      )}
 
       {wrongChain && (
         <div className="border border-[var(--color-signal-down)] bg-white rounded-[2px] p-4 text-sm text-[var(--color-signal-down)]">
@@ -416,9 +534,10 @@ export function PostJobForm() {
         </div>
       )}
 
-      {isConnected && (
+      {wallet.isConnected && wallet.address && (
         <p className="text-xs text-[var(--color-mute)] font-mono">
-          connected · {address?.slice(0, 10)}…{address?.slice(-4)}
+          connected · {wallet.address.slice(0, 10)}…{wallet.address.slice(-4)} · {wallet.label}
+          {wallet.email && ` · ${wallet.email}`}
         </p>
       )}
 
@@ -439,9 +558,14 @@ export function PostJobForm() {
 
       {step === 'form' && (
         <div className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-6 space-y-4">
-          <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em] pb-2 border-b-2 border-[var(--color-ink)]">
-            //job_details
-          </h2>
+          <div className="flex items-baseline justify-between pb-2 border-b-2 border-[var(--color-ink)]">
+            <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
+              //job_details
+            </h2>
+            <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
+              mode · {mode}
+            </span>
+          </div>
 
           <div>
             <label className={labelClass}>Title *</label>
@@ -468,114 +592,153 @@ export function PostJobForm() {
             <p className={noteClass}>{description.length}/2000</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Budget (USDC) *</label>
-              <input
-                type="number"
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                min="1"
-                max="1000"
-                step="0.01"
-                className={inputClass}
-                placeholder="1.00"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Deadline *</label>
-              <input
-                type="datetime-local"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-                className={inputClass}
-              />
-            </div>
+          <div>
+            <label className={labelClass}>Budget (USDC) *</label>
+            <input
+              type="number"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              min="1"
+              max="1000"
+              step="0.01"
+              className={inputClass}
+              placeholder="1.00"
+            />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Minimum rating *</label>
-              <select
-                value={minTier}
-                onChange={(e) => setMinTier(Number(e.target.value))}
-                className={inputClass}
+          {/* === Agent picker — searchable + tier-filterable list ========== */}
+          <div>
+            <div className="flex items-baseline justify-between mb-1">
+              <label className={labelClass.replace('mb-1', '')}>Agent to hire *</label>
+              <a
+                href="/agents"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
               >
-                {TIER_OPTIONS.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-              <p className={noteClass}>The gateway refuses agents below this tier.</p>
+                browse all (new tab) ↗
+              </a>
             </div>
-            <div>
-              <label className={labelClass}>Minimum confidence *</label>
-              <select
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(Number(e.target.value))}
-                className={inputClass}
-              >
-                {CONFIDENCE_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-              <p className={noteClass}>Higher confidence = more interaction history backing the rating.</p>
-            </div>
+            <AgentPicker
+              selectedId={targetAgentId}
+              onSelect={setTargetAgentId}
+              minTierOrdinal={minTier}
+              showTierFilter={mode === 'advanced'}
+            />
+            <input
+              type="text"
+              value={targetAgentId}
+              onChange={(e) => setTargetAgentId(e.target.value)}
+              className={inputClass + ' mt-2'}
+              placeholder="or paste an ERC-8004 agent id"
+            />
+            <p className={noteClass}>
+              Pick from the list above (filtered to demo-ready agents) or paste any id.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <div className="flex items-baseline justify-between mb-1">
-                <label className={labelClass.replace('mb-1', '')}>Agent to hire *</label>
-                <a href="/agents" className="text-[11px] font-mono text-[var(--color-copper)] hover:underline">
-                  browse →
-                </a>
-              </div>
-              <input
-                type="text"
-                value={targetAgentId}
-                onChange={(e) => setTargetAgentId(e.target.value)}
-                className={inputClass}
-                placeholder="ERC-8004 agent id (e.g., 4102)"
-              />
-              <p className={noteClass}>
-                Easiest: open <a href="/agents" className="text-[var(--color-copper)] underline">/agents</a>, click <strong>Hire</strong>, this auto-fills.
+          {/* === Advanced fields (deadline, tier, confidence, evaluator) === */}
+          {mode === 'advanced' && (
+            <div className="space-y-4 pt-4 border-t border-dashed border-[var(--color-hairline)]">
+              <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
+                //advanced_options
               </p>
-            </div>
-            <div>
-              <div className="flex items-baseline justify-between mb-1">
-                <label className={labelClass.replace('mb-1', '')}>Evaluator *</label>
-                {address && evaluatorAddress !== address && (
-                  <button
-                    type="button"
-                    onClick={() => setEvaluatorAddress(address)}
-                    className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Deadline</label>
+                  <input
+                    type="datetime-local"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className={inputClass}
+                  />
+                  <p className={noteClass}>Defaults to +7 days.</p>
+                </div>
+                <div>
+                  <label className={labelClass}>Minimum rating</label>
+                  <select
+                    value={minTier}
+                    onChange={(e) => setMinTier(Number(e.target.value))}
+                    className={inputClass}
                   >
-                    use my wallet
-                  </button>
-                )}
+                    {TIER_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <p className={noteClass}>Gateway refuses agents below this tier. Default: Provisional or better.</p>
+                </div>
               </div>
-              <input
-                type="text"
-                value={evaluatorAddress}
-                onChange={(e) => setEvaluatorAddress(e.target.value)}
-                className={inputClass}
-                placeholder="0x…"
-              />
-              <p className={noteClass}>
-                The wallet that approves or rejects the deliverable. Defaults to your wallet (self-eval).
-              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Minimum confidence</label>
+                  <select
+                    value={minConfidence}
+                    onChange={(e) => setMinConfidence(Number(e.target.value))}
+                    className={inputClass}
+                  >
+                    {CONFIDENCE_OPTIONS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  <p className={noteClass}>Default: Moderate (≥25 completed jobs).</p>
+                </div>
+                <div>
+                  <div className="flex items-baseline justify-between mb-1">
+                    <label className={labelClass.replace('mb-1', '')}>Evaluator</label>
+                    {address && evaluatorAddress !== address && (
+                      <button
+                        type="button"
+                        onClick={() => setEvaluatorAddress(address)}
+                        className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
+                      >
+                        use my wallet
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={evaluatorAddress}
+                    onChange={(e) => setEvaluatorAddress(e.target.value)}
+                    className={inputClass}
+                    placeholder="0x…"
+                  />
+                  <p className={noteClass}>
+                    Defaults to your wallet (self-eval). Demo path uses the Circle wallet automatically.
+                  </p>
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* === Mode toggle ============================================== */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setMode((m) => (m === 'basic' ? 'advanced' : 'basic'))}
+              className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
+            >
+              {mode === 'basic' ? 'advanced options ↓' : '← back to basic mode'}
+            </button>
           </div>
 
           <TargetGateStatus check={targetCheck} minTierOrdinal={minTier} />
 
-          <button
-            onClick={handleAttest}
-            disabled={submitDisabled}
-            className="w-full py-3 px-4 bg-[var(--color-ink)] text-[var(--color-paper)] font-medium text-sm rounded-[2px] hover:bg-[#1c2028] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            get attestation & continue →
-          </button>
+          {!wallet.isConnected ? (
+            <div className="border-l-2 border-[var(--color-copper)] bg-[var(--color-bg-elev)] px-4 py-3 text-sm text-[var(--color-ink)]">
+              Connect a wallet (top-right) to hire. MetaMask or Google sign-in both work.
+            </div>
+          ) : (
+            <button
+              onClick={handleHire}
+              disabled={submitDisabled}
+              className="w-full py-3 px-4 bg-[var(--color-ink)] text-[var(--color-paper)] font-medium text-sm rounded-[2px] hover:bg-[#1c2028] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              hire — post gated job
+              <span className="opacity-60 font-mono text-[11px] ml-2">via {wallet.label}</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -643,9 +806,17 @@ export function PostJobForm() {
                 view job #{createdJobId}
               </a>
             ) : (
-              <span className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] rounded-[2px] text-sm text-[var(--color-mute)] font-mono">
-                parsing on-chain jobId…
-              </span>
+              <>
+                <span className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] rounded-[2px] text-sm text-[var(--color-mute)] font-mono">
+                  scanning chain for jobId…
+                </span>
+                <a
+                  href="/jobs"
+                  className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] rounded-[2px] text-sm text-[var(--color-copper)] hover:underline"
+                >
+                  or browse all jobs →
+                </a>
+              </>
             )}
           </div>
         </div>
