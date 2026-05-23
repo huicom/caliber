@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { ConnectKitButton } from 'connectkit';
 import { LiveTicker } from '@/components/home/LiveTicker';
+import { ConnectButton } from '@/components/wallet/ConnectButton';
 
 interface SubItem {
   href: string;
@@ -41,7 +41,7 @@ const NAV: NavItem[] = [
   {
     label: 'activity',
     children: [
-      { href: '/watchlist', label: 'watchlist' },
+      { href: '/watchlist', label: 'sentinel' },
       { href: '/live', label: 'live feed' },
       { href: '/jobs', label: 'jobs' },
       { href: '/jobs/new', label: 'post a job' },
@@ -154,14 +154,9 @@ export function Nav() {
         </nav>
 
         <div className="aa-header__right">
-          {/* ConnectKit renders its own DOM; we wrap so the visual matches `.aa-btn--primary`. */}
-          <ConnectKitButton.Custom>
-            {({ isConnected, show, truncatedAddress }) => (
-              <button type="button" onClick={show} className="aa-btn aa-btn--primary">
-                {isConnected ? truncatedAddress : 'connect wallet'}
-              </button>
-            )}
-          </ConnectKitButton.Custom>
+          {/* Unified: MetaMask (via ConnectKit) + Google (via Circle).
+              See web/src/components/wallet/ConnectButton.tsx */}
+          <ConnectButton />
         </div>
       </div>
     </header>

@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { createPublicClient, http, type Abi } from 'viem';
 import { api, type CaliberTier } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,6 +23,10 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatUSDC } from '@/lib/format';
+import { useCaliberWallet } from '@/lib/wallet/useCaliberWallet';
+import { arcTestnet } from '@/lib/wagmi/chains';
+import { RATING_GATEWAY } from '@/lib/contracts/addresses';
+import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
 
 // Same ordinal ↔ tier mapping the contract and PostJobForm use (v2.0).
 // Lower ordinal = stronger tier. A row's provider is "currently ineligible"
@@ -72,18 +77,25 @@ function JobsSkeleton() {
 function JobList() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const wallet = useCaliberWallet();
 
   const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [providerRatings, setProviderRatings] = useState<Record<string, CaliberTier | null>>({});
+  // jobId → original poster address (from gateway.jobPoster on-chain). Lets us
+  // surface "originally posted by you" for gateway-mediated jobs where the
+  // on-chain client is the RatingGateway, not the human poster.
+  const [originalPosters, setOriginalPosters] = useState<Record<string, string>>({});
+  const [resolvingMine, setResolvingMine] = useState(false);
 
   const status = searchParams.get('status') ?? '';
   const sort = searchParams.get('sort') ?? 'recent';
   const gatedParam = (searchParams.get('gated') ?? 'all') as GatedFilter;
+  const mineOnly = searchParams.get('mine') === 'true';
   const page = Number(searchParams.get('page') ?? '1');
-  const limit = 20;
-  const offset = (page - 1) * limit;
+  const limit = mineOnly ? 100 : 20; // wider fetch when filtering client-side
+  const offset = mineOnly ? 0 : (page - 1) * limit;
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -104,6 +116,51 @@ function JobList() {
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  // When "my jobs" is on, look up gateway.jobPoster(jobId) for every gated
+  // job in the current list so we can filter to those the connected wallet
+  // actually posted. Direct (non-gateway) jobs use client_address directly.
+  useEffect(() => {
+    const gatewayLower = (RATING_GATEWAY as string).toLowerCase();
+    const gatewayJobs = jobs.filter(
+      (j) => typeof j.clientAddress === 'string' && j.clientAddress.toLowerCase() === gatewayLower,
+    );
+    if (!mineOnly || gatewayJobs.length === 0 || !wallet.address) {
+      return;
+    }
+    let cancelled = false;
+    setResolvingMine(true);
+    (async () => {
+      try {
+        const client = createPublicClient({ chain: arcTestnet, transport: http() });
+        // Fire all jobPoster reads in parallel — cheap enough for ~100 jobs.
+        const reads = await Promise.all(
+          gatewayJobs.map(async (j) => {
+            try {
+              const poster = (await client.readContract({
+                address: RATING_GATEWAY as `0x${string}`,
+                abi: RatingGateway_ABI as Abi,
+                functionName: 'jobPoster',
+                args: [BigInt(String(j.jobId))],
+              })) as string;
+              return [String(j.jobId), poster] as const;
+            } catch {
+              return [String(j.jobId), '0x0000000000000000000000000000000000000000'] as const;
+            }
+          }),
+        );
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const [id, addr] of reads) map[id] = addr;
+        setOriginalPosters(map);
+      } finally {
+        if (!cancelled) setResolvingMine(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs, mineOnly, wallet.address]);
 
   // After jobs load, look up the live Caliber tier for every provider on a
   // gated row, then compute the "currently ineligible" marker per row.
@@ -164,6 +221,23 @@ function JobList() {
     [jobs],
   );
 
+  // Filter to "my posted jobs" — combines direct posts (client = wallet) +
+  // gateway-mediated posts (client = gateway AND jobPoster[jobId] = wallet).
+  const filteredJobs = useMemo(() => {
+    if (!mineOnly || !wallet.address) return jobs;
+    const me = wallet.address.toLowerCase();
+    const gatewayLower = (RATING_GATEWAY as string).toLowerCase();
+    return jobs.filter((j) => {
+      const client = typeof j.clientAddress === 'string' ? j.clientAddress.toLowerCase() : '';
+      if (client === me) return true;
+      if (client === gatewayLower) {
+        const original = originalPosters[String(j.jobId)]?.toLowerCase();
+        return original === me;
+      }
+      return false;
+    });
+  }, [jobs, mineOnly, wallet.address, originalPosters]);
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="text-3xl font-bold mb-6">Jobs</h1>
@@ -192,7 +266,7 @@ function JobList() {
         </Select>
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-6 flex-wrap">
         <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-dim">
           //gate
         </span>
@@ -206,6 +280,24 @@ function JobList() {
             {g.label}
           </Button>
         ))}
+
+        {wallet.isConnected && (
+          <>
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-dim ml-3">
+              //mine
+            </span>
+            <Button
+              variant={mineOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateParams({ mine: mineOnly ? '' : 'true' })}
+              title="Show only jobs you posted (direct + gateway-mediated)"
+            >
+              {mineOnly
+                ? `my posted jobs${resolvingMine ? ' (loading…)' : ''}`
+                : 'my posted jobs'}
+            </Button>
+          </>
+        )}
       </div>
 
       {loading ? (
@@ -214,10 +306,16 @@ function JobList() {
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
-      ) : jobs.length === 0 ? (
+      ) : filteredJobs.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-text-dim text-lg mb-2">No jobs yet</p>
-          <p className="text-text-dim text-sm mb-6">Jobs will appear here once they are posted on-chain.</p>
+          <p className="text-text-dim text-lg mb-2">
+            {mineOnly ? 'No jobs from your wallet yet' : 'No jobs yet'}
+          </p>
+          <p className="text-text-dim text-sm mb-6">
+            {mineOnly
+              ? `Posts via gateway are matched by jobPoster() against ${wallet.address?.slice(0, 10)}…${wallet.address?.slice(-6)}.`
+              : 'Jobs will appear here once they are posted on-chain.'}
+          </p>
           <Button variant="outline" onClick={() => router.push('/jobs/new')}>
             Post a Job
           </Button>
@@ -236,7 +334,7 @@ function JobList() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {jobs.map((j) => {
+              {filteredJobs.map((j) => {
                 const minTierOrdinal =
                   j.minTier !== null && j.minTier !== undefined
                     ? Number(j.minTier)

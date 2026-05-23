@@ -213,7 +213,27 @@ function AgentList() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Agents</h1>
+      <div className="mb-6 space-y-3">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <h1 className="text-3xl font-bold">Agents</h1>
+          <span
+            className="font-mono text-[10px] uppercase tracking-[0.05em] px-2 py-0.5 rounded-[2px] border border-accent text-accent bg-accent/5"
+            title="Raw ERC-8004 registry — every on-chain registration. 88% of agents on Arc Testnet ship with placeholder metadata (no fetchable name, generic avatar)."
+          >
+            raw · unfiltered · ~88% have placeholder metadata
+          </span>
+        </div>
+        <p className="text-sm text-text-dim leading-relaxed max-w-3xl">
+          This is the unfiltered ERC-8004 registry on Arc Testnet — every agent ever registered,
+          including the ~88% with no fetchable IPFS metadata (they render as{' '}
+          <span className="font-mono text-xs">Agent #N</span>). Looking for the curated,
+          deduplicated, semantically-searchable view? →{' '}
+          <Link href="/discover" className="text-accent hover:underline font-medium">
+            Discover
+          </Link>
+          .
+        </p>
+      </div>
 
       <div className="flex gap-6">
         <aside className="hidden lg:block w-52 shrink-0">
