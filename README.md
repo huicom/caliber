@@ -40,7 +40,7 @@ If the agent's tier is below `Silver` (or any risk flag fires), the transaction 
 | **💼 Gated marketplace** | Working demo — post a job, gateway enforces tier check, USDC escrows | [`/jobs/new`](https://caliber.poko.blue/jobs/new) |
 | **📦 SDK** | `@caliber/sdk` v0.1 in `packages/sdk/` — typed read/attest/route/verify | `pnpm add @caliber/sdk` (npm publish forthcoming) |
 
-**Today's data:** ~16,000 ERC-8004 agents indexed on Arc · 637 currently rated · 8 Gold · 131 Silver · 7 Bronze · 147 Pending · 344 Watch · 0 Dormant. Sentinel runs nightly at 04:00 UTC.
+**As of May 24, 2026:** ~16,000 ERC-8004 agents indexed on Arc · 637 currently rated · 8 Gold · 131 Silver · 7 Bronze · 147 Pending · 344 Watch · 0 Dormant. Sentinel runs nightly at 04:00 UTC.
 
 ## The six tiers (v2.0.1 metallurgical)
 
@@ -202,8 +202,4 @@ The moat isn't the code — it's being the **canonical issuer**. Anyone can impl
 
 Solo from Bangkok 🇹🇭 by [PokoBlue](https://x.com/PokoBlue99). Submitted to the **Agora Agents Hackathon** (May 2026), hosted by [Canteen](https://thecanteenapp.com) in partnership with [Circle](https://circle.com) and [Arc](https://arc.network).
 
-The aperture mark and editorial typography are part of the Caliber design language. Avatar by PokoBlue (NFT on Base).
-
----
-
-*If you're a judge, builder, or grant reviewer reading this for the first time — start with the live site at [caliber.poko.blue](https://caliber.poko.blue), then read the methodology at [`/methodology`](https://caliber.poko.blue/methodology). Every rating you see is reproducible from the code in this repo + the on-chain events.*
+The aperture mark and editorial typography are part of the Caliber design language.
