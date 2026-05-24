@@ -14,6 +14,8 @@ contract CaliberEscrowTest is Test {
     MockERC20 public usdc;
     MockERC8183 public erc8183;
 
+    // Anvil/Foundry default test key (account #0). Public, deterministic,
+    // universally used for local testing. Never send real funds to this address.
     uint256 constant SIGNER_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
     address constant SIGNER_ADDR = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     bytes32 constant METHODOLOGY_VERSION = bytes32("2.0.0");

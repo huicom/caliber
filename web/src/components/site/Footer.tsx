@@ -23,7 +23,7 @@ const EXPLORE = [
 ];
 
 const METHODOLOGY = [
-  { href: '/methodology', label: 'methodology v2.0' },
+  { href: '/methodology', label: 'methodology v2.0.1' },
   { href: '/methodology#3-rating-scale', label: 'rating scale' },
   { href: '/methodology#41-performance-default-definition', label: 'default definition' },
   { href: '/methodology#45-anti-gaming-controls', label: 'anti-gaming controls' },
@@ -35,7 +35,7 @@ const BUILD = [
   { href: '/guide', label: 'user guide' },
   { href: '/jobs/new', label: 'demo marketplace' },
   { href: 'https://eips.ethereum.org/EIPS/eip-8004', label: 'ERC-8004 spec ↗', external: true },
-  { href: 'https://github.com/huicom/arc-agents-explorer', label: 'github ↗', external: true },
+  { href: 'https://github.com/huicom/caliber', label: 'github ↗', external: true },
 ];
 
 export function Footer() {
@@ -99,7 +99,7 @@ export function Footer() {
 
       <div className="aa-container aa-foot__ledger">
         <span className="aa-mono aa-mute">
-          testnet · methodology v2.0 · built by pokoblue
+          testnet · methodology v2.0.1 · built by pokoblue
         </span>
         <span className="aa-mono aa-mute">
           © 2026 · caliber — the rating layer for the agent economy

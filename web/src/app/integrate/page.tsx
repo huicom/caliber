@@ -60,13 +60,13 @@ export default function IntegratePage() {
 
 # Returns:
 # { "rated": true,
-#   "tier": "Proven",
+#   "tier": "Silver",
 #   "score": 73,
 #   "confidence": "moderate",
 #   "confidence_label": "Moderate confidence — based on 31 jobs over 4 months",
 #   "flags": [],
 #   "interaction_count": 247,
-#   "methodology_version": "2.0.0",
+#   "methodology_version": "2.0.1",
 #   "factors": { ... }
 # }`}</code>
           </pre>
@@ -92,9 +92,9 @@ export default function IntegratePage() {
 verifier.requireMinRating(
   att,            // EIP-712 RatingAttestation (v2.0)
   signature,      // signed by Caliber
-  3,              // weakest tier accepted: 3 = Provisional
-                  //   (0=Established, 1=Proven, 2=Emerging,
-                  //    3=Provisional, 4=Watch, 5=Inactive)
+  3,              // weakest tier accepted: 3 = Pending
+                  //   (0=Gold, 1=Silver, 2=Bronze,
+                  //    3=Pending, 4=Watch, 5=Dormant)
   0x1F            // blockingFlagMask — refuse any flagged agent
                   //   (5 flag bits: counterparty, validator,
                   //    sybil, volume, dormancy)
@@ -152,7 +152,7 @@ modifier onlyQualified(
 ) {
   verifier.requireMinRating(
     att, signature,
-    1,            // weakest tier accepted: Proven
+    1,            // weakest tier accepted: Silver
     0x1F          // refuse any flagged agent
   );
   _;
@@ -163,7 +163,7 @@ function subscribeToPushChannel(
   RatingAttestation calldata att,
   bytes calldata signature
 ) external onlyQualified(att, signature) {
-  // Only Established + Proven agents (no flags) ever reach here.
+  // Only Gold + Silver agents (no flags) ever reach here.
   // Application gets the gating without holding USDC or running an oracle.
 }`}</code>
         </pre>
@@ -200,7 +200,7 @@ function subscribeToPushChannel(
             <p className="text-fg-mute text-sm mt-3 leading-relaxed">
               Each tier carries a basis-points bond rate. No PD × LGD product,
               no expected-loss math: just a published tier and a published rate.
-              Caliber v2.0 swapped to this shape because the credit-rating
+              Caliber v2.0.1 swapped to this shape because the credit-rating
               vocabulary (PD, LGD, EAD, EL) overclaimed what a young dataset
               can support.
             </p>
@@ -220,27 +220,27 @@ function subscribeToPushChannel(
               </thead>
               <tbody className="text-fg">
                 <tr className="border-t border-border">
-                  <td className="py-1">Established</td>
+                  <td className="py-1">Gold</td>
                   <td className="py-1">0.5%</td>
                   <td className="py-1 text-right">5 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1">Proven</td>
+                  <td className="py-1">Silver</td>
                   <td className="py-1">1.5%</td>
                   <td className="py-1 text-right">15 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1">Emerging</td>
+                  <td className="py-1">Bronze</td>
                   <td className="py-1">5.0%</td>
                   <td className="py-1 text-right">50 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1">Provisional</td>
+                  <td className="py-1">Pending</td>
                   <td className="py-1">15.0%</td>
                   <td className="py-1 text-right">150 USDC</td>
                 </tr>
                 <tr className="border-t border-border">
-                  <td className="py-1 text-[var(--color-signal-down)]">Watch / Inactive</td>
+                  <td className="py-1 text-[var(--color-signal-down)]">Watch / Dormant</td>
                   <td className="py-1 text-[var(--color-signal-down)]" colSpan={2}>
                     refused at the gate
                   </td>
@@ -316,7 +316,7 @@ function joinAsMember(
   RatingAttestation calldata att,
   bytes calldata signature
 ) external {
-  // Verifier enforces: signature valid + tier ≤ Proven + no flags.
+  // Verifier enforces: signature valid + tier ≤ Silver + no flags.
   verifier.requireMinRating(att, signature, 1, 0x1F);
 
   // Caller must be the rated agent's wallet.
@@ -364,7 +364,7 @@ function isMember(address agent) public view returns (bool) {
   -H 'content-type: application/json' \\
   -d '{
     "intent":  "summarize a long technical document",
-    "min_tier": "Proven",
+    "min_tier": "Silver",
     "category": "utility",
     "chain":    "arc"
   }'`}</code>
@@ -379,7 +379,7 @@ function isMember(address agent) public view returns (bool) {
     "agent_id":      "1317",
     "name":          "Document Digest Agent",
     "owner_address": "0xafe6dd…0549",
-    "tier":          "Proven",
+    "tier":          "Silver",
     "similarity":    0.871,
     "match_reason":  "semantic match on \\"summarize a long...\\"; cosine 0.871",
     "passport_url":  "/passport/arc/1317"
@@ -387,7 +387,7 @@ function isMember(address agent) public view returns (bool) {
   "attestation":  { /* EIP-712 RatingAttestation struct */ },
   "signature":    "0xfd9549…",
   "valid_until":  1779453814,
-  "methodology_version": "2.0.0"
+  "methodology_version": "2.0.1"
 }`}</code>
         </pre>
         <p className="font-mono text-[11px] tracking-[0.06em] uppercase text-fg-dim mb-2">
@@ -427,8 +427,8 @@ function isMember(address agent) public view returns (bool) {
           reference patterns above with typed TypeScript helpers and an
           off-chain attestation verifier. Source lives in the
           <code className="text-accent">packages/sdk</code> workspace —
-          reviewer/integration access on request until the July 2026
-          hackathon close, after which it ships to npm under MIT.
+          MIT-licensed, open source on GitHub. npm publish coming once
+          the API surface settles.
         </p>
         <pre className="bg-bg p-4 rounded-lg border border-border text-xs overflow-x-auto mb-4">
           <code>{`import { Caliber } from '@caliber/sdk';
@@ -439,7 +439,7 @@ const caliber = new Caliber();
 const rating = await caliber.rating('arc', '1317');
 
 // 2. get a signed attestation
-const envelope = await caliber.attest('arc', '1317', { minTier: 'Proven' });
+const envelope = await caliber.attest('arc', '1317', { minTier: 'Silver' });
 
 // 3. verify off-chain (no gas, no wallet)
 const v = await caliber.verifyAttestation(envelope);
@@ -448,7 +448,7 @@ if (v.ok) console.log('valid · methodology', envelope.methodologyVersion);
 // 4. trust-routed agent picker — natural language → signed attestation
 const match = await caliber.route({
   intent: 'summarize a long research paper',
-  min_tier: 'Proven',
+  min_tier: 'Silver',
 });`}</code>
         </pre>
         <p className="text-fg-mute leading-relaxed max-w-3xl">

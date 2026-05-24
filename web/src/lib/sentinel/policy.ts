@@ -31,12 +31,12 @@ const FLAG_REASONS: Record<(typeof FLAG_NAMES)[number], string> = {
 };
 
 const TIER_GATE_REASONS: Record<string, string> = {
-  Established: '§3.4: requires score ≥ 80 AND ≥ 50 interactions',
-  Proven: '§3.4: requires score ≥ 65 AND ≥ 20 interactions',
-  Emerging: '§3.4: requires score ≥ 50 AND ≥ 5 interactions',
-  Provisional: '§3.4: fallback when above tier thresholds not met',
-  Watch: '§3.4: any risk flag (except Dormancy) overrides tier to Watch',
-  Inactive: '§3.4: Dormancy flag overrides tier to Inactive',
+  Gold: '§3: requires score ≥ 80 AND ≥ 2 completed jobs (testnet) · production target ≥ 50',
+  Silver: '§3: requires score ≥ 75 AND ≥ 2 completed jobs (testnet) · production target ≥ 20',
+  Bronze: '§3: requires score ≥ 50 AND ≥ 1 completed job (testnet) · production target ≥ 5',
+  Pending: '§3: fallback when above tier thresholds not met',
+  Watch: '§3: any risk flag (except Dormancy) overrides tier to Watch',
+  Dormant: '§3: Dormancy flag overrides tier to Dormant',
 };
 
 function bitsToNames(mask: number | null | undefined): string[] {
@@ -98,13 +98,13 @@ export function describePolicy(row: TransitionRowLike): string | null {
       return TIER_GATE_REASONS.Watch;
     }
 
-    case 'enter_inactive': {
-      // Inactive is always Dormancy.
+    case 'enter_dormant': {
+      // Dormant is always Dormancy.
       return FLAG_REASONS.Dormancy;
     }
 
     case 'exit_watch':
-    case 'exit_inactive': {
+    case 'exit_dormant': {
       const cleared = removed.length > 0 ? removed.join(', ') : 'risk condition';
       return `cleared ${cleared} → rating reissued at ${row.to_tier}`;
     }

@@ -32,21 +32,21 @@ import { Search, Briefcase } from 'lucide-react';
 // Caliber Rating v2.0 tier set (strongest → weakest), with display chip
 // styling that mirrors RatingBadge.tsx.
 const ALL_TIERS: CaliberTier[] = [
-  'Established',
-  'Proven',
-  'Emerging',
-  'Provisional',
+  'Gold',
+  'Silver',
+  'Bronze',
+  'Pending',
   'Watch',
-  'Inactive',
+  'Dormant',
 ];
 
 const TIER_COLORS: Record<CaliberTier, string> = {
-  Established: 'bg-[#00B894]/14 border-[#00B894]/55 text-[#047857]',
-  Proven:      'bg-[#0EA5E9]/14 border-[#0EA5E9]/55 text-[#075985]',
-  Emerging:    'bg-[#14B8A6]/14 border-[#14B8A6]/55 text-[#0F766E]',
-  Provisional: 'bg-[#94A3B8]/14 border-[#94A3B8]/55 text-[#475569]',
-  Watch:       'bg-[#F59E0B]/14 border-[#F59E0B]/55 text-[#B45309]',
-  Inactive:    'bg-[#1F2937]/14 border-[#1F2937]/55 text-[#111827]',
+  Gold:    'bg-[#B8862B]/14 border-[#B8862B]/55 text-[#B8862B]',
+  Silver:  'bg-[#7E8690]/14 border-[#7E8690]/55 text-[#7E8690]',
+  Bronze:  'bg-[#8C5A2C]/14 border-[#8C5A2C]/55 text-[#8C5A2C]',
+  Pending: 'bg-[#98948C]/14 border-[#98948C]/55 text-[#98948C]',
+  Watch:   'bg-[#B45309]/14 border-[#B45309]/55 text-[#B45309]',
+  Dormant: 'bg-[#A8A39A]/14 border-[#A8A39A]/55 text-[#A8A39A]',
 };
 
 export default function AgentsPage() {
@@ -182,8 +182,8 @@ function AgentList() {
         if (!ra?.rated) return 1;
         if (!rb?.rated) return -1;
         const tierOrder: Record<CaliberTier, number> = {
-          Established: 0, Proven: 1, Emerging: 2,
-          Provisional: 3, Watch: 4, Inactive: 5,
+          Gold: 0, Silver: 1, Bronze: 2,
+          Pending: 3, Watch: 4, Dormant: 5,
         };
         return (tierOrder[ra.tier!] ?? 99) - (tierOrder[rb.tier!] ?? 99);
       });

@@ -29,16 +29,16 @@ const paramsSchema = z.object({
 });
 
 const TIER_NAMES = [
-  'Established',
-  'Proven',
-  'Emerging',
-  'Provisional',
+  'Gold',
+  'Silver',
+  'Bronze',
+  'Pending',
   'Watch',
-  'Inactive',
+  'Dormant',
 ] as const satisfies readonly CaliberTier[];
 
 const bodySchema = z.object({
-  minTier: z.enum(TIER_NAMES).optional().default('Provisional'),
+  minTier: z.enum(TIER_NAMES).optional().default('Pending'),
   minConfidence: z.enum(['high', 'moderate', 'low']).optional().default('moderate'),
   validForSeconds: z.number().int().min(60).max(3600).optional().default(600),
 });

@@ -1,0 +1,40 @@
+MIT License
+
+Copyright (c) 2026 PokoBlue / Caliber
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+**Scope.** This MIT license covers the source code in this repository:
+the indexer, rating engine, smart contracts, web application, SDK, and
+deployment scripts.
+
+**The Caliber Rating Methodology** (the published methodology document at
+`docs/02-riskmodel/01-Methodology.md` and rendered at
+https://caliber.poko.blue/methodology) is licensed separately under
+**Creative Commons Attribution 4.0 International (CC BY 4.0)**. See
+`LICENSE-METHODOLOGY` for that license's terms.
+
+**Caliber brand, trademark, and canonical issuer signing key are not
+licensed by this repository.** Anyone may run their own instance of the
+software; only attestations signed by the canonical Caliber signer
+(`0xbF017698BB2c936D54a74DCABF68Df42800bAA84` on Arc Testnet) are
+recognised by the deployed `RatingVerifier` contract as "Caliber
+ratings."

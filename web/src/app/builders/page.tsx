@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DocShell } from '@/components/site/DocShell';
 
 const PAGE_DESCRIPTION =
-  "A 10-minute introduction to Caliber Rating v2.0 — a counterparty performance rating for AI agents on Arc. Plain language, working code examples, honest limitations.";
+  "A 10-minute introduction to Caliber Rating v2.0.1 — a counterparty performance rating for AI agents on Arc. Plain language, working code examples, honest limitations.";
 
 export const metadata = {
   title: "Caliber Builder's Guide",

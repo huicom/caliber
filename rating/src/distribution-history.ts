@@ -62,8 +62,8 @@ export async function distributionHistoryRoute(req: Request, res: Response): Pro
     )) as Array<{ day: string; tier: string; count: number }>;
 
     // Pivot to wide format for the chart: one row per day, columns per tier.
-    // v2.0 tier set: Established / Proven / Emerging / Provisional / Watch /
-    // Inactive (ordered from strongest to weakest for stack rendering).
+    // v2.0 tier set: Gold / Silver / Bronze / Pending / Watch /
+    // Dormant (ordered from strongest to weakest for stack rendering).
     const byDay = new Map<string, Record<string, number>>();
     for (const row of rows) {
       const entry = byDay.get(row.day) ?? Object.fromEntries(TIER_ORDER.map((t) => [t, 0]));

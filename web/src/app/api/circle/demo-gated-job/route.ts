@@ -49,7 +49,7 @@ const bodySchema = z.object({
   title: z.string().min(1).max(60),
   description: z.string().min(1).max(2000),
   budgetUsdc: z.string().regex(/^\d+(\.\d+)?$/),
-  minTier: z.enum(['Established', 'Proven', 'Emerging', 'Provisional']).default('Provisional'),
+  minTier: z.enum(['Gold', 'Silver', 'Bronze', 'Pending']).default('Pending'),
   minConfidence: z.enum(['high', 'moderate', 'low']).default('moderate'),
   targetAgentId: z.string().regex(/^\d+$/),
   // Optional. Server defaults to the Circle wallet itself (self-eval) when
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
         title: body.title,
         description: body.description,
         budgetUsdc: body.budgetUsdc,
-        minTier: ['Established', 'Proven', 'Emerging', 'Provisional'].indexOf(body.minTier),
+        minTier: ['Gold', 'Silver', 'Bronze', 'Pending'].indexOf(body.minTier),
         minConfidence: ['high', 'moderate', 'low'].indexOf(body.minConfidence),
         chainId: 'arc',
         poster: wallet.address,
@@ -200,7 +200,7 @@ export async function POST(req: Request) {
     // 5. RatingGateway.postGatedJob(...) — server-orchestrated popup #2.
     const expiredAt = BigInt(Math.floor(new Date(deadlineIso).getTime() / 1000));
     const onchainDescription = `${body.title}\n\narcagents:draft:${draftHash}`;
-    const minTierOrdinal = ['Established', 'Proven', 'Emerging', 'Provisional'].indexOf(body.minTier);
+    const minTierOrdinal = ['Gold', 'Silver', 'Bronze', 'Pending'].indexOf(body.minTier);
 
     const postTxId = await executeContractCall({
       walletId: wallet.id,

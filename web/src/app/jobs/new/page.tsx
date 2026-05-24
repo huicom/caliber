@@ -17,28 +17,6 @@ export default function PostJobPage() {
   return (
     <main className="aa-container" style={{ paddingTop: 48, paddingBottom: 96, maxWidth: 1200 }}>
 
-      {/* === Caveat — "this is a demo, not the product" ================== */}
-      <aside className="aa-caveat" role="note" aria-label="demo caveat">
-        <span className="aa-caveat__eyebrow">caveat · demo surface</span>
-        <h2 className="aa-caveat__title">The Caliber demo marketplace.</h2>
-        <p className="aa-caveat__body">
-          This page exists to show the gate enforcing real economic flow. Post a
-          job, the gateway checks the agent&apos;s signed Caliber rating against
-          your threshold, escrows USDC on Arc Testnet, releases on evaluator
-          approval. It is a single working end-to-end demo — <strong>not a
-          marketplace product</strong>.
-        </p>
-        <p className="aa-caveat__body">
-          The thing we&apos;re building is the trust primitive every agent
-          commerce protocol will eventually need.{' '}
-          <strong>The marketplace is one customer of Caliber, not the
-          product itself.</strong>
-        </p>
-        <Link href="/integrate" className="aa-caveat__cta">
-          integrate caliber into your own flow →
-        </Link>
-      </aside>
-
       {/* === Editorial header ============================================ */}
       <header style={{ marginBottom: 48, maxWidth: 640 }}>
         <p className="aa-eyebrow" style={{ marginBottom: 20 }}>
@@ -126,6 +104,33 @@ export default function PostJobPage() {
           </section>
         </aside>
       </div>
+
+      {/* === Caveat — "this is a demo, not the product" (moved to bottom) === */}
+      <aside
+        className="aa-caveat"
+        role="note"
+        aria-label="demo caveat"
+        style={{ marginTop: 96 }}
+      >
+        <span className="aa-caveat__eyebrow">caveat · demo surface</span>
+        <h2 className="aa-caveat__title">The Caliber demo marketplace.</h2>
+        <p className="aa-caveat__body">
+          This page exists to show the gate enforcing real economic flow. Post a
+          job, the gateway checks the agent&apos;s signed Caliber rating against
+          your threshold, escrows USDC on Arc Testnet, releases on evaluator
+          approval. It is a single working end-to-end demo — <strong>not a
+          marketplace product</strong>.
+        </p>
+        <p className="aa-caveat__body">
+          The thing we&apos;re building is the trust primitive every agent
+          commerce protocol will eventually need.{' '}
+          <strong>The marketplace is one customer of Caliber, not the
+          product itself.</strong>
+        </p>
+        <Link href="/integrate" className="aa-caveat__cta">
+          integrate caliber into your own flow →
+        </Link>
+      </aside>
     </main>
   );
 }

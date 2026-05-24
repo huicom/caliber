@@ -19,13 +19,14 @@ interface TierVisuals {
   wash: string;
 }
 
+// v2.0.1 metallurgical tier palette — must mirror the --tier-* tokens in globals.css.
 const TIER_COLORS: Record<string, TierVisuals> = {
-  Established: { border: '#00B894', text: '#047857', bg: '#0A0F0D', wash: 'rgba(0,184,148,0.18)' },
-  Proven:      { border: '#0EA5E9', text: '#075985', bg: '#080D14', wash: 'rgba(14,165,233,0.18)' },
-  Emerging:    { border: '#14B8A6', text: '#0F766E', bg: '#080F0E', wash: 'rgba(20,184,166,0.18)' },
-  Provisional: { border: '#94A3B8', text: '#475569', bg: '#0C0E10', wash: 'rgba(148,163,184,0.18)' },
-  Watch:       { border: '#F59E0B', text: '#B45309', bg: '#100C08', wash: 'rgba(245,158,11,0.18)' },
-  Inactive:    { border: '#475569', text: '#94A3B8', bg: '#0A0A0B', wash: 'rgba(71,85,105,0.18)' },
+  Gold:    { border: '#B8862B', text: '#D4A04A', bg: '#0F0C07', wash: 'rgba(184,134,43,0.20)' },
+  Silver:  { border: '#7E8690', text: '#A8AFB7', bg: '#0B0D10', wash: 'rgba(126,134,144,0.20)' },
+  Bronze:  { border: '#8C5A2C', text: '#B8804D', bg: '#0E0A07', wash: 'rgba(140,90,44,0.20)' },
+  Pending: { border: '#98948C', text: '#B8B4AB', bg: '#0C0C0B', wash: 'rgba(152,148,140,0.18)' },
+  Watch:   { border: '#B45309', text: '#D67A2A', bg: '#100B07', wash: 'rgba(180,83,9,0.22)' },
+  Dormant: { border: '#A8A39A', text: '#A8A39A', bg: '#0A0A09', wash: 'rgba(168,163,154,0.15)' },
 };
 
 const RATING_API_BASE =
@@ -67,7 +68,7 @@ export default async function PassportOG({ params }: { params: { id: string } })
   }
 
   const tier = snapshotRows[0]?.tier ?? null;
-  const visuals = TIER_COLORS[tier ?? 'Provisional'] ?? TIER_COLORS.Provisional;
+  const visuals = TIER_COLORS[tier ?? 'Pending'] ?? TIER_COLORS.Pending;
   const name = agent.name ?? `Agent #${id}`;
   const description = ((agent.metadata as any)?.description as string | undefined) ?? '';
   const score = live?.score ?? null;

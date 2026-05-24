@@ -2,8 +2,8 @@
 title: "Caliber Rating — Service Companion"
 description: "How the Caliber Rating service is operated, what's in the API, how methodology and contracts compose, and what we learned from the v1 → v2 pivot."
 slug: methodology-and-service
-methodology_version: 2.0.0
-updated: 2026-05-22
+methodology_version: 2.0.1
+updated: 2026-05-24
 ---
 
 # Caliber Rating — Service Companion
@@ -56,7 +56,7 @@ struct RatingAttestation {
     bytes32 chain;
     uint256 agentId;
     address agentAddress;
-    uint8   tier;             // 0=Established … 5=Inactive
+    uint8   tier;             // 0=Gold … 5=Dormant
     uint8   score;            // 0–100
     uint16  interactionCount; // count backing the confidence claim
     uint8   flags;            // bitfield: counterparty | validator | sybil | volume | dormancy
@@ -85,12 +85,12 @@ CaliberEscrow's bond rate per tier (initial values, owner-configurable on-chain)
 
 | Tier | Rate | Bond on a 1,000 USDC job |
 |---|---|---|
-| Established | 50 bps (0.5%) | 5 USDC |
-| Proven | 150 bps (1.5%) | 15 USDC |
-| Emerging | 500 bps (5.0%) | 50 USDC |
-| Provisional | 1500 bps (15%) | 150 USDC |
+| Gold | 50 bps (0.5%) | 5 USDC |
+| Silver | 150 bps (1.5%) | 15 USDC |
+| Bronze | 500 bps (5.0%) | 50 USDC |
+| Pending | 1500 bps (15%) | 150 USDC |
 | Watch | refused | — |
-| Inactive | refused | — |
+| Dormant | refused | — |
 
 `setBondBpsForTier(tier, bps)` lets the owner update any rate, capped at 5,000 bps (50%), emitting `BondBpsByTierUpdated`. Material changes follow the methodology §9 governance rule (30-day notice).
 
@@ -144,12 +144,12 @@ Live numbers as of 2026-05-22. The methodology paper §"Honest Disclaimers" is t
 
 | Tier | Agent count |
 |---|---|
-| Established | 1 |
-| Proven | 126 |
-| Emerging | 2 |
-| Provisional | 158 |
+| Gold | 1 |
+| Silver | 126 |
+| Bronze | 2 |
+| Pending | 158 |
 | Watch | 338 |
-| Inactive | 0 |
+| Dormant | 0 |
 
 The Watch concentration reflects the testnet's economic reality — most agents serve a small set of clients (counterparty-concentration flag fires) or have at least one self-deal job in their history (the v2.0 SybilPattern rule fires above 30% self-deal share with <5 unique clients). These flags are accurate, not noise; the threshold values are tuned for the dataset's current shape.
 
@@ -180,7 +180,7 @@ The earliest published Caliber methodology (v1.0, v1.0.1-tuning) used credit-rat
 
 We rejected it before any external integrator built against it, for one reason: **the dataset does not support credit-rating-grade claims.** Credit rating agencies calibrate against decades of default data across millions of obligors; we have months of testnet data across roughly 16,000 agents with most having fewer than 10 jobs. Borrowing the *vocabulary* of credit rating (PD, LGD, EAD, EL, AAA/AA/BBB) without the *evidence base* was overclaiming. Any reviewer with five minutes of risk experience would have caught it.
 
-The v2.0 methodology — counterparty performance rating with credibility-weighted reliability, survival analysis, and rule-based risk flags — fits the data we actually have. Reliability engineering and actuarial credibility theory are appropriate to sparse data and honestly disclosable. Tier names (Established / Proven / Emerging / Provisional / Watch / Inactive) describe what was observed without borrowing authority from regulatory letter grades.
+The v2.0 methodology — counterparty performance rating with credibility-weighted reliability, survival analysis, and rule-based risk flags — fits the data we actually have. Reliability engineering and actuarial credibility theory are appropriate to sparse data and honestly disclosable. Tier names (Gold / Silver / Bronze / Pending / Watch / Dormant) describe what was observed without borrowing authority from regulatory letter grades.
 
 What was preserved across the pivot:
 - The architecture (self-hosted node, indexer, Postgres schema, service layer, web surface)
@@ -202,8 +202,8 @@ The v1.x code is preserved at the git tag `methodology-v1.0.1-final` for archaeo
 
 **Licensing.** Methodology under **CC BY 4.0**. Engine and contract source under **MIT**. Required attribution when reused: `Caliber by PokoBlue`, with a link to `caliber.poko.blue/methodology` where the medium supports it.
 
-**Operator.** Service operated by PokoBlue ([`x.com/PokoBlue99`](https://x.com/PokoBlue99)). The engine and contract source repository is **private through the active hackathon window**; reviewer / integration access on request via DM. The repository will be released publicly under **MIT (code) and CC BY 4.0 (methodology)** after the July 2026 hackathon submission deadline. Until then, the methodology paper plus the published factor breakdown in every rating response is sufficient to reproduce any published rating.
+**Operator.** Service operated by PokoBlue ([`x.com/PokoBlue99`](https://x.com/PokoBlue99)). The engine, contracts, indexer, web app, and SDK are **open source on GitHub under MIT**. The methodology paper is licensed **CC BY 4.0**. The methodology paper plus the published factor breakdown in every rating response is sufficient for anyone to independently reproduce any published rating.
 
 ---
 
-*Caliber Rating Service Companion · methodology v2.0.0 · updated 2026-05-22*
+*Caliber Rating Service Companion · methodology v2.0.1 · updated 2026-05-24*

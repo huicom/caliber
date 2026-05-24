@@ -8,12 +8,12 @@ import { type CaliberTier } from '@/lib/api';
 // escrow. No expected-loss claim — Caliber v2.0 doesn't publish one.
 
 const TIER_COLOR: Record<CaliberTier, string> = {
-  Established: '#00B894',
-  Proven:      '#0EA5E9',
-  Emerging:    '#14B8A6',
-  Provisional: '#94A3B8',
-  Watch:       '#F59E0B',
-  Inactive:    '#1F2937',
+  Gold:    '#B8862B',
+  Silver:  '#7E8690',
+  Bronze:  '#8C5A2C',
+  Pending: '#98948C',
+  Watch:   '#B45309',
+  Dormant: '#A8A39A',
 };
 
 function formatUsdc(s: string | null | undefined, fallback = '—'): string {
@@ -66,7 +66,7 @@ export function RatingExposurePanel({ snapshot }: Props) {
             //track_record
           </h2>
           <p className="text-xs text-[var(--color-mute)] mt-1 leading-snug">
-            Caliber Rating v2.0 — tier, score, smoothed completion, and
+            Caliber Rating v2.0.1 — tier, score, smoothed completion, and
             current escrow under this agent&apos;s in-flight book.
           </p>
         </div>
@@ -89,7 +89,7 @@ export function RatingExposurePanel({ snapshot }: Props) {
         <Cell label="forward success" hint="next-job estimate, recency-weighted">
           {forward !== null ? `${(forward * 100).toFixed(1)}%` : '—'}
         </Cell>
-        <Cell label="active escrow" hint="USDC currently funded for this agent (§v2.0 Step 1)" copper>
+        <Cell label="active escrow" hint="USDC currently funded for this agent (§v2.0.1 Step 1)" copper>
           {formatUsdc(snapshot.eadUsdc)}
         </Cell>
       </div>

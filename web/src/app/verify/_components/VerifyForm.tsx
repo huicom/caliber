@@ -10,7 +10,7 @@ import { RATING_VERIFIER } from '@/lib/contracts/addresses';
 const RATING_API_BASE =
   process.env.NEXT_PUBLIC_RATING_API_BASE ?? 'https://caliber-api.poko.blue';
 
-const TIER_NAMES = ['Established', 'Proven', 'Emerging', 'Provisional', 'Watch', 'Inactive'];
+const TIER_NAMES = ['Gold', 'Silver', 'Bronze', 'Pending', 'Watch', 'Dormant'];
 
 const FLAG_NAMES = [
   'CounterpartyConcentration', // 0x01
@@ -194,7 +194,7 @@ export function VerifyForm() {
       } else {
         if (!prefillChain) throw new Error('rating prefill requires ?chain=...');
         url = `${RATING_API_BASE}/v1/agents/${prefillChain}/${prefillId}/attest`;
-        body = JSON.stringify({ minTier: 'Inactive' });
+        body = JSON.stringify({ minTier: 'Dormant' });
       }
       const res = await fetch(url, {
         method: 'POST',

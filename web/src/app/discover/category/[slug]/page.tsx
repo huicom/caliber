@@ -53,8 +53,8 @@ async function loadCategory(slug: string): Promise<Row[]> {
           PARTITION BY CONCAT(a.name, '|', LEFT(COALESCE(a.metadata->>'description',''), 200))
           ORDER BY
             CASE s.tier
-              WHEN 'Established' THEN 0 WHEN 'Proven' THEN 1 WHEN 'Emerging' THEN 2
-              WHEN 'Provisional' THEN 3 WHEN 'Watch' THEN 4 WHEN 'Inactive' THEN 5 ELSE 9
+              WHEN 'Gold' THEN 0 WHEN 'Silver' THEN 1 WHEN 'Bronze' THEN 2
+              WHEN 'Pending' THEN 3 WHEN 'Watch' THEN 4 WHEN 'Dormant' THEN 5 ELSE 9
             END,
             a.jobs_completed DESC NULLS LAST,
             a.agent_id ASC
@@ -73,8 +73,8 @@ async function loadCategory(slug: string): Promise<Row[]> {
     WHERE rep_rank = 1
     ORDER BY
       CASE tier
-        WHEN 'Established' THEN 0 WHEN 'Proven' THEN 1 WHEN 'Emerging' THEN 2
-        WHEN 'Provisional' THEN 3 WHEN 'Watch' THEN 4 WHEN 'Inactive' THEN 5 ELSE 9
+        WHEN 'Gold' THEN 0 WHEN 'Silver' THEN 1 WHEN 'Bronze' THEN 2
+        WHEN 'Pending' THEN 3 WHEN 'Watch' THEN 4 WHEN 'Dormant' THEN 5 ELSE 9
       END,
       cluster_size DESC,
       jobs_completed DESC NULLS LAST

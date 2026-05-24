@@ -92,12 +92,12 @@ describe('Methodology constants', () => {
 // ============================================================
 
 describe('Tier ordinal mapping (matches CaliberEscrow enum)', () => {
-  it('Established = 0', () => expect(TIER_ORDINAL.Established).toBe(0));
-  it('Proven = 1', () => expect(TIER_ORDINAL.Proven).toBe(1));
-  it('Emerging = 2', () => expect(TIER_ORDINAL.Emerging).toBe(2));
-  it('Provisional = 3', () => expect(TIER_ORDINAL.Provisional).toBe(3));
+  it('Gold = 0', () => expect(TIER_ORDINAL.Gold).toBe(0));
+  it('Silver = 1', () => expect(TIER_ORDINAL.Silver).toBe(1));
+  it('Bronze = 2', () => expect(TIER_ORDINAL.Bronze).toBe(2));
+  it('Pending = 3', () => expect(TIER_ORDINAL.Pending).toBe(3));
   it('Watch = 4', () => expect(TIER_ORDINAL.Watch).toBe(4));
-  it('Inactive = 5', () => expect(TIER_ORDINAL.Inactive).toBe(5));
+  it('Dormant = 5', () => expect(TIER_ORDINAL.Dormant).toBe(5));
 });
 
 // ============================================================
@@ -383,30 +383,32 @@ describe('Risk flags', () => {
 // ============================================================
 
 describe('Tier assignment (§Step 3)', () => {
-  it('Established needs score >= 80 AND completed >= 50', () => {
-    expect(assignTier(85, 100, [])).toBe('Established');
-    expect(assignTier(85, 49, [])).toBe('Proven');     // score qualifies for higher, but jobs gate
-    expect(assignTier(79, 100, [])).toBe('Proven');    // jobs qualify, score doesn't
+  it('Gold needs score >= 80 AND completed >= 2 (testnet calibration)', () => {
+    expect(assignTier(85, 100, [])).toBe('Gold');
+    expect(assignTier(80, 2, [])).toBe('Gold');        // exact threshold
+    expect(assignTier(85, 1, [])).toBe('Bronze');      // score qualifies for Gold, but jobs=1 < Silver(2) → falls to Bronze (1+ jobs gate)
+    expect(assignTier(79, 100, [])).toBe('Silver');    // jobs qualify, score doesn't
   });
-  it('Proven needs score >= 65 AND completed >= 20', () => {
-    expect(assignTier(70, 25, [])).toBe('Proven');
-    expect(assignTier(70, 19, [])).toBe('Emerging');
+  it('Silver needs score >= 75 AND completed >= 2 (testnet calibration)', () => {
+    expect(assignTier(78, 20, [])).toBe('Silver');
+    expect(assignTier(78, 1, [])).toBe('Bronze');      // jobs gate falls back to Bronze
+    expect(assignTier(74, 100, [])).toBe('Bronze');    // score below Silver
   });
-  it('Emerging needs score >= 50 AND completed >= 5', () => {
-    expect(assignTier(55, 10, [])).toBe('Emerging');
-    expect(assignTier(55, 4, [])).toBe('Provisional');
+  it('Bronze needs score >= 50 AND completed >= 1 (testnet calibration)', () => {
+    expect(assignTier(60, 5, [])).toBe('Bronze');
+    expect(assignTier(60, 0, [])).toBe('Pending');
   });
-  it('Provisional is the floor', () => {
-    expect(assignTier(0, 0, [])).toBe('Provisional');
-    expect(assignTier(20, 100, [])).toBe('Provisional');
+  it('Pending is the floor', () => {
+    expect(assignTier(0, 0, [])).toBe('Pending');
+    expect(assignTier(20, 100, [])).toBe('Pending');
   });
   it('Any non-dormancy flag → Watch (overrides score)', () => {
     expect(assignTier(95, 100, ['CounterpartyConcentration'])).toBe('Watch');
     expect(assignTier(0, 0, ['SybilPattern'])).toBe('Watch');
   });
-  it('Dormancy → Inactive (not Watch)', () => {
-    expect(assignTier(95, 100, ['Dormancy'])).toBe('Inactive');
-    expect(assignTier(0, 0, ['Dormancy', 'CounterpartyConcentration'])).toBe('Inactive');
+  it('Dormancy → Dormant (not Watch)', () => {
+    expect(assignTier(95, 100, ['Dormancy'])).toBe('Dormant');
+    expect(assignTier(0, 0, ['Dormancy', 'CounterpartyConcentration'])).toBe('Dormant');
   });
 });
 
@@ -415,17 +417,17 @@ describe('Tier assignment (§Step 3)', () => {
 // ============================================================
 
 describe('Tier gates expose the published thresholds', () => {
-  it('Established: floor=80, minJobs=50', () => {
-    expect(TIER_GATES.Established.floor).toBe(80);
-    expect(TIER_GATES.Established.minJobs).toBe(50);
+  it('Gold: floor=80, minJobs=2 (testnet calibration)', () => {
+    expect(TIER_GATES.Gold.floor).toBe(80);
+    expect(TIER_GATES.Gold.minJobs).toBe(2);
   });
-  it('Proven: floor=65, minJobs=20', () => {
-    expect(TIER_GATES.Proven.floor).toBe(65);
-    expect(TIER_GATES.Proven.minJobs).toBe(20);
+  it('Silver: floor=75, minJobs=2 (testnet calibration)', () => {
+    expect(TIER_GATES.Silver.floor).toBe(75);
+    expect(TIER_GATES.Silver.minJobs).toBe(2);
   });
-  it('Emerging: floor=50, minJobs=5', () => {
-    expect(TIER_GATES.Emerging.floor).toBe(50);
-    expect(TIER_GATES.Emerging.minJobs).toBe(5);
+  it('Bronze: floor=50, minJobs=1 (testnet calibration)', () => {
+    expect(TIER_GATES.Bronze.floor).toBe(50);
+    expect(TIER_GATES.Bronze.minJobs).toBe(1);
   });
 });
 

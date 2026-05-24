@@ -13,11 +13,11 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://caliber.poko.blue'),
   title: 'Caliber — Trust layer for the Arc agent economy',
   description:
-    'Caliber rates ERC-8004 AI agents on Arc with a published methodology. EIP-712 attestations any contract can verify and consume. Tiers: Established / Proven / Emerging / Provisional / Watch / Inactive.',
+    'Caliber rates ERC-8004 AI agents on Arc with a published methodology. EIP-712 attestations any contract can verify and consume. Tiers: Gold / Silver / Bronze / Pending / Watch / Dormant.',
   openGraph: {
     title: 'Caliber — the trust primitive for AI agent commerce on Arc',
     description:
-      'Know which agents your contracts can trust. Published methodology v2.0, signed attestations, on-chain enforcement on Arc Testnet.',
+      'Know which agents your contracts can trust. Published methodology v2.0.1, signed attestations, on-chain enforcement on Arc Testnet.',
     url: 'https://caliber.poko.blue',
     type: 'website',
   },

@@ -10,7 +10,7 @@
 // Request:
 //   {
 //     "intent":           "trading bot for prediction markets",   required
-//     "min_tier":         "Proven",                              default "Provisional"
+//     "min_tier":         "Silver",                              default "Pending"
 //     "category":         "trading",                             optional
 //     "blocking_flags":   0,                                     optional bitmask
 //     "chain":            "arc"                                  default
@@ -22,7 +22,7 @@
 //     attestation:  { ... },              // EIP-712 envelope
 //     signature:    "0x..."               // sig over typed-data hash
 //     validUntil:   <unix>                // when the attestation expires
-//     methodologyVersion: "2.0.0"
+//     methodologyVersion: "2.0.1"
 //   }
 //
 // 404 if no agent matches; 422 if best candidate fails the min_tier gate;
@@ -40,17 +40,17 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const TIER_ORDINAL: Record<string, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 const requestSchema = z.object({
   intent: z.string().min(3).max(500),
-  min_tier: z.enum(['Established', 'Proven', 'Emerging', 'Provisional']).optional().default('Provisional'),
+  min_tier: z.enum(['Gold', 'Silver', 'Bronze', 'Pending']).optional().default('Pending'),
   category: z.string().optional(),
   blocking_flags: z.number().int().min(0).max(0x1f).optional().default(0),
   chain: z.string().optional().default('arc'),
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
     // First viable: meets tier AND has a real owner address
     let chosen: CandidateRow | null = null;
     for (const c of candidates) {
-      const ord = TIER_ORDINAL[c.tier ?? 'Inactive'] ?? 9;
+      const ord = TIER_ORDINAL[c.tier ?? 'Dormant'] ?? 9;
       if (ord <= minOrd && c.owner_address && c.owner_address !== '0x0000000000000000000000000000000000000000') {
         chosen = c;
         break;
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
       if (candidates.length === 0) {
         return notFound('no agents match this intent');
       }
-      const topTier = candidates[0]?.tier ?? 'Inactive';
+      const topTier = candidates[0]?.tier ?? 'Dormant';
       return NextResponse.json(
         {
           error: 'no_qualified_match',

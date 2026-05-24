@@ -2,7 +2,7 @@
 //
 // Rules, not models. Each fires under a specific, disclosed condition.
 // When any flag fires the agent's tier is overridden:
-//   - Dormancy           → Inactive
+//   - Dormancy           → Dormant
 //   - All other flags    → Watch
 // Both override regardless of the agent's underlying score.
 

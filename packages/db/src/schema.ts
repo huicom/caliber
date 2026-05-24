@@ -287,7 +287,7 @@ export type NewRatingSnapshot = typeof ratingSnapshots.$inferInsert;
 // Track 3 (Phase 2 voyage): tier-transition feed. One row per snapshot-to-
 // snapshot transition that is "interesting" — first rating issued, tier
 // moved up or down, flags added/removed, agent crossed into Watch or
-// Inactive. Populated by snapshot-daily.ts after the day's snapshot insert.
+// Dormant. Populated by snapshot-daily.ts after the day's snapshot insert.
 //
 // Kept narrow & append-only so the Watchlist UI + RSS feed + JSON endpoint
 // can each read one table with no joins. methodology_version is included so
@@ -302,7 +302,7 @@ export const tierTransitions = pgTable(
     // Discrete change kind. Multiple transitions per day are allowed (e.g.
     // tier_down + flag_added on the same snapshot diff). Values:
     //   first_rating · tier_up · tier_down · flag_added · flag_removed
-    //   enter_watch · enter_inactive · exit_watch · exit_inactive
+    //   enter_watch · enter_dormant · exit_watch · exit_dormant
     kind: text('kind').notNull(),
     fromTier: text('from_tier'),
     toTier: text('to_tier').notNull(),

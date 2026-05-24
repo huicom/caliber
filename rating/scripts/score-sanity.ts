@@ -24,21 +24,21 @@ async function main() {
   )) as Array<{ agent_id: string }>;
 
   const histogram: Record<string, number> = {
-    Established: 0,
-    Proven: 0,
-    Emerging: 0,
-    Provisional: 0,
+    Gold: 0,
+    Silver: 0,
+    Bronze: 0,
+    Pending: 0,
     Watch: 0,
-    Inactive: 0,
+    Dormant: 0,
     UNRATED: 0,
   };
   const tierScores: Record<CaliberTier, number[]> = {
-    Established: [],
-    Proven: [],
-    Emerging: [],
-    Provisional: [],
+    Gold: [],
+    Silver: [],
+    Bronze: [],
+    Pending: [],
     Watch: [],
-    Inactive: [],
+    Dormant: [],
   };
   const flagCounts: Record<string, number> = {};
   const rows: Array<Record<string, string | number>> = [];

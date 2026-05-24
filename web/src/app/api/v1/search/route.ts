@@ -88,12 +88,12 @@ export async function GET(req: Request) {
             PARTITION BY cluster_key
             ORDER BY
               CASE tier
-                WHEN 'Established' THEN 0
-                WHEN 'Proven' THEN 1
-                WHEN 'Emerging' THEN 2
-                WHEN 'Provisional' THEN 3
+                WHEN 'Gold' THEN 0
+                WHEN 'Silver' THEN 1
+                WHEN 'Bronze' THEN 2
+                WHEN 'Pending' THEN 3
                 WHEN 'Watch' THEN 4
-                WHEN 'Inactive' THEN 5
+                WHEN 'Dormant' THEN 5
                 ELSE 9
               END,
               jobs_completed DESC NULLS LAST

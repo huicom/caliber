@@ -7,9 +7,9 @@
 //   import { Caliber } from '@caliber/sdk';
 //   const c = new Caliber();
 //   const rating = await c.rating('arc', '1317');
-//   const envelope = await c.attest('arc', '1317', { minTier: 'Proven' });
+//   const envelope = await c.attest('arc', '1317', { minTier: 'Silver' });
 //   const ok = await c.verifyAttestation(envelope);
-//   const match = await c.route({ intent: 'trading bot', min_tier: 'Proven' });
+//   const match = await c.route({ intent: 'trading bot', min_tier: 'Silver' });
 
 import {
   createPublicClient,
@@ -24,12 +24,12 @@ import {
 // =====================================================================
 
 export type CaliberTier =
-  | 'Established'
-  | 'Proven'
-  | 'Emerging'
-  | 'Provisional'
+  | 'Gold'
+  | 'Silver'
+  | 'Bronze'
+  | 'Pending'
   | 'Watch'
-  | 'Inactive';
+  | 'Dormant';
 
 export type ConfidenceLabel = 'high' | 'moderate' | 'low' | 'insufficient';
 
@@ -41,12 +41,12 @@ export type RatingFlag =
   | 'Dormancy';
 
 export const TIER_ORDINAL: Record<CaliberTier, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 export const FLAG_BIT: Record<RatingFlag, number> = {
@@ -107,7 +107,7 @@ export interface AttestationEnvelope {
 
 export interface RouteRequest {
   intent: string;
-  min_tier?: 'Established' | 'Proven' | 'Emerging' | 'Provisional';
+  min_tier?: 'Gold' | 'Silver' | 'Bronze' | 'Pending';
   category?: string;
   blocking_flags?: number;
   chain?: string;
@@ -237,7 +237,7 @@ export class Caliber {
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ minTier: 'Inactive', ...body }),
+        body: JSON.stringify({ minTier: 'Dormant', ...body }),
       },
     );
   }

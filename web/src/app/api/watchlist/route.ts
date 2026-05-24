@@ -9,7 +9,7 @@
 //   limit=N              1..200, default 50
 //   kind=k1,k2,...       filter to specific transition kinds
 //                        (first_rating, tier_up, tier_down, enter_watch,
-//                         enter_inactive, exit_watch, exit_inactive,
+//                         enter_dormant, exit_watch, exit_dormant,
 //                         flag_added, flag_removed)
 //   chain=arc            chain id, default 'arc'
 
@@ -25,9 +25,9 @@ const KIND_VALUES = [
   'tier_up',
   'tier_down',
   'enter_watch',
-  'enter_inactive',
+  'enter_dormant',
   'exit_watch',
-  'exit_inactive',
+  'exit_dormant',
   'flag_added',
   'flag_removed',
 ] as const;
