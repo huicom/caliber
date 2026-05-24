@@ -62,7 +62,7 @@ function buildBadge(opts: {
     <circle cx="12" cy="12" r="10.5" class="mark"/>
     <circle cx="12" cy="12" r="6.5"  class="mark"/>
     <circle cx="12" cy="12" r="2.5"  class="mark"/>
-    <circle cx="20" cy="12" r="1.4"  class="dot"/>
+    <circle cx="12" cy="12" r="1.4"  class="dot"/>
   </g>
   <text x="44" y="22" class="stage tier">${escapeXml(tierLabel)}</text>
   <text x="44" y="36" class="stage name">${escapeXml(safeName)}</text>

@@ -41,7 +41,7 @@ A third-party RPC provider is integrated as a redundant cross-check on specific 
 
 ## 3. On-chain primitives
 
-Three contracts. v3 was deployed 2026-05-22 alongside the methodology v2.0 launch.
+Three contracts. v3 was deployed 2026-05-22 alongside the methodology v2.0 internal review (current published version: v2.0.1, byte-identical on-chain — see Appendix F).
 
 | Contract | Address | Role |
 |---|---|---|

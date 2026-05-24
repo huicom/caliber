@@ -120,7 +120,7 @@ export default async function PassportOG({ params }: { params: { id: string } })
             <circle cx="12" cy="12" r="10.5" stroke="#9CA3AF" strokeWidth="1" fill="none" />
             <circle cx="12" cy="12" r="6.5" stroke="#9CA3AF" strokeWidth="1" fill="none" />
             <circle cx="12" cy="12" r="2.5" stroke="#9CA3AF" strokeWidth="1" fill="none" />
-            <circle cx="20" cy="12" r="1.4" fill="#C2410C" />
+            <circle cx="12" cy="12" r="1.4" fill="#C2410C" />
           </svg>
           <span>CALIBER · ARC TESTNET · PASSPORT</span>
         </div>

@@ -75,14 +75,27 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
     let cancelled = false;
     (async () => {
       try {
-        const list = await api.agents({ sort: 'rating', limit: 100, ratedOnly: 'true' });
+        // Pull a wide slice so every tier (Gold/Silver/Bronze/Pending) is
+        // represented in the picker. The legacy 'rating' sort returns
+        // reputation_score descending; top-100 by that metric was
+        // dominated by Silver and the "≥ Pending" / "≥ Bronze" filter
+        // chips had nothing different to show.
+        const list = await api.agents({ sort: 'rating', limit: 600, ratedOnly: 'true' });
         const ids = list.agents.map((a) => a.agentId);
         if (ids.length === 0) {
           if (!cancelled) setLoading(false);
           return;
         }
-        const ratings = await api.bulkRatings('arc', ids);
-        const ratingMap = Object.fromEntries(ratings.ratings.map((r) => [r.agent_id, r]));
+        // bulkRatings caps at 100 ids per call (server-side), so chunk the
+        // request and merge — keeps the picker working as the rated cohort
+        // grows past 100.
+        const CHUNK = 100;
+        const chunks: string[][] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
+        const responses = await Promise.all(chunks.map((c) => api.bulkRatings('arc', c)));
+        const ratingMap = Object.fromEntries(
+          responses.flatMap((r) => r.ratings).map((r) => [r.agent_id, r]),
+        );
         if (cancelled) return;
         const agents: Agent[] = list.agents
           .map((a) => ({

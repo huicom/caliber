@@ -335,7 +335,7 @@ export function ConnectButton() {
             className="w-full text-left px-3 py-2 border border-[var(--color-hairline)] hover:border-[var(--color-ink)] rounded-[2px] text-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
             title="Powered by Circle Programmable Wallets"
           >
-            <div className="font-medium">Sign in with Google <span className="text-[10px] text-[var(--color-copper)]">(beta)</span></div>
+            <div className="font-medium">Sign in with Google</div>
             <div className="text-[11px] text-[var(--color-mute)]">
               {circle.unavailable
                 ? 'unavailable — server not configured'

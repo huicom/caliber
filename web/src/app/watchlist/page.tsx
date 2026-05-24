@@ -174,7 +174,7 @@ export default async function WatchlistPage({
           </Link>{' '}
           · Policy:{' '}
           <Link href="/methodology" className="text-[var(--color-copper)] hover:underline">
-            methodology v2.0
+            methodology v2.0.1
           </Link>
         </p>
       </section>
@@ -347,7 +347,7 @@ export default async function WatchlistPage({
         <p>
           Source:{' '}
           <Link href="/methodology" className="text-[var(--color-copper)] hover:underline">
-            methodology v2.0
+            methodology v2.0.1
           </Link>
           {' · '}engine:{' '}
           <code className="font-mono text-xs">rating/engine/flags.ts</code>,{' '}

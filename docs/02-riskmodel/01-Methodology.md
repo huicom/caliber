@@ -5,6 +5,8 @@
 > by PokoBlue · @PokoBlue99 · May 2026
 > Live at [caliber.poko.blue](https://caliber.poko.blue)
 
+> **Current version: v2.0.1** · Published 2026-05-24 · Stable under §Versioning rules · Earlier versions (v1.x and internal-review v2.0) live in §Appendix F for audit only
+
 ---
 
 ## TL;DR
