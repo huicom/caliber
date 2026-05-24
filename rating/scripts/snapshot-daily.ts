@@ -14,12 +14,12 @@ import { flagsToBitfield, TIER_ORDINAL, type CaliberTier } from '../engine/types
 //
 // Transition kinds:
 //   first_rating    — no previous snapshot existed
-//   tier_up         — moved up the tier scale (e.g. Proven → Established)
-//   tier_down       — moved down (e.g. Proven → Watch)
+//   tier_up         — moved up the tier scale (e.g. Silver → Gold)
+//   tier_down       — moved down (e.g. Silver → Watch)
 //   enter_watch     — entered Watch tier from anything else
 //   exit_watch      — left Watch tier
-//   enter_inactive  — entered Inactive tier
-//   exit_inactive   — left Inactive tier
+//   enter_dormant  — entered Dormant tier
+//   exit_dormant   — left Dormant tier
 //   flag_added      — gained at least one risk flag
 //   flag_removed    — cleared at least one risk flag
 // Tier moves and flag changes can co-occur — both rows emitted.
@@ -83,8 +83,8 @@ export function computeTransitions(
     }
     if (curr.tier === 'Watch' && prev.tier !== 'Watch') out.push({ ...base, kind: 'enter_watch' });
     if (curr.tier !== 'Watch' && prev.tier === 'Watch') out.push({ ...base, kind: 'exit_watch' });
-    if (curr.tier === 'Inactive' && prev.tier !== 'Inactive') out.push({ ...base, kind: 'enter_inactive' });
-    if (curr.tier !== 'Inactive' && prev.tier === 'Inactive') out.push({ ...base, kind: 'exit_inactive' });
+    if (curr.tier === 'Dormant' && prev.tier !== 'Dormant') out.push({ ...base, kind: 'enter_dormant' });
+    if (curr.tier !== 'Dormant' && prev.tier === 'Dormant') out.push({ ...base, kind: 'exit_dormant' });
   }
 
   const prevFlags = prev.flags ?? 0;
@@ -240,12 +240,12 @@ async function main() {
 // ---------------------------------------------------------------------
 
 const TIER_COLOR: Record<string, number> = {
-  Established: 0x00b894,
-  Proven:      0x0ea5e9,
-  Emerging:    0x14b8a6,
-  Provisional: 0x94a3b8,
+  Gold: 0x00b894,
+  Silver:      0x0ea5e9,
+  Bronze:    0x14b8a6,
+  Pending: 0x94a3b8,
   Watch:       0xf59e0b,
-  Inactive:    0x1f2937,
+  Dormant:    0x1f2937,
 };
 
 const KIND_VERB: Record<string, string> = {
@@ -253,9 +253,9 @@ const KIND_VERB: Record<string, string> = {
   tier_up: 'moved up to',
   tier_down: 'moved down to',
   enter_watch: 'entered Watch tier',
-  enter_inactive: 'went Inactive',
+  enter_dormant: 'went Dormant',
   exit_watch: 'left Watch tier',
-  exit_inactive: 'reactivated to',
+  exit_dormant: 'reactivated to',
   flag_added: 'gained risk flag while at',
   flag_removed: 'cleared risk flag while at',
 };

@@ -22,7 +22,7 @@ describe.skipIf(!runIntegration)('Integration: rate real agents against live DB 
     expect(result.confidence).toMatch(/^(high|moderate|low|insufficient)$/);
     expect(result.confidence_label).toBeTruthy();
     expect(Array.isArray(result.flags)).toBe(true);
-    expect(result.methodology_version).toBe('2.0.0');
+    expect(result.methodology_version).toBe('2.0.1');
     expect(result.view).toBe('PIT');
 
     // Factors

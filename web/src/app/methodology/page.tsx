@@ -2,22 +2,23 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { RatingPipelineFigure } from '@/components/methodology/RatingPipelineFigure';
 
 const PAGE_DESCRIPTION =
   'Open counterparty performance rating methodology for ERC-8004 AI agents on Arc. Tier + score + flags, computed from on-chain track record with credibility-weighted reliability, survival analysis, and rule-based risk flags. Not a credit rating.';
 
 export const metadata = {
-  title: 'Caliber Rating Methodology v2.0',
+  title: 'Caliber Rating Methodology v2.0.1',
   description: PAGE_DESCRIPTION,
   openGraph: {
-    title: 'Caliber Rating Methodology v2.0',
+    title: 'Caliber Rating Methodology v2.0.1',
     description: PAGE_DESCRIPTION,
     url: 'https://caliber.poko.blue/methodology',
     type: 'article',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Caliber Rating Methodology v2.0',
+    title: 'Caliber Rating Methodology v2.0.1',
     description: PAGE_DESCRIPTION,
   },
 };
@@ -59,7 +60,24 @@ export default async function MethodologyPage() {
           prose-td:text-[var(--color-fg)] prose-td:border-[var(--color-border)]
         "
       >
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            // Substitute the rating-pipeline placeholder image with the
+            // native React/SVG figure (RatingPipelineFigure). Falls back
+            // to a normal <img> for any other image.
+            img: (props) => {
+              const src = props.src ?? '';
+              if (typeof src === 'string' && src.includes('rating-pipeline')) {
+                return <RatingPipelineFigure />;
+              }
+              // eslint-disable-next-line @next/next/no-img-element
+              return <img {...props} alt={props.alt ?? ''} />;
+            },
+          }}
+        >
+          {markdown}
+        </ReactMarkdown>
       </article>
     </main>
   );

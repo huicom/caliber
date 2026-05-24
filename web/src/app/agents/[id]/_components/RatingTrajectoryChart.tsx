@@ -168,14 +168,14 @@ export function RatingTrajectoryChart({ chain, agentId }: Props) {
               stroke="var(--color-hairline)"
               width={50}
             />
-            {/* Reference line for the Provisional band — most agents on a young
+            {/* Reference line for the Pending band — most agents on a young
                 dataset cluster around insufficient-data tier */}
             <ReferenceLine
-              y={TIER_TO_Y['Provisional']}
+              y={TIER_TO_Y['Pending']}
               stroke="var(--color-hairline)"
               strokeDasharray="1 4"
               label={{
-                value: 'Provisional',
+                value: 'Pending',
                 position: 'right',
                 fill: 'var(--color-mute)',
                 fontSize: 9,

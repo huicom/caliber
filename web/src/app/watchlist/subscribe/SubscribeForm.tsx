@@ -4,8 +4,8 @@ import { useState } from 'react';
 
 const KIND_PRESETS: Array<{ label: string; value: string; hint: string }> = [
   { label: 'everything', value: '*', hint: 'every transition kind' },
-  { label: 'risk events only', value: 'tier_down,enter_watch,enter_inactive,flag_added', hint: 'agents that dropped or got flagged' },
-  { label: 'good news only', value: 'tier_up,exit_watch,exit_inactive,flag_removed', hint: 'agents that climbed' },
+  { label: 'risk events only', value: 'tier_down,enter_watch,enter_dormant,flag_added', hint: 'agents that dropped or got flagged' },
+  { label: 'good news only', value: 'tier_up,exit_watch,exit_dormant,flag_removed', hint: 'agents that climbed' },
   { label: 'first ratings only', value: 'first_rating', hint: 'new entrants to the board' },
 ];
 

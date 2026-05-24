@@ -19,7 +19,7 @@ A human looking for an agent can land at `/discover` and get clustered, deduped,
 |---|---|---|
 | F1 — IPFS metadata backfill | Multi-gateway race, +59 agents recovered, honest 11% ceiling documented | `pnpm --filter @arc-agents/indexer ipfs-sweep` |
 | F2 — 8-category taxonomy | `agents.category` text column, classifier in `@arc-agents/db`, auto-tagging in indexer | `/api/v1/categories` |
-| 1.1 — Caliber Passport | `/passport/arc/[id]` with tier explainer + flag chips + 3 actions | `/passport/arc/1317` (Proven), `/passport/arc/4093` (Watch) |
+| 1.1 — Caliber Passport | `/passport/arc/[id]` with tier explainer + flag chips + 3 actions | `/passport/arc/1317` (Silver), `/passport/arc/4093` (Watch) |
 | 1.2 — Badge + embed | `/badge/arc/[id].svg` + `/embed.js` (1.2 KB each, CORS-open) | `curl /badge/arc/1317` returns 1191 B SVG |
 | 1.3 — Verify | `/verify` page recovers EIP-712 signer locally via viem, compares to on-chain | `/verify?chain=arc&id=1317` (pre-fill) |
 | 1.4 — Per-Passport OG card | 1200×630 tier-colored PNG via next/og co-located convention | Open `/passport/arc/1317/opengraph-image` |
@@ -62,7 +62,7 @@ Four additive migrations, all already applied to the local DB. None alter or dro
   - `curl -sI https://caliber.poko.blue/watchlist | head -1` → `HTTP/2 200`
   - `curl -sI https://caliber.poko.blue/verify | head -1` → `HTTP/2 200`
   - `curl -s "https://caliber.poko.blue/api/v1/search?q=trading%20bot" | jq '.count, .results[0].similarity'` → first hit ≥ 0.5
-  - `curl -s -X POST -H 'content-type: application/json' -d '{"intent":"agent that summarizes papers","min_tier":"Provisional"}' https://caliber.poko.blue/api/v1/route | jq '.match.tier, .signature'` → signed envelope
+  - `curl -s -X POST -H 'content-type: application/json' -d '{"intent":"agent that summarizes papers","min_tier":"Pending"}' https://caliber.poko.blue/api/v1/route | jq '.match.tier, .signature'` → signed envelope
   - `curl -s https://caliber.poko.blue/badge/arc/1317 -o /tmp/b.svg && file /tmp/b.svg` → SVG
 - [ ] First `/discover` request after cold start is ~1-2 s slower (model warmup); subsequent ~ms
 - [ ] Discord webhook subscribe flow: paste a webhook URL into `/watchlist/subscribe` → see a test message in the channel

@@ -5,19 +5,19 @@ import type { CaliberTier, ConfidenceLabel, RatingFlag } from '@/lib/api';
 // never opened a block explorer.
 
 export const TIER_EXPLAINERS: Record<CaliberTier, { headline: string; body: string }> = {
-  Established: {
+  Gold: {
     headline: 'Strong, consistent track record.',
     body: 'This agent has completed many jobs successfully over a sustained period. Among the top tier of agents Caliber rates.',
   },
-  Proven: {
+  Silver: {
     headline: 'Reliable. A solid record.',
-    body: "Solid history but hasn't reached Established yet. Reasonable choice for most tasks; the next tier up is the safer bet for high-stakes work.",
+    body: "Solid history but hasn't reached Gold yet. Reasonable choice for most tasks; the next tier up is the safer bet for high-stakes work.",
   },
-  Emerging: {
+  Bronze: {
     headline: 'Promising. Early but trending well.',
     body: 'Limited data so far, but the early trajectory looks good. Suitable for lower-stakes work where you can absorb a miss.',
   },
-  Provisional: {
+  Pending: {
     headline: 'Not enough data to commit to a verdict.',
     body: "Caliber doesn't have enough interactions yet to draw firm conclusions about this agent. Use with care — or check back when more activity has accumulated.",
   },
@@ -25,7 +25,7 @@ export const TIER_EXPLAINERS: Record<CaliberTier, { headline: string; body: stri
     headline: 'A risk flag was triggered.',
     body: "Something in this agent's recent history tripped one of Caliber's risk rules — usually concentration or anomaly. Read the flags below before relying on this agent.",
   },
-  Inactive: {
+  Dormant: {
     headline: 'No recent activity.',
     body: "This agent hasn't been active in over 90 days. The rating reflects historical record but may not predict current performance.",
   },
@@ -44,9 +44,9 @@ export const FLAG_EXPLAINERS: Record<RatingFlag, string> = {
 };
 
 export const CONFIDENCE_EXPLAINERS: Record<ConfidenceLabel, string> = {
-  high: 'High confidence — at least 50 interactions support this rating.',
-  moderate: 'Moderate confidence — 15-49 interactions support this rating.',
-  low: 'Low confidence — fewer than 15 interactions to lean on. Treat the tier as a directional signal, not a verdict.',
+  high: 'High confidence — at least 50 completed jobs support this rating.',
+  moderate: 'Moderate confidence — 20-49 completed jobs support this rating.',
+  low: 'Low confidence — 5-19 completed jobs to lean on. Treat the tier as a directional signal, not a verdict.',
   insufficient:
     'Insufficient data — Caliber does not publish a tier for this agent yet. Check back when more activity has accumulated.',
 };

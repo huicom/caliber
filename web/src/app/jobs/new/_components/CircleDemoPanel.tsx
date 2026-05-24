@@ -27,7 +27,7 @@ interface Props {
     title: string;
     description: string;
     budgetUsdc: string;
-    minTier: 'Established' | 'Proven' | 'Emerging' | 'Provisional';
+    minTier: 'Gold' | 'Silver' | 'Bronze' | 'Pending';
     minConfidence: 'high' | 'moderate' | 'low';
     targetAgentId: string;
     evaluatorAddress?: string;

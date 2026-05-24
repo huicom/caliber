@@ -23,9 +23,9 @@ const KIND_VERB: Record<string, string> = {
   tier_up: 'moved up to',
   tier_down: 'moved down to',
   enter_watch: 'entered Watch tier',
-  enter_inactive: 'went Inactive',
+  enter_dormant: 'went Dormant',
   exit_watch: 'left Watch tier',
-  exit_inactive: 'reactivated to',
+  exit_dormant: 'reactivated to',
   flag_added: 'gained risk flag while at',
   flag_removed: 'cleared risk flag while at',
 };

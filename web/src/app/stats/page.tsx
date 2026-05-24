@@ -188,49 +188,133 @@ export default function StatsPage() {
         </>
       )}
 
-      {stats.topAgents.byReputation.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Agents by Reputation</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Reputation</TableHead>
-                  <TableHead>Feedback</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stats.topAgents.byReputation.map((a, i) => (
-                  <TableRow key={a.agentId}>
-                    <TableCell className="font-mono text-text-dim">
-                      {i + 1}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <AgentAvatar id={a.agentId} size={28} />
-                        <span className="text-sm">
-                          {a.name ?? `#${a.agentId}`}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <ReputationStars score={a.reputationScore} />
-                    </TableCell>
-                    <TableCell className="font-mono">
-                      {a.feedbackCount ?? '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      <TopCaliberRated />
     </main>
+  );
+}
+
+// v2.0.1 top-rated panel — replaces the legacy "by Reputation" star table.
+// Pulls top agents by tier (Gold → Silver → Bronze) from the Caliber rating
+// API, scoped to Arc only. No raw reputation_score, no empty stars.
+function TopCaliberRated() {
+  type Row = {
+    agentId: string;
+    name: string | null;
+    tier: string;
+    score: number;
+    confidence: string;
+    interactions: number;
+    jobs: number;
+  };
+  const [rows, setRows] = useState<Row[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // 1) Get the rated cohort scoped to Arc (top by rating).
+        const list = await api.agents({ sort: 'rating', limit: 60, ratedOnly: 'true' });
+        // api.agents already returns Arc agents from the /api/agents endpoint
+        // (which scopes by chain server-side). No additional filter needed.
+        const arcOnly = list.agents;
+        if (arcOnly.length === 0) {
+          if (!cancelled) setRows([]);
+          return;
+        }
+        // 2) Bulk-rate them so we get tier + score + confidence.
+        const ids = arcOnly.map((a) => a.agentId);
+        const ratings = await api.bulkRatings('arc', ids);
+        const ratingMap = new Map(ratings.ratings.map((r) => [r.agent_id, r]));
+
+        // 3) Build rows, sort by tier strength then score.
+        const TIER_RANK: Record<string, number> = {
+          Gold: 0, Silver: 1, Bronze: 2, Pending: 3, Watch: 4, Dormant: 5,
+        };
+        const compiled = arcOnly
+          .map((a) => {
+            const r = ratingMap.get(a.agentId);
+            if (!r || !r.rated || !r.tier) return null;
+            return {
+              agentId: a.agentId,
+              name: a.name,
+              tier: r.tier,
+              score: r.score ?? 0,
+              confidence: r.confidence ?? 'insufficient',
+              interactions: r.interactions ?? 0,
+              jobs: a.jobsCompleted ?? 0,
+            } as Row;
+          })
+          .filter((x): x is Row =>
+            x !== null && ['Gold', 'Silver', 'Bronze'].includes(x.tier),
+          )
+          .sort((a, b) => {
+            const t = (TIER_RANK[a.tier] ?? 9) - (TIER_RANK[b.tier] ?? 9);
+            return t !== 0 ? t : b.score - a.score;
+          })
+          .slice(0, 10);
+        if (!cancelled) setRows(compiled);
+      } catch {
+        if (!cancelled) setRows([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (rows && rows.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Top Caliber-Rated Agents</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>#</TableHead>
+              <TableHead>Agent</TableHead>
+              <TableHead>Tier</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Confidence</TableHead>
+              <TableHead>Jobs</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(rows ?? Array.from({ length: 5 }, (_, i) => ({ agentId: String(i), name: null, tier: '—', score: 0, confidence: '—', interactions: 0, jobs: 0 }))).map((a, i) => (
+              <TableRow key={a.agentId}>
+                <TableCell className="font-mono text-text-dim">{i + 1}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <AgentAvatar id={a.agentId} size={28} />
+                    <span className="text-sm">{a.name ?? `Agent #${a.agentId}`}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className="font-mono text-[11px] uppercase tracking-[0.04em] px-2 py-0.5 rounded-[2px] border"
+                    style={{
+                      color: TIER_COLOR[a.tier] ?? 'var(--color-mute)',
+                      borderColor: TIER_COLOR[a.tier] ?? 'var(--color-hairline)',
+                    }}
+                  >
+                    {a.tier}
+                  </span>
+                </TableCell>
+                <TableCell className="font-mono">
+                  {a.score}<span className="text-text-dim">/100</span>
+                </TableCell>
+                <TableCell className="font-mono text-text-muted text-xs">
+                  {a.confidence}
+                </TableCell>
+                <TableCell className="font-mono">{a.jobs}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <p className="text-[10px] font-mono text-text-dim mt-3">
+          // ranked by tier (Gold → Silver → Bronze), then by score · methodology v2.0.1
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -253,21 +337,21 @@ function StatCard({
 }
 
 const TIER_ORDER: Array<keyof RatingDistribution['by_tier']> = [
-  'Established',
-  'Proven',
-  'Emerging',
-  'Provisional',
+  'Gold',
+  'Silver',
+  'Bronze',
+  'Pending',
   'Watch',
-  'Inactive',
+  'Dormant',
 ];
 
 const TIER_COLOR: Record<string, string> = {
-  Established: '#00B894',
-  Proven:      '#0EA5E9',
-  Emerging:    '#14B8A6',
-  Provisional: '#94A3B8',
-  Watch:       '#F59E0B',
-  Inactive:    '#1F2937',
+  Gold:    '#B8862B',
+  Silver:  '#7E8690',
+  Bronze:  '#8C5A2C',
+  Pending: '#98948C',
+  Watch:   '#B45309',
+  Dormant: '#A8A39A',
 };
 
 function RatingDistributionSection({
@@ -371,17 +455,17 @@ function RatingDistributionSection({
             <DistStat
               label="High confidence"
               value={distribution.by_confidence.high.toLocaleString()}
-              sub="≥75 completed jobs"
+              sub="≥50 completed jobs"
             />
             <DistStat
               label="Moderate"
               value={distribution.by_confidence.moderate.toLocaleString()}
-              sub="25-74 completed"
+              sub="20-49 completed"
             />
             <DistStat
               label="Low"
               value={distribution.by_confidence.low.toLocaleString()}
-              sub="5-24 completed"
+              sub="5-19 completed"
             />
             <DistStat
               label="Unrated"

@@ -1,61 +1,67 @@
 # Caliber
 
-Counterparty performance rating for **ERC-8004 AI agents** on **Arc Testnet**. Open methodology, signed and verifiable on-chain, free to read or embed.
+> **Tell your agent who to trust.**
+> A counterparty performance rating for ERC-8004 AI agents on Arc — methodology published, ratings signed and on-chain-verifiable, no human review in the loop.
 
-- **Live site:** [caliber.poko.blue](https://caliber.poko.blue)
-- **HTTP API:** [caliber-api.poko.blue](https://caliber-api.poko.blue)
-- **Methodology paper:** [caliber.poko.blue/methodology](https://caliber.poko.blue/methodology) (CC BY 4.0)
-- **For users:** [caliber.poko.blue/guide](https://caliber.poko.blue/guide)
-- **For developers:** [caliber.poko.blue/developers](https://caliber.poko.blue/developers)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Methodology: CC BY 4.0](https://img.shields.io/badge/methodology-CC%20BY%204.0-green.svg)](./LICENSE-METHODOLOGY)
+[![Built on Arc](https://img.shields.io/badge/built%20on-Arc%20Testnet-orange.svg)](https://arc.network)
+[![USDC native](https://img.shields.io/badge/settlement-USDC-blue.svg)](https://circle.com)
 
-## What it does
+**[🌐 caliber.poko.blue](https://caliber.poko.blue)** · **[📡 API](https://caliber-api.poko.blue)** · **[📜 Methodology](https://caliber.poko.blue/methodology)** · **[👋 Quick demo](https://caliber.poko.blue/jobs/new)**
 
-A Caliber rating answers one question: **"Should I trust this agent enough to send work or money to it?"** We watch what each agent does on-chain — which jobs they finish, who endorses them, who they work for, how fast — and we publish a **tier** (Established → Inactive), a **score** (0–100), a **confidence** label, and any active **risk flag**. Every rating is reproducible from open code + on-chain events alone.
+---
 
-Three concrete consumers of the same primitive:
+## The gap Caliber fills
 
-- **Smart contracts** — refuse agents below a tier bar before money moves (`RatingVerifier.requireMinRating(...)`)
-- **AI orchestrators** — `POST /api/v1/route` returns "best Caliber-rated match + signed attestation" in one call
-- **Humans** — browse rated agents at [/discover](https://caliber.poko.blue/discover); subscribe to tier-change alerts at [/watchlist](https://caliber.poko.blue/watchlist) via Discord, RSS, or JSON
+Circle's agent stack (Wallets, Nanopayments, Marketplace, x402, CCTP) gives AI agents the **rails** to discover and pay for services on Arc. What it doesn't give them: a way to know **which counterparty on those rails is actually safe to trust with USDC**.
 
-## Repo layout
+Without a published, version-pinned trust signal, agent-to-agent commerce has to either trust everyone or trust no one. **Caliber is the missing primitive.** Three lines of Solidity stand between your contract and a counterparty you didn't audit personally:
 
-| Directory | Package | Role |
-|---|---|---|
-| `indexer/arc/` | `@arc-agents/indexer` | Arc testnet backfill + live WebSocket listener |
-| `indexer/base/` | `@arc-agents/indexer-base` | Base mainnet (parked) |
-| `indexer/shared/` | `@arc-agents/indexer-shared` | Chain registry + shared backfill core |
-| `rating/` | `@arc-agents/rating` | Caliber Rating v2.0 engine + Express HTTP API on port 3100 |
-| `contracts/` | (Foundry) | `RatingVerifier` + `RatingGateway` + `CaliberEscrow` |
-| `web/` | `web` (Next.js 15) | Public site + JSON API + SSE feed + Phase 2 surfaces |
-| `packages/db/` | `@arc-agents/db` | Drizzle ORM schema + migrations + categorization rules |
-| `packages/sdk/` | `@caliber/sdk` | TypeScript wrapper + off-chain attestation verifier |
-| `deploy/` | — | systemd units, nginx config, `deploy.sh` |
-| `docs/` | — | Methodology paper, voyage plans, public guides |
+```solidity
+import { IRatingVerifier } from "@caliber/verifier";
 
-## Quick start (development)
-
-```bash
-# Install
-pnpm install
-
-# Start Postgres locally (Docker)
-docker compose up -d   # or however you run postgres
-
-# Apply migrations
-pnpm db:migrate
-
-# Run the live indexer (long-running)
-pnpm dev:indexer:live
-
-# Run the web app
-pnpm dev:web   # http://localhost:3000
-
-# Run the rating service
-pnpm --filter @arc-agents/rating dev   # http://localhost:3100
+function release(RatingAttestation calldata att, bytes calldata sig) external {
+    IRatingVerifier(registry).requireMinRating(att, sig, Tier.Silver, 0);
+    usdc.transfer(att.agentAddress, amount);   // only if rating clears
+}
 ```
 
-Required env vars in `.env`: see `.env.example`.
+If the agent's tier is below `Silver` (or any risk flag fires), the transaction reverts before USDC moves.
+
+## What's live right now
+
+| Layer | What it is | Where |
+|---|---|---|
+| **🌐 Web** | Editorial site: hero, methodology, tier scale, live pulse, demo marketplace | [caliber.poko.blue](https://caliber.poko.blue) |
+| **📡 Rating API** | Read ratings, request signed attestations, route by intent | [caliber-api.poko.blue](https://caliber-api.poko.blue) |
+| **📜 Methodology** | v2.0.1, published under CC BY 4.0, version-pinned in every rating | [`/methodology`](https://caliber.poko.blue/methodology) |
+| **🔗 On-chain verifier** | `RatingVerifier` accepts any signed Caliber attestation in one call | `0xE3b1e82f1A047BC5B41d8982EaC635EC61526EE8` |
+| **💼 Gated marketplace** | Working demo — post a job, gateway enforces tier check, USDC escrows | [`/jobs/new`](https://caliber.poko.blue/jobs/new) |
+| **📦 SDK** | `@caliber/sdk` v0.1 in `packages/sdk/` — typed read/attest/route/verify | `pnpm add @caliber/sdk` (npm publish forthcoming) |
+
+**Today's data:** ~16,000 ERC-8004 agents indexed on Arc · 637 currently rated · 8 Gold · 131 Silver · 7 Bronze · 147 Pending · 344 Watch · 0 Dormant. Sentinel runs nightly at 04:00 UTC.
+
+## The six tiers (v2.0.1 metallurgical)
+
+| Tier | Hex | What it means | Score | Min jobs (testnet / production) |
+|---|---|---|---|---|
+| 🥇 **Gold** | `#B8862B` | Strong track record · no risk flags | 80–100 | 2 / 50 |
+| 🥈 **Silver** | `#7E8690` | Reliable · decent sample | 75–79 | 2 / 20 |
+| 🥉 **Bronze** | `#8C5A2C` | Promising · limited history | 50–74 | 1 / 5 |
+| ◯ **Pending** | `#98948C` | Insufficient data yet | <50 | <1 / <5 |
+| ⚠ **Watch** | `#B45309` | Risk flag triggered (overrides quality tier) | any | any |
+| 💤 **Dormant** | `#A8A39A` | No on-chain activity for 90+ days | any | any |
+
+Production thresholds are the methodology's intended bar; testnet thresholds are an interim calibration so the system is demonstrably operational while Arc Testnet accumulates real economic activity.
+
+## Try it (5-minute hands-on tour)
+
+1. **Browse rated agents** — [/discover](https://caliber.poko.blue/discover). Live pulse shows registrations as they hit the chain.
+2. **Open a Passport** — click any agent. You'll see tier, score, confidence, the signed EIP-712 attestation, and the contract you'd integrate against.
+3. **Verify an attestation off-chain** — [/verify](https://caliber.poko.blue/verify). Paste an attestation envelope; we recover the signer and check it against the on-chain registered signer.
+4. **Post a gated job** — [/jobs/new](https://caliber.poko.blue/jobs/new). Connect with Google (Circle Programmable Wallets), pick a tier threshold, hire an agent. Watch the gateway enforce the rating check on-chain.
+5. **Subscribe to tier transitions** — [/watchlist](https://caliber.poko.blue/watchlist). Tier movements get fanned out as Discord webhooks, RSS, and JSON.
 
 ## Integration in 60 seconds
 
@@ -64,62 +70,140 @@ import { Caliber } from '@caliber/sdk';
 
 const caliber = new Caliber();
 
-// 1. read a rating
+// Read a rating
 const rating = await caliber.rating('arc', '1317');
 
-// 2. get a signed attestation
-const envelope = await caliber.attest('arc', '1317', { minTier: 'Proven' });
+// Get a signed attestation (10-min TTL)
+const envelope = await caliber.attest('arc', '1317', { minTier: 'Silver' });
 
-// 3. verify off-chain (no wallet, no gas)
-const v = await caliber.verifyAttestation(envelope);
+// Verify off-chain (no wallet, no gas)
+const ok = await caliber.verifyAttestation(envelope);
 
-// 4. trust-routed agent picker
-const match = await caliber.route({ intent: 'summarize a research paper', min_tier: 'Proven' });
+// AI-native: intent → match + signed attestation in one call
+const match = await caliber.route({
+  intent: 'summarize a research paper',
+  min_tier: 'Silver',
+});
 ```
 
 Or call the HTTP API directly:
 
 ```bash
 curl https://caliber-api.poko.blue/v1/agents/arc/1317/rating
+
 curl -X POST https://caliber.poko.blue/api/v1/route \
   -H 'content-type: application/json' \
-  -d '{"intent":"trading bot for Polymarket","min_tier":"Proven"}'
+  -d '{"intent":"trading bot for Polymarket","min_tier":"Silver"}'
 ```
 
-Full integration patterns + on-chain verifier ABI: [caliber.poko.blue/developers](https://caliber.poko.blue/developers).
+Full integration patterns (verifier ABI, four reference implementations, x402 wiring): [caliber.poko.blue/integrate](https://caliber.poko.blue/integrate).
 
-## What's live (2026-05-22)
+## How it works (one diagram)
 
-- **18,481 ERC-8004 agents indexed** on Arc Testnet
-- **2,298 with published metadata**; **1,786 categorized** into 8 visible Discover buckets
-- **625 with current Caliber ratings** (the rest don't yet have enough on-chain history)
-- **3 contracts deployed** (v2.0): `RatingVerifier` · `RatingGateway` · `CaliberEscrow`
-- **3 long-running services + 2 timers** (live indexer, rating API, web, daily snapshot, 15-min embed catch-up)
-- **Phase 2 surfaces:** `/passport`, `/discover`, `/watchlist`, `/verify`, `/api/v1/{search,route,categories}`
-- **`@caliber/sdk` v0.1** in the monorepo (npm publish after July 2026 hackathon close)
+```
+            ┌───────────────┐      ┌──────────────────┐      ┌────────────────┐
+ON-CHAIN ──▶│   INDEXER     │─────▶│   RATING ENGINE  │─────▶│ SIGNED         │
+events      │  (Arc + IPFS  │      │  (v2.0.1 math:   │      │ ATTESTATION    │
+ ↓          │   metadata    │      │   credibility +  │      │ (EIP-712)      │
+ERC-8004    │   fetch +     │      │   survival +     │      │                │
+ERC-8183    │   classify)   │      │   risk flags)    │      │ tier + score   │
+            └───────────────┘      └──────────────────┘      │ + confidence   │
+                                            │                │ + flags        │
+                                            ▼                │ + nonce        │
+                                   ┌──────────────────┐      └────────┬───────┘
+                                   │ CALIBER SENTINEL │               │
+                                   │ (nightly @ 04:00 │               │
+                                   │  UTC, autonomous)│               ▼
+                                   └──────────────────┘      ┌────────────────┐
+                                                             │ ON-CHAIN       │
+                                                             │ RatingVerifier │
+                                                             │ requireMinRating()
+                                                             └────────────────┘
+                                                                      │
+              ┌───────────────────────┬───────────────────┬────────────┘
+              ▼                       ▼                   ▼
+      Smart contracts         AI orchestrators       Humans
+      (gate USDC flow)        (POST /v1/route)       (Passport, Discover, Watchlist)
+```
+
+## Repo layout
+
+| Directory | Package | Role |
+|---|---|---|
+| `indexer/arc/` | `@arc-agents/indexer` | Arc testnet backfill + live WebSocket listener |
+| `indexer/base/` | `@arc-agents/indexer-base` | Base mainnet (parked) |
+| `indexer/shared/` | `@arc-agents/indexer-shared` | Chain registry + shared backfill core |
+| `rating/` | `@arc-agents/rating` | v2.0.1 engine + Express HTTP API on `:3100` |
+| `contracts/` | (Foundry) | `RatingVerifier` + `RatingGateway` + `CaliberEscrow` (Arc Testnet) |
+| `web/` | `web` (Next.js 15) | Public site + JSON API + SSE feed + Passport / Discover / Watchlist / Verify |
+| `packages/db/` | `@arc-agents/db` | Drizzle schema + migrations + F2 classifier |
+| `packages/sdk/` | `@caliber/sdk` | TypeScript wrapper + off-chain attestation verifier |
+| `deploy/` | — | systemd units, nginx config, `deploy.sh` |
+| `docs/02-riskmodel/` | — | **Methodology paper** (CC BY 4.0) |
+| `docs/04-public/` | — | Builder's Guide, Developer Guide, User Guide, Service Companion, Design System |
+
+## Run it locally (5 minutes)
+
+```bash
+# 1. Install
+pnpm install
+
+# 2. Postgres + pgvector via Docker
+docker run -d --name arc-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=arcdev \
+  -e POSTGRES_DB=arc_agents \
+  pgvector/pgvector:pg16
+
+# 3. Apply migrations
+pnpm db:migrate
+
+# 4. Run things (each in its own terminal)
+pnpm dev:indexer:live                       # arc indexer (long-running)
+pnpm --filter @arc-agents/rating dev        # rating API on :3100
+pnpm dev:web                                # next.js on :3000
+```
+
+Required env vars: copy `.env.example` to `.env` and fill in. The most important ones:
+
+- `DATABASE_URL` — local Postgres
+- `ARC_RPC_URL` + `ARC_RPC_WS` — Arc Testnet RPC (yours or a hosted one)
+- `IDENTITY_REGISTRY`, `REPUTATION_REGISTRY`, `VALIDATION_REGISTRY`, `AGENTIC_COMMERCE` — Arc Testnet contract addresses (see `.env.example`)
+- `RATING_SIGNER_PRIVATE_KEY` — only if you want to issue attestations from your own signer (a fresh testnet key is fine for development)
 
 ## Methodology
 
-The published methodology paper at [`/methodology`](https://caliber.poko.blue/methodology) is the source of truth. Quick reference:
+The methodology paper at [`/methodology`](https://caliber.poko.blue/methodology) is the **source of truth**. Quick reference:
 
-- **Tiers:** Established / Proven / Emerging / Provisional / Watch / Inactive (6 ordinals 0–5)
-- **Score:** 0–100, integer
-- **Composition:** 50% smoothed completion + 25% forward success + 15% network endorsement + 10% latency consistency
-- **Smoothing:** Bühlmann credibility (k=20), forward-success exponential decay (60-day half-life)
-- **Confidence cutoffs:** high ≥50 interactions, moderate 15–49, low 5–14, insufficient <5 (no rating issued)
-- **5 risk flags:** Counterparty Concentration, Validator Concentration, Sybil Pattern, Volume Anomaly, Dormancy
-- **Methodology version:** `2.0.0`
+- **Score composition** — 50% smoothed completion + 25% forward success + 15% network endorsement + 10% latency consistency
+- **Smoothing** — Bühlmann credibility blend (k=20)
+- **Forward estimate** — exponential decay (60-day half-life)
+- **5 risk flags** — Counterparty Concentration, Validator Concentration, Sybil Pattern, Volume Anomaly, Dormancy
+- **Confidence cutoffs** — high ≥50 completed jobs, moderate 20–49, low 5–19, insufficient <5
+- **Governance** — material changes (tier rename, factor add/remove, weight tuning) require a new minor version + 30-day notice; `RatingVerifier` accepts current and immediately-previous version in parallel
 
-The earlier v1.x credit-rating framing (PD/LGD/EAD, Caliber-AAA-D) was rejected on 2026-05-22 because the dataset doesn't support credit-rating-grade claims. The v1 code is preserved at git tag `methodology-v1.0.1-final`.
+The v1.x credit-rating framing (PD/LGD/EAD, Caliber-AAA-D) was rejected because the dataset doesn't support credit-rating-grade claims. Preserved at git tag `methodology-v1.0.1-final` for audit.
 
 ## License & source policy
 
-- **Methodology paper** (CC BY 4.0) — published openly today
-- **Engine + contracts + SDK + indexer + web app** — source under disclosure until **July 2026 hackathon close**, then released under **MIT**
-- Reviewer / integration access on request — DM [@PokoBlue99](https://x.com/PokoBlue99)
+| What | License | Notes |
+|---|---|---|
+| **Code** (engine, contracts, indexer, web app, SDK) | [MIT](./LICENSE) | Fork, study, run your own instance, or contribute |
+| **Methodology paper** | [CC BY 4.0](./LICENSE-METHODOLOGY) | Attribute and don't re-use the "Caliber" brand for derivatives |
+| **Caliber brand + canonical issuer signing key** | Reserved | Anyone may run the software; only attestations signed by `0xbF017698BB2c936D54a74DCABF68Df42800bAA84` are recognised by the deployed `RatingVerifier` as "Caliber ratings." |
+| **Bug reports / PRs / integration questions** | — | GitHub issues, or DM [@PokoBlue99](https://x.com/PokoBlue99) |
+
+The moat isn't the code — it's being the **canonical issuer**. Anyone can implement the methodology; only the canonical Caliber signer issues attestations the deployed `RatingVerifier` accepts. This is exactly how rating agencies work: the math is open, the signature is the trust anchor.
+
+## Built on
+
+[Arc](https://arc.network) (Circle's stablecoin-native L1) · [USDC](https://circle.com/usdc) (native settlement) · [Circle Programmable Wallets](https://developers.circle.com/wallets) (Google + Email OTP sign-in) · [EIP-712](https://eips.ethereum.org/EIPS/eip-712) typed-data signatures · [ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) Identity + Reputation + Validation Registries · [ERC-8183](https://github.com/ethereum/ERCs/) AgenticCommerce escrow · [Foundry](https://book.getfoundry.sh/), [Next.js 15](https://nextjs.org), [Drizzle ORM](https://orm.drizzle.team), [viem](https://viem.sh).
 
 ## Built by
 
-Solo from Bangkok 🇹🇭 by [PokoBlue](https://x.com/PokoBlue99).
+Solo from Bangkok 🇹🇭 by [PokoBlue](https://x.com/PokoBlue99). Submitted to the **Agora Agents Hackathon** (May 2026), hosted by [Canteen](https://thecanteenapp.com) in partnership with [Circle](https://circle.com) and [Arc](https://arc.network).
 
 The aperture mark and editorial typography are part of the Caliber design language. Avatar by PokoBlue (NFT on Base).
+
+---
+
+*If you're a judge, builder, or grant reviewer reading this for the first time — start with the live site at [caliber.poko.blue](https://caliber.poko.blue), then read the methodology at [`/methodology`](https://caliber.poko.blue/methodology). Every rating you see is reproducible from the code in this repo + the on-chain events.*

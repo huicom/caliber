@@ -24,9 +24,9 @@ const ALL_KINDS = [
   'tier_up',
   'tier_down',
   'enter_watch',
-  'enter_inactive',
+  'enter_dormant',
   'exit_watch',
-  'exit_inactive',
+  'exit_dormant',
   'flag_added',
   'flag_removed',
 ];
@@ -52,10 +52,10 @@ async function fireTest(webhookUrl: string, kindFilter: string): Promise<{ ok: t
       {
         title: 'Caliber Watchlist',
         description:
-          'You will receive a message for every matching tier transition on Arc Testnet. Methodology v2.0.0.',
+          'You will receive a message for every matching tier transition on Arc Testnet. Methodology v2.0.1.',
         url: 'https://caliber.poko.blue/watchlist',
         color: 0xc2410c, // copper
-        footer: { text: 'caliber.poko.blue · methodology v2.0' },
+        footer: { text: 'caliber.poko.blue · methodology v2.0.1' },
       },
     ],
   };

@@ -5,9 +5,9 @@
 //                 + 0.15 × network_endorsement + 0.10 × latency_consistency
 //
 // Tier assignment:
-//   - Dormancy flag → Inactive
+//   - Dormancy flag → Dormant
 //   - Any other flag → Watch
-//   - Score & completed-jobs gates → Established / Proven / Emerging / Provisional
+//   - Score & completed-jobs gates → Gold / Silver / Bronze / Pending
 //
 // Min-data gate (methodology §"How sure we are"):
 //   - < 5 interactions → unrated (insufficient_interactions)
@@ -57,12 +57,16 @@ export const SCORE_WEIGHTS = {
   latency: 0.10,
 } as const;
 
-/** Tier score thresholds. Score ≥ floor AND completed jobs ≥ minJobs. */
+/** Tier score thresholds. Score ≥ floor AND completed jobs ≥ minJobs.
+ *  v2.0.1 calibration against the first ~900-agent rated cohort on Arc
+ *  Testnet (2026-05-24). Population scores cluster at 74, 78, and 81;
+ *  thresholds chosen to give meaningful tier separation against the
+ *  observed distribution. */
 export const TIER_GATES = {
-  Established: { floor: 80, minJobs: 50 },
-  Proven: { floor: 65, minJobs: 20 },
-  Emerging: { floor: 50, minJobs: 5 },
-  Provisional: { floor: 0, minJobs: 0 },
+  Gold: { floor: 80, minJobs: 2 },
+  Silver: { floor: 75, minJobs: 2 },
+  Bronze: { floor: 50, minJobs: 1 },
+  Pending: { floor: 0, minJobs: 0 },
 } as const;
 
 // =====================================================================
@@ -137,20 +141,20 @@ export function assignTier(
   completedJobs: number,
   flags: RatingFlag[],
 ): CaliberTier {
-  // Watch flags override score. Dormancy is its own thing — Inactive tier.
-  if (flags.includes('Dormancy')) return 'Inactive';
+  // Watch flags override score. Dormancy is its own thing — Dormant tier.
+  if (flags.includes('Dormancy')) return 'Dormant';
   if (flags.length > 0) return 'Watch';
 
-  if (score >= TIER_GATES.Established.floor && completedJobs >= TIER_GATES.Established.minJobs) {
-    return 'Established';
+  if (score >= TIER_GATES.Gold.floor && completedJobs >= TIER_GATES.Gold.minJobs) {
+    return 'Gold';
   }
-  if (score >= TIER_GATES.Proven.floor && completedJobs >= TIER_GATES.Proven.minJobs) {
-    return 'Proven';
+  if (score >= TIER_GATES.Silver.floor && completedJobs >= TIER_GATES.Silver.minJobs) {
+    return 'Silver';
   }
-  if (score >= TIER_GATES.Emerging.floor && completedJobs >= TIER_GATES.Emerging.minJobs) {
-    return 'Emerging';
+  if (score >= TIER_GATES.Bronze.floor && completedJobs >= TIER_GATES.Bronze.minJobs) {
+    return 'Bronze';
   }
-  return 'Provisional';
+  return 'Pending';
 }
 
 // =====================================================================

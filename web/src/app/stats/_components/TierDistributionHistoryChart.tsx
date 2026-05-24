@@ -13,14 +13,16 @@ import {
 } from 'recharts';
 import { api, type CaliberTier, type DistributionHistoryResponse } from '@/lib/api';
 
-// Caliber Rating v2.0 tier palette (mirrors RatingBadge.tsx).
+// v2.0.1 metallurgical tier palette. Tokens defined in globals.css :root
+// (--tier-gold/silver/bronze/pending/watch/dormant). Hex literals here
+// because Recharts can't resolve CSS variables in SVG fills.
 const TIER_FILL: Record<CaliberTier, string> = {
-  Established: '#00B894',
-  Proven:      '#0EA5E9',
-  Emerging:    '#14B8A6',
-  Provisional: '#94A3B8',
-  Watch:       '#F59E0B',
-  Inactive:    '#1F2937',
+  Gold:    '#B8862B',
+  Silver:  '#7E8690',
+  Bronze:  '#8C5A2C',
+  Pending: '#98948C',
+  Watch:   '#B45309',
+  Dormant: '#A8A39A',
 };
 
 type WindowDays = 30 | 90 | 180;

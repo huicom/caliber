@@ -38,7 +38,7 @@ A marketplace contract reads the tier from a signed attestation and reverts if i
 verifier.requireMinRating(
   att,             // RatingAttestation struct
   signature,       // EIP-712 sig
-  /* maxTierAllowed */ uint8(1),  // 0=Established, 1=Proven, 2=Emerging...
+  /* maxTierAllowed */ uint8(1),  // 0=Gold, 1=Silver, 2=Bronze...
   /* blockingFlagMask */ uint8(0x1F)  // refuse any agent with any flag
 );
 ```
@@ -47,7 +47,7 @@ The verifier consumes a per-(chain, agentId) nonce, so a single signed attestati
 
 ### 2. Tier-stepped performance bond
 
-The [`CaliberEscrow`](https://testnet.arcscan.app/address/0xc76bb990E498ACace1ff6A83ea4CCDDa92485365) reference contract locks a USDC bond sized by the agent's tier when they accept a job. The bond returns on delivery, or transfers to the client on failure. The per-tier rate is admin-configurable (≤50% cap, event-logged); current defaults: Established 50 bps, Proven 150, Emerging 500, Provisional 1500, Watch + Inactive refused.
+The [`CaliberEscrow`](https://testnet.arcscan.app/address/0xc76bb990E498ACace1ff6A83ea4CCDDa92485365) reference contract locks a USDC bond sized by the agent's tier when they accept a job. The bond returns on delivery, or transfers to the client on failure. The per-tier rate is admin-configurable (≤50% cap, event-logged); current defaults: Gold 50 bps, Silver 150, Bronze 500, Pending 1500, Watch + Dormant refused.
 
 The bond is **a separate concern from the rating**. The rating is the signal; the bond is one possible economic consequence of that signal. Other consequences (refusal, audit trigger, manual review) are equally valid.
 
@@ -57,7 +57,7 @@ The bond is **a separate concern from the rating**. The rating is the signal; th
 mapping(address => uint64) public memberSince;
 
 function joinAsMember(RatingAttestation calldata att, bytes calldata signature) external {
-  verifier.requireMinRating(att, signature, 1, 0x1F);  // Proven, no flags
+  verifier.requireMinRating(att, signature, 1, 0x1F);  // Silver, no flags
   require(msg.sender == att.agentAddress, "Not the agent");
   memberSince[msg.sender] = att.validUntil;
 }
@@ -74,7 +74,7 @@ curl -X POST https://caliber.poko.blue/api/v1/route \
   -H 'content-type: application/json' \
   -d '{
     "intent":   "summarize a long technical document",
-    "min_tier": "Proven",
+    "min_tier": "Silver",
     "category": "utility"
   }'
 ```
@@ -85,14 +85,14 @@ curl -X POST https://caliber.poko.blue/api/v1/route \
     "agent_id":      "1317",
     "name":          "Document Digest Agent",
     "owner_address": "0xafe6dd…0549",
-    "tier":          "Proven",
+    "tier":          "Silver",
     "similarity":    0.871,
     "match_reason":  "semantic match on \"summarize a long...\"; cosine 0.871"
   },
   "attestation":  { /* EIP-712 RatingAttestation */ },
   "signature":    "0xfd9549…",
   "valid_until":  1779453814,
-  "methodology_version": "2.0.0"
+  "methodology_version": "2.0.1"
 }
 ```
 
@@ -165,7 +165,7 @@ const caliber = new Caliber();  // defaults to caliber.poko.blue
 const rating = await caliber.rating('arc', '1317');
 
 // 2. get a signed attestation
-const envelope = await caliber.attest('arc', '1317', { minTier: 'Proven' });
+const envelope = await caliber.attest('arc', '1317', { minTier: 'Silver' });
 
 // 3. verify off-chain (no wallet, no gas)
 const v = await caliber.verifyAttestation(envelope);
@@ -174,13 +174,13 @@ if (v.ok) console.log('valid, methodology', envelope.methodologyVersion);
 // 4. trust-routed agent picker
 const match = await caliber.route({
   intent: 'summarize a long research paper',
-  min_tier: 'Proven',
+  min_tier: 'Silver',
 });
 ```
 
 `verifyAttestation()` reads the on-chain signer + methodology versions via viem and runs the **same four conditions** the on-chain `requireMinRating(...)` enforces — without sending a transaction. Useful for pre-flight checks before any wallet popup.
 
-Source under disclosure until July 2026 hackathon close. After that: MIT on npm. Reviewer/integration access on request via [@PokoBlue99](https://x.com/PokoBlue99).
+Source is MIT-licensed and open on GitHub. npm publish forthcoming once the API surface settles. Integration questions via [@PokoBlue99](https://x.com/PokoBlue99) or GitHub issues.
 
 ---
 
@@ -201,11 +201,11 @@ struct RatingAttestation {
   bytes32  chain;              // padded ASCII chain id (e.g. "arc")
   uint256  agentId;
   address  agentAddress;
-  uint8    tier;               // 0=Established ... 5=Inactive
+  uint8    tier;               // 0=Gold ... 5=Dormant
   uint8    score;              // 0-100
   uint16   interactionCount;
   uint8    flags;              // bitmask: 0x01..0x10
-  bytes32  methodologyVersion; // padded ASCII e.g. "2.0.0"
+  bytes32  methodologyVersion; // padded ASCII e.g. "2.0.1"
   uint64   asOf;               // unix
   uint64   validUntil;         // unix
   uint256  nonce;              // monotonic per (chain, agentId)
@@ -272,15 +272,14 @@ We'll publish a migration guide before any mainnet deploy.
 
 ## Source code and licensing
 
-- **Repository:** [github.com/huicom/arc-agents-explorer](https://github.com/huicom/arc-agents-explorer) — currently private through the July 2026 hackathon close
-- **Reviewer / integration access:** on request — DM [@PokoBlue99](https://x.com/PokoBlue99)
-- **Post-hackathon release plan:**
+- **Repository:** [github.com/huicom/caliber](https://github.com/huicom/caliber) — public, MIT-licensed
+- **Methodology paper:** CC BY 4.0 — already published at [`/methodology`](https://caliber.poko.blue/methodology)
+- **Components & licenses:**
   - Engine + contracts + SDK → MIT
-  - Methodology paper → CC BY 4.0
   - Indexer + web app → MIT
-  - Public release on or shortly after 2026-07-31
-
-The methodology paper at [`/methodology`](https://caliber.poko.blue/methodology) is **already published under CC BY 4.0** — you can read, fork, and redistribute the math today.
+  - Methodology paper → CC BY 4.0
+- **Caliber brand + canonical issuer signer** (`0xbF017698BB2c936D54a74DCABF68Df42800bAA84`) are reserved. Anyone can fork and run their own instance; only attestations signed by the canonical signer are recognised by the deployed `RatingVerifier` as "Caliber ratings."
+- **Contributions:** GitHub issues and PRs welcome.
 
 ---
 

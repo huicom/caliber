@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DocShell } from '@/components/site/DocShell';
 
 const PAGE_DESCRIPTION =
-  'Operational companion to the Caliber Rating Methodology v2.0. How the service is operated, what the API contract looks like, how the on-chain primitives compose, and the v1→v2 provenance lesson.';
+  'Operational companion to the Caliber Rating Methodology v2.0.1. How the service is operated, what the API contract looks like, how the on-chain primitives compose, and the v1→v2 provenance lesson.';
 
 export const metadata = {
   title: 'Caliber Rating — Service Companion',
@@ -44,7 +44,7 @@ export default async function MethodologyServicePage() {
       ]}
       eyebrow="//service_companion"
       title="Service Companion"
-      kicker="How Caliber Rating v2.0 is operated. System architecture, on-chain primitives, the API surface, data-quality disclosures, ops model, and the v1 → v2 pivot lesson."
+      kicker="How Caliber Rating v2.0.1 is operated. System architecture, on-chain primitives, the API surface, data-quality disclosures, ops model, and the v1 → v2 pivot lesson."
       markdown={markdown}
       seeAlso={[
         { href: '/methodology', label: 'methodology paper' },

@@ -57,7 +57,7 @@ export default function VerifyPage() {
           </a>{' '}
           on Arc Testnet. EIP-712 domain name <code className="font-mono text-xs">Caliber</code>, version{' '}
           <code className="font-mono text-xs">1</code>, methodology{' '}
-          <code className="font-mono text-xs">2.0.0</code>.
+          <code className="font-mono text-xs">2.0.1</code>.
         </p>
         <p className="mt-3">
           Don&rsquo;t have an attestation handy? Open any agent&rsquo;s Passport and click{' '}

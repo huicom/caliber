@@ -8,8 +8,8 @@ import { api, type CaliberTier } from '@/lib/api';
  *
  *  - Pulls top-rated rated agents on mount, filtered to moderate+ confidence
  *    so a clicked agent always passes the basic-mode attestation gate.
- *  - Tier filter chips: "≥ Established" / "≥ Proven" / "≥ Emerging" / "≥ Provisional".
- *    Selecting "≥ Emerging" shows agents at Established | Proven | Emerging.
+ *  - Tier filter chips: "≥ Gold" / "≥ Silver" / "≥ Bronze" / "≥ Pending".
+ *    Selecting "≥ Bronze" shows agents at Gold | Silver | Bronze.
  *  - Search filters by name or agent id.
  *  - Scrolls inside its own max-height container so it never explodes the form.
  *
@@ -30,35 +30,35 @@ interface Agent {
 interface Props {
   selectedId: string;
   onSelect: (id: string) => void;
-  /** Filter floor (lower ordinal = stronger tier). 3 = Provisional or better. */
+  /** Filter floor (lower ordinal = stronger tier). 3 = Pending or better. */
   minTierOrdinal: number;
   /** When true, show the tier-filter chips. When false (basic mode), hide them. */
   showTierFilter?: boolean;
 }
 
 const TIER_ORDINAL: Record<CaliberTier, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 const TIER_LABEL: Record<number, string> = {
-  0: 'Established',
-  1: 'Proven',
-  2: 'Emerging',
-  3: 'Provisional',
+  0: 'Gold',
+  1: 'Silver',
+  2: 'Bronze',
+  3: 'Pending',
 };
 
 const TIER_COLOR: Record<CaliberTier, string> = {
-  Established: 'text-[#047857] bg-[#E6F7F2] border-[#00B894]/40',
-  Proven: 'text-[#075985] bg-[#E0F2FE] border-[#0EA5E9]/40',
-  Emerging: 'text-[#0F766E] bg-[#CCFBF1] border-[#14B8A6]/40',
-  Provisional: 'text-[#475569] bg-[#F1F5F9] border-[#94A3B8]/40',
-  Watch: 'text-[#B45309] bg-[#FEF3E2] border-[#F59E0B]/40',
-  Inactive: 'text-[#111827] bg-[#E5E7EB] border-[#1F2937]/40',
+  Gold:    'text-[#B8862B] bg-[#B8862B]/12 border-[#B8862B]/45',
+  Silver:  'text-[#7E8690] bg-[#7E8690]/12 border-[#7E8690]/45',
+  Bronze:  'text-[#8C5A2C] bg-[#8C5A2C]/12 border-[#8C5A2C]/45',
+  Pending: 'text-[#98948C] bg-[#98948C]/12 border-[#98948C]/45',
+  Watch:   'text-[#B45309] bg-[#B45309]/12 border-[#B45309]/45',
+  Dormant: 'text-[#A8A39A] bg-[#A8A39A]/12 border-[#A8A39A]/45',
 };
 
 export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilter = false }: Props) {
@@ -88,18 +88,23 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
           .map((a) => ({
             id: a.agentId,
             name: a.name ?? `Agent #${a.agentId}`,
-            tier: (ratingMap[a.agentId]?.tier ?? 'Provisional') as CaliberTier,
+            tier: (ratingMap[a.agentId]?.tier ?? 'Pending') as CaliberTier,
             jobs: a.jobsCompleted ?? 0,
             score: ratingMap[a.agentId]?.score ?? 0,
             confidence: ratingMap[a.agentId]?.confidence ?? 'low',
             category: a.agentType ?? null,
           }))
           .filter((a) => {
+            // Testnet calibration: relaxed filter so all rated agents in
+            // Gold/Silver/Bronze/Pending are pickable. Most testnet agents
+            // have insufficient confidence (2-3 jobs) under the production
+            // gate; filtering by confidence here was hiding 99% of them.
+            // The form will warn separately if the picked agent's tier is
+            // weaker than the poster's minTier threshold.
             const r = ratingMap[a.id];
             return (
               r?.rated &&
-              (r.confidence === 'high' || r.confidence === 'moderate') &&
-              TIER_ORDINAL[a.tier as CaliberTier] <= 3 // Watch + Inactive excluded
+              TIER_ORDINAL[a.tier as CaliberTier] <= 3 // Watch + Dormant excluded
             );
           });
         setAllAgents(agents);

@@ -39,12 +39,12 @@ async function computeDistribution(chain: string): Promise<DistributionResponse>
 
   const total_agents = candidates.length;
   const tier_counts: Record<CaliberTier, number> = {
-    Established: 0,
-    Proven: 0,
-    Emerging: 0,
-    Provisional: 0,
+    Gold: 0,
+    Silver: 0,
+    Bronze: 0,
+    Pending: 0,
     Watch: 0,
-    Inactive: 0,
+    Dormant: 0,
   };
   let rateable_agents = 0;
   let conf_high = 0;

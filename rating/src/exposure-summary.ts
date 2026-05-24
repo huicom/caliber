@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { sql as rawSql } from '@arc-agents/db';
+import { METHODOLOGY_VERSION } from '../engine/version';
 
 const querySchema = z.object({
   chain: z.string().min(1).default('arc'),
@@ -45,27 +46,34 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
   }
 
   try {
-    // Per-tier roll-up from the freshest snapshot day. `ead_usdc` in the
-    // schema is now semantically "active escrow USDC" — column name kept
-    // stable so older clients don't break, but the methodology meaning
-    // changed at v2.0 (it no longer feeds an EL formula).
+    // Per-tier roll-up from the LATEST snapshot per agent. Using DISTINCT ON
+    // is critical: rating_snapshots is append-only, so an agent rated on day
+    // N under tier X and re-rated on day N+1 under tier Y must be counted
+    // only as Y. The previous query grouped by date and double-counted
+    // agents who had multiple snapshots on the same day (e.g. when
+    // snapshot:daily was run twice for a methodology rename).
+    // `ead_usdc` is now semantically "active escrow USDC" — column name
+    // kept stable for backwards compat.
     const rows = (await rawSql.unsafe(
       `
-      WITH latest_day AS (
-        SELECT MAX(DATE(computed_at)) AS d
+      WITH latest AS (
+        SELECT DISTINCT ON (agent_id) agent_id, tier, ead_usdc
         FROM rating_snapshots
         WHERE chain_id = $1 AND view = 'PIT'
+        ORDER BY agent_id, computed_at DESC
       )
       SELECT
         tier,
         COUNT(*)::int AS agent_count,
         COALESCE(SUM(CAST(NULLIF(ead_usdc, '') AS NUMERIC)), 0)::text AS active_escrow
-      FROM rating_snapshots, latest_day
-      WHERE rating_snapshots.chain_id = $1
-        AND rating_snapshots.view = 'PIT'
-        AND DATE(rating_snapshots.computed_at) = latest_day.d
+      FROM latest
       GROUP BY tier
-      ORDER BY tier
+      ORDER BY
+        CASE tier
+          WHEN 'Gold' THEN 0 WHEN 'Silver' THEN 1 WHEN 'Bronze' THEN 2
+          WHEN 'Pending' THEN 3 WHEN 'Watch' THEN 4 WHEN 'Dormant' THEN 5
+          ELSE 9
+        END
       `,
       [chain],
     )) as Array<{ tier: string; agent_count: number; active_escrow: string }>;
@@ -84,7 +92,7 @@ export async function exposureSummaryRoute(req: Request, res: Response): Promise
 
     const payload = {
       chain,
-      methodology_version: '2.0.0',
+      methodology_version: METHODOLOGY_VERSION,
       computed_at: computedAtRow[0]?.computed_at ?? null,
       total_agents: totalAgents,
       total_active_escrow_usdc: totalEscrow.toFixed(2),

@@ -4,7 +4,7 @@
 //   - total agent count
 //   - cluster_count (distinct (name + first-200-of-description) clusters,
 //     so duplicate bulk-deployed series are counted once)
-//   - top_agents: 3 representatives ordered by latest tier (Established
+//   - top_agents: 3 representatives ordered by latest tier (Gold
 //     first), then jobs_completed
 //
 // Used by /discover landing for the category-grid cards.
@@ -66,12 +66,12 @@ export async function GET() {
             PARTITION BY a.category, CONCAT(a.name, '|', LEFT(COALESCE(a.metadata->>'description',''), 200))
             ORDER BY
               CASE s.tier
-                WHEN 'Established' THEN 0
-                WHEN 'Proven' THEN 1
-                WHEN 'Emerging' THEN 2
-                WHEN 'Provisional' THEN 3
+                WHEN 'Gold' THEN 0
+                WHEN 'Silver' THEN 1
+                WHEN 'Bronze' THEN 2
+                WHEN 'Pending' THEN 3
                 WHEN 'Watch' THEN 4
-                WHEN 'Inactive' THEN 5
+                WHEN 'Dormant' THEN 5
                 ELSE 9
               END,
               a.jobs_completed DESC NULLS LAST,
@@ -94,12 +94,12 @@ export async function GET() {
             PARTITION BY category
             ORDER BY
               CASE tier
-                WHEN 'Established' THEN 0
-                WHEN 'Proven' THEN 1
-                WHEN 'Emerging' THEN 2
-                WHEN 'Provisional' THEN 3
+                WHEN 'Gold' THEN 0
+                WHEN 'Silver' THEN 1
+                WHEN 'Bronze' THEN 2
+                WHEN 'Pending' THEN 3
                 WHEN 'Watch' THEN 4
-                WHEN 'Inactive' THEN 5
+                WHEN 'Dormant' THEN 5
                 ELSE 9
               END,
               jobs_completed DESC NULLS LAST,

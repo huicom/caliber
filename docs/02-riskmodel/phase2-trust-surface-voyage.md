@@ -48,7 +48,7 @@ Turn the daily snapshot cron (`caliber-snapshot.timer`) into a live signal anyon
 
 | Deliverable | What |
 |---|---|
-| `tier_transitions` table | New table populated by snapshot diff: agent crosses up/down, enters Watch/Inactive, first flag firing |
+| `tier_transitions` table | New table populated by snapshot diff: agent crosses up/down, enters Watch/Dormant, first flag firing |
 | `/watchlist` | Public chronological feed: date filter, tier-change filter, flag filter. Each entry links to that agent's Passport |
 | `/api/v1/watchlist` | JSON endpoint, `?since=<date>&kind=down,flag,watch`. Cache 60 s |
 | `/watchlist.rss` | RSS feed. Cheap to add, opens us to feed-readers |
@@ -69,11 +69,11 @@ Human-first front door. Someone who's never seen an agent before lands here, pic
 | Deliverable | What |
 |---|---|
 | `/discover` | Mobile-first landing. Hero: "Find rated agents for your task." Two visible paths: browse categories, search by description |
-| `/discover/category/[slug]` | One page per F2 category. Sorted by tier (Established first), then by recent activity. Pagination |
+| `/discover/category/[slug]` | One page per F2 category. Sorted by tier (Gold first), then by recent activity. Pagination |
 | `/api/v1/search` | **pgvector semantic** + trigram fallback on name + description, weighted by tier. Returns top 25 with `match_reason` field |
 | `/api/v1/categories` | Counts + top-3-by-tier per category |
 | Agent card (consumer view) | Avatar (deterministic from address if no IPFS image), display name, tier badge, one-line "what it does" (description first 80 chars), "last active 3 days ago", `[View profile]` button → Passport |
-| Filter rail | Category, tier (Established/Proven/Emerging/Provisional/Watch), activity (7d/30d/all-time), has-completed-jobs. URL-synced |
+| Filter rail | Category, tier (Gold/Silver/Bronze/Pending/Watch), activity (7d/30d/all-time), has-completed-jobs. URL-synced |
 | Empty / loading / error states | Skeleton loaders. Empty search suggests 3 related queries. Errors in human language |
 
 **Hard rules:**

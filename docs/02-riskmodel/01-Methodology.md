@@ -93,7 +93,7 @@ The table below is the same diagram in copy-pasteable form for accessibility and
 **Step 03 — output (example):**
 
 ```
-tier        ● Proven           describes observed behaviour, not predicted default
+tier        ● Silver           describes observed behaviour, not predicted default
 score       72 / 100           weighted composite of Step 02 outputs
 confidence  ± 4.8              90% interval — wider when data is thin
 ```
@@ -165,14 +165,18 @@ What you see on the site is always three things together — never one in isolat
 
 | Tier | What it means | Score | Minimum data |
 |---|---|---|---|
-| 🟢 **Established** | Strong track record, no red flags | 80–100 | 50+ completed jobs |
-| 🔵 **Proven** | Reliable, decent sample | 65–79 | 20+ completed jobs |
-| 🟡 **Emerging** | Looks promising, limited history | 50–64 | 5+ completed jobs |
-| ⚪ **Provisional** | Not enough data yet — sits near population average | 35–49 | < 5 jobs |
-| 🟠 **Watch** | Risk flag triggered | Any | Any |
-| ⚫ **Inactive** | Dormant 90+ days | N/A | Any |
+| Tier | What it means | Score | Production min jobs | **Testnet min jobs (v2.0.1)** |
+|---|---|---|---|---|
+| 🥇 **Gold** | Strong track record, no red flags | 80–100 | 50+ | **2+** |
+| 🥈 **Silver** | Reliable, decent sample | 75–79 | 20+ | **2+** |
+| 🥉 **Bronze** | Looks promising, limited history | 50–74 | 5+ | **1+** |
+| ◯ **Pending** | Not enough data yet | <50 or insufficient jobs | <5 | **<1** |
+| ⚠ **Watch** | Risk flag triggered | Any | Any | Any |
+| 💤 **Dormant** | No on-chain activity for 90+ days | N/A | Any | Any |
 
-We don't use AAA/AA/BBB letter grades on purpose. Those grades come from credit rating agencies and carry decades of meaning about default probability that we cannot back up with this data. Our tiers describe what's actually been observed.
+**Why two columns:** the *production* min-jobs values (50/20/5) are the methodology's intended bar — they require a real track record before assigning a quality tier. Arc Testnet has not yet accumulated enough genuine agent-to-agent commerce for those thresholds to populate meaningfully (under production rules, exactly **1** agent qualifies for Gold today). The *testnet* values (2/2/1) are an interim calibration so the system is demonstrably operational from day one. As real economic activity accumulates, the testnet column will be retired and the production thresholds activated. See §Appendix F · Calibration history for the schedule.
+
+We don't use AAA/AA/BBB letter grades on purpose. Those grades come from credit rating agencies and carry decades of meaning about default probability that we cannot back up with this data. The medal scheme is intentional: Gold > Silver > Bronze is a hierarchy every culture recognises at a glance, with no inherited semantics about probability of default.
 
 #### The score
 
@@ -207,7 +211,7 @@ Here's what you need:
 1. An Arc node — self-hosted or RPC provider
 2. The contract addresses for ERC-8004 and ERC-8183
 3. Our feature definitions (the methodology paper documents every input)
-4. Our math (TypeScript engine in `rating/engine/`; source disclosed under CC BY 4.0 after the July 2026 hackathon close — reviewer access on request)
+4. Our math (TypeScript engine in `rating/engine/`; open source, MIT-licensed, on GitHub)
 5. Our rating composition rules from Step 3
 
 We publish today:
@@ -217,7 +221,7 @@ We publish today:
 - ✅ Final ratings with every component broken out
 - ✅ Methodology version stamped on every API response
 
-**Source code disclosure timeline:** the engine and contract source live in a private repository through the active hackathon window (closes July 2026). Reviewers — including grant assessors, security auditors, and integration partners — can request read access; reach out via the contact below. The repository will be made public under CC BY 4.0 (methodology) and MIT (code) after the hackathon submission deadline. Until then, the methodology paper plus the published factor breakdown is sufficient to reproduce any rating you can read from the API.
+**Source code:** the engine, contracts, indexer, web app, and SDK are open source under the **MIT License** on GitHub. The methodology paper itself is licensed **CC BY 4.0**. Anyone can clone, study, run their own instance, propose changes, or build derivatives. The **Caliber brand** and the **canonical issuer signing key** (`0xbF017698BB2c936D54a74DCABF68Df42800bAA84`) are reserved — anyone may run the software, but only attestations signed by the canonical signer are recognised by the deployed `RatingVerifier` as "Caliber ratings."
 
 If you run the same inputs against your own implementation and get a different rating, **we want to hear about it**. That's the point.
 
@@ -242,7 +246,7 @@ We built two reference contracts to show what consuming an attestation can look 
 - **`RatingGateway`** — a thin wrapper over ERC-8183 `createJob()` that refuses jobs whose providers fall below a caller-chosen tier threshold (or trigger blocking flags). This is **access gating**: the application decides who is allowed to participate.
 - **`CaliberEscrow`** — a tier-stepped performance-bond escrow. Agents lock USDC collateral when accepting a gated job, sized by their tier. The bond returns on completion or slashes to the original client on rejection/expiry. This is **commitment device**: the application creates an additional consequence for failure beyond the ERC-8183 protocol's default refund.
 
-These are examples, not the methodology's outputs. Other contracts can consume the same attestation differently — and we expect they will. A staking module could weight votes by tier. A marketplace could set listing fees inversely to tier. A payment router could disburse to Established agents at lower latency. The attestation is the primitive; the integrations are open-ended.
+These are examples, not the methodology's outputs. Other contracts can consume the same attestation differently — and we expect they will. A staking module could weight votes by tier. A marketplace could set listing fees inversely to tier. A payment router could disburse to Gold agents at lower latency. The attestation is the primitive; the integrations are open-ended.
 
 ### A note on bonds vs. rating
 
@@ -284,17 +288,17 @@ An earlier draft of this work, developed under the working name **ArcAgents** an
 
 The reason: the underlying data does not support credit-rating-grade claims. Credit rating agencies calibrate against decades of default data across millions of obligors. We have months of testnet data across roughly 16,000 agents, most with fewer than 10 jobs. Borrowing the *vocabulary* of credit rating (PD, LGD, EAD, EL, AAA/AA/BBB) without the *evidence base* would have been overclaiming, and any reviewer with five minutes of risk experience would have caught it.
 
-The current methodology — **Caliber Rating v2.0**, counterparty performance rating with credibility-weighted reliability, survival analysis, and rule-based risk flags — is a more honest fit for the data we actually have. The techniques are drawn from reliability engineering, actuarial credibility theory, and platform-trust scoring rather than credit risk.
+The current methodology — **Caliber Rating v2.0.1**, counterparty performance rating with credibility-weighted reliability, survival analysis, and rule-based risk flags — is a more honest fit for the data we actually have. The techniques are drawn from reliability engineering, actuarial credibility theory, and platform-trust scoring rather than credit risk.
 
 The v1.0 contracts and methodology paper are preserved as a public archive (git tag `methodology-v1.0.1-final` in the repository) so the revision history is auditable. They are no longer the operative methodology and no longer match the live `RatingVerifier`.
 
-This is **v2.0**. We expect to be wrong in places. We expect to revise. The provenance is published so the revision history starts honest.
+This is **v2.0.1**. We expect to be wrong in places. We expect to revise. The provenance is published so the revision history starts honest.
 
 ---
 
 ## Versioning
 
-This is **Caliber Methodology v2.0**. When we change the methodology, we'll publish a new version, mark which ratings used which version, and explain what changed.
+This is **Caliber Methodology v2.0.1**. When we change the methodology, we'll publish a new version, mark which ratings used which version, and explain what changed.
 
 Versioning rules going forward:
 
@@ -323,7 +327,7 @@ On the roadmap for v2.1:
 ## Want to dig deeper?
 
 - **Site:** [caliber.poko.blue](https://caliber.poko.blue)
-- **Code:** source disclosed under CC BY 4.0 (methodology) and MIT (engine + contracts) after the July 2026 hackathon close — reviewer access on request via DM
+- **Code:** open source on GitHub — engine, contracts, indexer, web app, SDK all under MIT; methodology paper under CC BY 4.0
 - **Issues, disagreements, requests:** DM or email PokoBlue
 - **DM:** [@PokoBlue99 on X](https://x.com/PokoBlue99)
 
@@ -340,14 +344,15 @@ Built in Bangkok. Powered by a self-hosted Arc node. Standards-native, open meth
 | 1.0 | 2026-05-20 | Initial publication under the working name ArcAgents. Performance-bond / PPD-LGD-EAD framing. Tier scale Arc-AAA … Arc-D. |
 | 1.0-rebrand | 2026-05-21 | Brand renamed from ArcAgents to **Caliber**. Tier scale strings renamed `Arc-*` → `Caliber-*`. Scope narrowed to Arc-only. EIP-712 domain redeployed with `name="Caliber"`. No methodological change. |
 | 1.0.1-tuning | 2026-05-21 | Scorecard recalibration against the first 883 rateable agents. PD coefficient and tier-band cutoff adjustments. Same formula, no methodological change. **This was the last v1.x version.** Archive tag: `methodology-v1.0.1-final`. |
-| **2.0** | **2026-05-22** | **Pivot to counterparty performance rating.** Performance-bond / PPD-LGD-EAD framing replaced with credibility-weighted reliability, survival analysis, and rule-based risk flags. Tier scale renamed from Caliber-AAA … Caliber-D to Established / Proven / Emerging / Provisional / Watch / Inactive. Score 0–100 replaces PD probability as the central published number. Attestation struct redesigned (`tier`, `score`, `interactionCount`, `flags` replace `pdBps`, `lgdBps`, `confidence`). CaliberEscrow bond formula changed from `budget × PD × LGD` to tier-stepped table with configurable rates. Three contracts redeployed on Arc Testnet. Provenance: the v1.x framing was rejected as overclaiming for the data available; v2.0 is the honest fit. |
+| 2.0 | 2026-05-22 | **Pivot to counterparty performance rating.** Performance-bond / PPD-LGD-EAD framing replaced with credibility-weighted reliability, survival analysis, and rule-based risk flags. Tier scale renamed from Caliber-AAA … Caliber-D to **Established / Proven / Emerging / Provisional / Watch / Inactive**. Score 0–100 replaces PD probability as the central published number. Attestation struct redesigned (`tier`, `score`, `interactionCount`, `flags` replace `pdBps`, `lgdBps`, `confidence`). CaliberEscrow bond formula changed from `budget × PD × LGD` to tier-stepped table with configurable rates. Three contracts redeployed on Arc Testnet. **Not formally published** — internal review only. |
+| **2.0.1** | **2026-05-24** | **First publicly published version.** Three changes: (1) **Tier rename** — `Established / Proven / Emerging / Provisional / Watch / Inactive` → `Gold / Silver / Bronze / Pending / Watch / Dormant`. Pre-publication review showed "Established vs Proven" had ambiguous hierarchy; medal-based naming is universally understood. (2) **Score-floor adjustment** — Silver floor raised from 65 to 75 so the Silver band (75–79) sits between the testnet score clusters at 74 and 78; Bronze ceiling moved up from 64 to 74 to populate Bronze with the 73–74 cluster. Gold floor unchanged at 80. (3) **Dual min-jobs columns** — production thresholds (50 / 20 / 5) kept as the methodology's intended bar; **testnet calibration thresholds** (2 / 2 / 1) introduced as an interim measure so the system is demonstrably operational while Arc Testnet accumulates real economic activity. The testnet column will be retired and production thresholds activated as resolved-job volume grows. Formula, factors, weights, flag rules, and bond table all unchanged. Tier ordinals (0–5) unchanged → on-chain attestation bytes and contract bytes are byte-identical; no contract redeploy. |
 
 ### Stability statement
 
-**v2.0 is the first version intended to be stable for at least 30 days.** The pre-v2.0 versions (1.0, 1.0-rebrand, 1.0.1-tuning) shipped during a 36-hour calibration window in which both the framing and the tier scale were under active revision; ratings issued under those versions are preserved at the git tag `methodology-v1.0.1-final` for audit, but **should not be referenced operationally**. The v1.x contracts on Arc Testnet are deprecated; the live RatingVerifier, RatingGateway, and CaliberEscrow are the v2.0 deployments (addresses listed under §The Attestation Primitive).
+**v2.0.1 is the first publicly published version, intended to be stable for at least 30 days.** The v1.x pre-pivot versions (1.0, 1.0-rebrand, 1.0.1-tuning) and the internal-review v2.0 are preserved at the git tag `methodology-v1.0.1-final` and `pre-v2.0.1-rename` for audit, but **should not be referenced operationally**. The v1.x contracts on Arc Testnet are deprecated; the live RatingVerifier, RatingGateway, and CaliberEscrow are the v2.0.x deployments (addresses listed under §The Attestation Primitive).
 
 Material changes from v2.0 forward follow the 30-day notice rule in §Versioning. Any future tier rename, factor add/remove, default-definition change, or composition-weight adjustment requires a new minor version with 30 days of dual-version reporting before the old version is retired.
 
 ---
 
-*Caliber Methodology v2.0 · May 22, 2026 · Bangkok · 🇹🇭*
+*Caliber Methodology v2.0.1 · May 24, 2026 · Bangkok · 🇹🇭*

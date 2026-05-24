@@ -28,25 +28,25 @@ import { useCircleAuth } from '@/lib/circle/AuthContext';
  * ────────────────────────────────────────────────────────────────────────── */
 
 // Caliber Rating v2.0 — poster selects the WEAKEST acceptable tier.
-// Bondable tiers only (Watch + Inactive are auto-refused by the escrow
+// Bondable tiers only (Watch + Dormant are auto-refused by the escrow
 // and the gateway tier check; no point listing them as a choice).
 const TIER_OPTIONS = [
-  { value: 0, label: 'Established (only the top tier)' },
-  { value: 1, label: 'Proven or better' },
-  { value: 2, label: 'Emerging or better' },
-  { value: 3, label: 'Provisional or better (loosest)' },
+  { value: 0, label: 'Gold (only the top tier)' },
+  { value: 1, label: 'Silver or better' },
+  { value: 2, label: 'Bronze or better' },
+  { value: 3, label: 'Pending or better (loosest)' },
 ];
 
 // v2.0 bond rate in basis points per tier, used for the bond preview
 // shown to the poster before they commit. Mirrors CaliberEscrow's
 // initial table (50/150/500/1500/0/0).
 const BOND_BPS_BY_TIER: Record<CaliberTier, number> = {
-  Established: 50,
-  Proven: 150,
-  Emerging: 500,
-  Provisional: 1500,
+  Gold: 50,
+  Silver: 150,
+  Bronze: 500,
+  Pending: 1500,
   Watch: 0,
-  Inactive: 0,
+  Dormant: 0,
 };
 
 // Sample templates for B4 — let judges fill the form in one click.
@@ -80,29 +80,29 @@ const SAMPLE_TEMPLATES: Array<{
 ];
 
 const CONFIDENCE_OPTIONS = [
-  { value: 0, label: 'High (≥75 completed jobs)' },
-  { value: 1, label: 'Moderate (≥25 completed)' },
+  { value: 0, label: 'High (≥50 completed jobs)' },
+  { value: 1, label: 'Moderate (≥20 completed)' },
   { value: 2, label: 'Low (≥5 completed, warned)' },
 ];
 
 const TIER_NAME_MAP: Record<number, string> = {
-  0: 'Established',
-  1: 'Proven',
-  2: 'Emerging',
-  3: 'Provisional',
+  0: 'Gold',
+  1: 'Silver',
+  2: 'Bronze',
+  3: 'Pending',
   4: 'Watch',
-  5: 'Inactive',
+  5: 'Dormant',
 };
 
-// Lower ordinal = stronger tier. minTier ordinal 3 (Provisional) allows
+// Lower ordinal = stronger tier. minTier ordinal 3 (Pending) allows
 // agents at ordinal 0..3 and refuses 4..5. Mirrors the contract enum.
 const TIER_TO_ORDINAL: Record<CaliberTier, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 const CONFIDENCE_NAMES = ['high', 'moderate', 'low'] as const;
@@ -121,7 +121,7 @@ interface AttestationResponse {
     chain: string;
     agentId: string;
     agentAddress: string;
-    tier: number;             // 0=Established, 5=Inactive
+    tier: number;             // 0=Gold, 5=Dormant
     score: number;            // 0-100
     interactionCount: number;
     flags: number;            // bitfield
@@ -182,6 +182,78 @@ export function PostJobForm() {
     }
   }, [searchParams]);
 
+  // ── Form-state persistence (survives Circle Google OAuth redirect) ──
+  // The OAuth flow does a full-page redirect, which destroys component
+  // state. We mirror the form to sessionStorage so when the user lands
+  // back on /jobs/new after sign-in, they see their work intact. Cleared
+  // on successful submit. sessionStorage (not localStorage) so it
+  // naturally clears when the tab closes — no stale drafts from yesterday.
+  const DRAFT_KEY = 'caliber:job-draft:v1';
+  // Restore on mount (single shot)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw) as Partial<{
+        title: string;
+        description: string;
+        budget: string;
+        minTier: number;
+        minConfidence: number;
+        deadline: string;
+        targetAgentId: string;
+        evaluatorAddress: string;
+        bondRequired: boolean;
+        mode: 'basic' | 'advanced';
+      }>;
+      if (d.title) setTitle(d.title);
+      if (d.description) setDescription(d.description);
+      if (d.budget) setBudget(d.budget);
+      if (typeof d.minTier === 'number') setMinTier(d.minTier);
+      if (typeof d.minConfidence === 'number') setMinConfidence(d.minConfidence);
+      if (d.deadline) setDeadline(d.deadline);
+      if (d.targetAgentId) setTargetAgentId(d.targetAgentId);
+      if (d.evaluatorAddress) setEvaluatorAddress(d.evaluatorAddress);
+      if (typeof d.bondRequired === 'boolean') setBondRequired(d.bondRequired);
+      // Note: `mode` is set further down, so we can't restore it here yet.
+      // We re-restore it inside its own effect below after the state exists.
+    } catch {
+      // Bad JSON or storage blocked → ignore, start fresh.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Persist on every change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+          title,
+          description,
+          budget,
+          minTier,
+          minConfidence,
+          deadline,
+          targetAgentId,
+          evaluatorAddress,
+          bondRequired,
+        }),
+      );
+    } catch {
+      /* storage quota / privacy mode — skip silently */
+    }
+  }, [
+    title,
+    description,
+    budget,
+    minTier,
+    minConfidence,
+    deadline,
+    targetAgentId,
+    evaluatorAddress,
+    bondRequired,
+  ]);
+
   // Default evaluator to the poster's wallet — most common case is self-eval.
   useEffect(() => {
     if (address && !evaluatorAddress) {
@@ -206,8 +278,8 @@ export function PostJobForm() {
   // evaluator when omitted in basic mode.
   const getJobFormData = useCallback(() => {
     if (!title || !description || !budget || !targetAgentId) return null;
-    const tierName = (['Established', 'Proven', 'Emerging', 'Provisional'][minTier] ??
-      'Provisional') as 'Established' | 'Proven' | 'Emerging' | 'Provisional';
+    const tierName = (['Gold', 'Silver', 'Bronze', 'Pending'][minTier] ??
+      'Pending') as 'Gold' | 'Silver' | 'Bronze' | 'Pending';
     const confName = (['high', 'moderate', 'low'][minConfidence] ?? 'moderate') as
       | 'high'
       | 'moderate'
@@ -316,7 +388,7 @@ export function PostJobForm() {
       setDraftHash(hash);
 
       // Step 2: signed Caliber v2.0 rating attestation
-      const tierName = TIER_NAME_MAP[minTier] ?? 'Provisional';
+      const tierName = TIER_NAME_MAP[minTier] ?? 'Pending';
       const confName = CONFIDENCE_NAMES[minConfidence] ?? 'moderate';
 
       const res = await fetch(
@@ -429,7 +501,7 @@ export function PostJobForm() {
           },
           attestationData.signature as `0x${string}`,
           minTier,
-          0, // blockingFlagMask = 0 — tier check already refuses Watch/Inactive
+          0, // blockingFlagMask = 0 — tier check already refuses Watch/Dormant
         ],
       },
       {
@@ -748,7 +820,7 @@ export function PostJobForm() {
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
                   </select>
-                  <p className={noteClass}>Gateway refuses agents below this tier. Default: Provisional or better.</p>
+                  <p className={noteClass}>Gateway refuses agents below this tier. Default: Pending or better.</p>
                   {/* A1: per-tier bond rate cheat-sheet so the poster knows
                       what their tier choice implies for the agent's bond. */}
                   <details className="mt-1.5 text-[11px] text-[var(--color-mute)]">
@@ -756,11 +828,11 @@ export function PostJobForm() {
                       what does each tier mean?
                     </summary>
                     <ul className="mt-1.5 space-y-0.5 pl-3 font-mono leading-relaxed">
-                      <li><strong className="text-[var(--color-ink)]">Established</strong>: score ≥80 + ≥50 jobs. Bond: 0.5% of budget.</li>
-                      <li><strong className="text-[var(--color-ink)]">Proven</strong>: score ≥65 + ≥20 jobs. Bond: 1.5%.</li>
-                      <li><strong className="text-[var(--color-ink)]">Emerging</strong>: score ≥50 + ≥5 jobs. Bond: 5%.</li>
-                      <li><strong className="text-[var(--color-ink)]">Provisional</strong>: fallback when above not met. Bond: 15%.</li>
-                      <li>Watch / Inactive: refused by gateway regardless of selection.</li>
+                      <li><strong className="text-[var(--color-ink)]">Gold</strong>: score ≥80 + ≥2 jobs (testnet) · production target ≥50. Bond: 0.5%.</li>
+                      <li><strong className="text-[var(--color-ink)]">Silver</strong>: score ≥75 + ≥2 jobs (testnet) · production target ≥20. Bond: 1.5%.</li>
+                      <li><strong className="text-[var(--color-ink)]">Bronze</strong>: score ≥50 + ≥1 job (testnet) · production target ≥5. Bond: 5%.</li>
+                      <li><strong className="text-[var(--color-ink)]">Pending</strong>: fallback when above not met. Bond: 15%.</li>
+                      <li>Watch / Dormant: refused by gateway regardless of selection.</li>
                     </ul>
                   </details>
                 </div>
@@ -778,7 +850,7 @@ export function PostJobForm() {
                       <option key={c.value} value={c.value}>{c.label}</option>
                     ))}
                   </select>
-                  <p className={noteClass}>Default: Moderate (≥25 completed jobs).</p>
+                  <p className={noteClass}>Default: Moderate (≥20 completed jobs).</p>
                 </div>
                 <div>
                   <div className="flex items-baseline justify-between mb-1">
@@ -1032,7 +1104,7 @@ function TargetGateStatus({
 }) {
   if (check.status === 'idle') return null;
 
-  const minTierName = TIER_NAME_MAP[minTierOrdinal] ?? 'Provisional';
+  const minTierName = TIER_NAME_MAP[minTierOrdinal] ?? 'Pending';
 
   if (check.status === 'loading') {
     return (

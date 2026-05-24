@@ -146,12 +146,12 @@ What you see on the site is always three things together — never one in isolat
 
 | Tier | What it means | Score | Minimum data |
 |---|---|---|---|
-| 🟢 **Established** | Strong track record, no red flags | 80–100 | 50+ completed jobs |
-| 🔵 **Proven** | Reliable, decent sample | 65–79 | 20+ completed jobs |
-| 🟡 **Emerging** | Looks promising, limited history | 50–64 | 5+ completed jobs |
-| ⚪ **Provisional** | Not enough data yet — sits near population average | 35–49 | < 5 jobs |
+| 🟢 **Gold** | Strong track record, no red flags | 80–100 | 50+ completed jobs |
+| 🔵 **Silver** | Reliable, decent sample | 65–79 | 20+ completed jobs |
+| 🟡 **Bronze** | Looks promising, limited history | 50–64 | 5+ completed jobs |
+| ⚪ **Pending** | Not enough data yet — sits near population average | 35–49 | < 5 jobs |
 | 🟠 **Watch** | Risk flag triggered | Any | Any |
-| ⚫ **Inactive** | Dormant 90+ days | N/A | Any |
+| ⚫ **Dormant** | Dormant 90+ days | N/A | Any |
 
 We don't use AAA/AA/BBB letter grades on purpose. Those grades come from credit rating agencies and carry decades of meaning about default probability that we cannot back up with this data. Our tiers describe what's actually been observed.
 

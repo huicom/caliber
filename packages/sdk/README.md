@@ -5,9 +5,9 @@ and the on-chain `RatingVerifier`. Designed for orchestrator stacks,
 contract frontends, and any agent runtime that wants typed access to
 ratings, signed attestations, and recommendation routing.
 
-> **Status:** v0.1 — source-disclosed under MIT after the July 2026
-> hackathon close. Reviewer or integration access on request. Not yet on
-> npm; consume by relative path within this monorepo or by tarball.
+> **Status:** v0.1 — MIT-licensed, open source. Source on GitHub.
+> Not yet on npm; consume by relative path within this monorepo or by
+> tarball. npm publish coming once the API surface settles.
 
 ## Install
 
@@ -24,14 +24,14 @@ The SDK has one peer dep — `viem` — for off-chain attestation verification.
 ```ts
 const rating = await caliber.rating('arc', '1317');
 if (rating.rated) {
-  console.log(rating.tier, rating.score, '/', 100); // Proven 76 / 100
+  console.log(rating.tier, rating.score, '/', 100); // Silver 76 / 100
 }
 ```
 
 ## Get a signed attestation
 
 ```ts
-const envelope = await caliber.attest('arc', '1317', { minTier: 'Proven' });
+const envelope = await caliber.attest('arc', '1317', { minTier: 'Silver' });
 //  → { attestation: { ... }, signature: '0x...', validUntil, methodologyVersion }
 ```
 
@@ -58,7 +58,7 @@ Plain-language intent, signed attestation back. The AI-native primitive.
 ```ts
 const match = await caliber.route({
   intent: 'agent that summarizes long research papers',
-  min_tier: 'Proven',
+  min_tier: 'Silver',
   category: 'utility',
 });
 

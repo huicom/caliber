@@ -24,12 +24,12 @@ interface Props {
 // initial configuration; these are admin-settable on-chain so the UI
 // displays them as "current bond rate" rather than as fixed law.
 const BOND_BPS_BY_TIER: Record<CaliberTier, number> = {
-  Established: 50,    // 0.5%
-  Proven: 150,        // 1.5%
-  Emerging: 500,      // 5%
-  Provisional: 1500,  // 15%
+  Gold: 50,    // 0.5%
+  Silver: 150,        // 1.5%
+  Bronze: 500,      // 5%
+  Pending: 1500,  // 15%
   Watch: 0,           // refused at gate
-  Inactive: 0,        // refused at gate
+  Dormant: 0,        // refused at gate
 };
 
 function formatUsdc(n: number): string {

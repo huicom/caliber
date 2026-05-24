@@ -10,7 +10,7 @@
 //   <a href="https://caliber.poko.blue/passport/arc/1317"
 //      target="_blank" rel="noopener" class="caliber-badge">
 //     <img src="https://caliber.poko.blue/badge/arc/1317"
-//          alt="Caliber rating: Proven" width="200" height="56" />
+//          alt="Caliber rating: Silver" width="200" height="56" />
 //   </a>
 
 const ORIGIN = 'https://caliber.poko.blue';

@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import { api, TIER_ORDER, type CaliberTier, type ExposureSummary } from '@/lib/api';
 
 const TIER_COLOR: Record<CaliberTier, string> = {
-  Established: '#00B894',
-  Proven:      '#0EA5E9',
-  Emerging:    '#14B8A6',
-  Provisional: '#94A3B8',
-  Watch:       '#F59E0B',
-  Inactive:    '#1F2937',
+  Gold:    '#B8862B',
+  Silver:  '#7E8690',
+  Bronze:  '#8C5A2C',
+  Pending: '#98948C',
+  Watch:   '#B45309',
+  Dormant: '#A8A39A',
 };
 
 function formatUsdc(s: string): string {
@@ -59,7 +59,7 @@ export function ExposureSummaryPanel() {
           </h2>
           <p className="text-xs text-[var(--color-mute)] mt-1 leading-snug">
             What&apos;s currently at stake — funded ERC-8183 escrow across every
-            Caliber-rated agent, broken out by tier. Caliber v2.0 does not
+            Caliber-rated agent, broken out by tier. Caliber v2.0.1 does not
             publish an expected-loss claim; this view is observed escrow, not
             a probability-weighted estimate.
           </p>
@@ -144,7 +144,7 @@ export function ExposureSummaryPanel() {
           <p className="text-[10px] text-[var(--color-mute)] mt-3 leading-snug">
             Active escrow = sum of funded in-flight ERC-8183 jobs assigned to
             each rated agent. The v1 "expected loss" column has been removed
-            from this view; Caliber v2.0 publishes a tier and a score, not a
+            from this view; Caliber v2.0.1 publishes a tier and a score, not a
             probability of default.
           </p>
         </div>

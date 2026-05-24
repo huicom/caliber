@@ -35,12 +35,12 @@ const FLAG_NAMES = [
 ];
 
 const TIER_COLOR: Record<CaliberTier, string> = {
-  Established: '#00B894',
-  Proven:      '#0EA5E9',
-  Emerging:    '#14B8A6',
-  Provisional: '#94A3B8',
-  Watch:       '#F59E0B',
-  Inactive:    '#1F2937',
+  Gold:    '#B8862B',
+  Silver:  '#7E8690',
+  Bronze:  '#8C5A2C',
+  Pending: '#98948C',
+  Watch:   '#B45309',
+  Dormant: '#A8A39A',
 };
 
 const KIND_LABELS: Record<string, { verb: string; icon: string; tone: 'good' | 'bad' | 'neutral' }> = {
@@ -48,9 +48,9 @@ const KIND_LABELS: Record<string, { verb: string; icon: string; tone: 'good' | '
   tier_up:        { verb: 'moved up to',           icon: '↑', tone: 'good' },
   tier_down:      { verb: 'moved down to',         icon: '↓', tone: 'bad' },
   enter_watch:    { verb: 'entered Watch',         icon: '⚠', tone: 'bad' },
-  enter_inactive: { verb: 'went Inactive',         icon: '◌', tone: 'bad' },
+  enter_dormant: { verb: 'went Dormant',         icon: '◌', tone: 'bad' },
   exit_watch:     { verb: 'left Watch',            icon: '↻', tone: 'good' },
-  exit_inactive:  { verb: 'reactivated',           icon: '↻', tone: 'good' },
+  exit_dormant:  { verb: 'reactivated',           icon: '↻', tone: 'good' },
   flag_added:     { verb: 'gained a risk flag',    icon: '⚐', tone: 'bad' },
   flag_removed:   { verb: 'cleared a risk flag',   icon: '✓', tone: 'good' },
 };
@@ -131,8 +131,8 @@ export default async function WatchlistPage({
 
   const KIND_FILTERS = [
     { label: 'all', value: '', hint: 'every event' },
-    { label: 'tier down', value: 'tier_down,enter_watch,enter_inactive', hint: 'agents that dropped' },
-    { label: 'tier up', value: 'tier_up,exit_watch,exit_inactive', hint: 'agents that climbed' },
+    { label: 'tier down', value: 'tier_down,enter_watch,enter_dormant', hint: 'agents that dropped' },
+    { label: 'tier up', value: 'tier_up,exit_watch,exit_dormant', hint: 'agents that climbed' },
     { label: 'flags', value: 'flag_added,flag_removed', hint: 'risk flag changes' },
     { label: 'new ratings', value: 'first_rating', hint: 'first time on the board' },
   ];

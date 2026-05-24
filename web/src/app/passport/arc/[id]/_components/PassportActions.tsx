@@ -27,7 +27,7 @@ export function PassportActions({ chain, agentId, agentName, passportUrl }: Prop
       const res = await fetch(`${RATING_API_BASE}/v1/agents/${chain}/${agentId}/attest`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ minTier: 'Inactive' }), // unconditional fetch — always returns current attestation
+        body: JSON.stringify({ minTier: 'Dormant' }), // unconditional fetch — always returns current attestation
         cache: 'no-store',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -96,7 +96,7 @@ export function PassportActions({ chain, agentId, agentName, passportUrl }: Prop
       </div>
 
       <p className="font-mono text-[10px] text-[var(--color-mute)] mt-2 leading-snug">
-        // attestation: EIP-712 signed by Caliber · methodology v2.0.0 · verifies on Arc Testnet
+        // attestation: EIP-712 signed by Caliber · methodology v2.0.1 · verifies on Arc Testnet
         <br />
         // share: <a href={passportUrl} className="text-[var(--color-copper)] hover:underline">{passportUrl}</a>
       </p>

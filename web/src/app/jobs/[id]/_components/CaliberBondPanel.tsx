@@ -18,7 +18,7 @@ interface AttestationResponse {
     chain: string;
     agentId: string;
     agentAddress: string;
-    tier: number;             // 0=Established, 5=Inactive
+    tier: number;             // 0=Gold, 5=Dormant
     score: number;            // 0-100
     interactionCount: number;
     flags: number;            // bitfield
@@ -40,21 +40,21 @@ interface AttestationResponse {
 // values. Used for UI preview only — the on-chain contract enforces the
 // real numbers (admin-settable).
 const BOND_BPS_BY_TIER_ORDINAL: Record<number, number> = {
-  0: 50,    // Established 0.5%
-  1: 150,   // Proven 1.5%
-  2: 500,   // Emerging 5%
-  3: 1500,  // Provisional 15%
+  0: 50,    // Gold 0.5%
+  1: 150,   // Silver 1.5%
+  2: 500,   // Bronze 5%
+  3: 1500,  // Pending 15%
   4: 0,     // Watch — refused
-  5: 0,     // Inactive — refused
+  5: 0,     // Dormant — refused
 };
 
 const TIER_NAME_BY_ORDINAL: Record<number, string> = {
-  0: 'Established',
-  1: 'Proven',
-  2: 'Emerging',
-  3: 'Provisional',
+  0: 'Gold',
+  1: 'Silver',
+  2: 'Bronze',
+  3: 'Pending',
   4: 'Watch',
-  5: 'Inactive',
+  5: 'Dormant',
 };
 
 interface Props {
@@ -115,7 +115,7 @@ export function CaliberBondPanel({
     fetch(`${RATING_API_BASE}/v1/agents/arc/${providerAgentId}/attest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ minTier: 'Provisional', minConfidence: 'low' }),
+      body: JSON.stringify({ minTier: 'Pending', minConfidence: 'low' }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -139,7 +139,7 @@ export function CaliberBondPanel({
     if (!att || !budgetRaw) return null;
     const budget = BigInt(budgetRaw);
     const bps = BigInt(BOND_BPS_BY_TIER_ORDINAL[att.attestation.tier] ?? 0);
-    if (bps === BigInt(0)) return BigInt(0); // Watch/Inactive — refused
+    if (bps === BigInt(0)) return BigInt(0); // Watch/Dormant — refused
     return (budget * bps) / BigInt(10_000);
   })();
 

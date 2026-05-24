@@ -33,21 +33,21 @@ import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
 // when the provider's live tier ordinal is greater than the job's recorded
 // min_tier ordinal.
 const TIER_ORDINAL_TO_NAME: Record<number, CaliberTier> = {
-  0: 'Established',
-  1: 'Proven',
-  2: 'Emerging',
-  3: 'Provisional',
+  0: 'Gold',
+  1: 'Silver',
+  2: 'Bronze',
+  3: 'Pending',
   4: 'Watch',
-  5: 'Inactive',
+  5: 'Dormant',
 };
 
 const TIER_NAME_TO_ORDINAL: Record<CaliberTier, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 type GatedFilter = 'all' | 'gated' | 'open';

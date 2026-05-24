@@ -77,29 +77,29 @@ async function ratingFetcher<T>(path: string, init?: RequestInit): Promise<T> {
 
 // Caliber Rating v2.0 tier scale. Order matches engine TIER_ORDINAL.
 export type CaliberTier =
-  | 'Established'
-  | 'Proven'
-  | 'Emerging'
-  | 'Provisional'
+  | 'Gold'
+  | 'Silver'
+  | 'Bronze'
+  | 'Pending'
   | 'Watch'
-  | 'Inactive';
+  | 'Dormant';
 
 export const TIER_ORDER: CaliberTier[] = [
-  'Established',
-  'Proven',
-  'Emerging',
-  'Provisional',
+  'Gold',
+  'Silver',
+  'Bronze',
+  'Pending',
   'Watch',
-  'Inactive',
+  'Dormant',
 ];
 
 export const TIER_ORDINAL: Record<CaliberTier, number> = {
-  Established: 0,
-  Proven: 1,
-  Emerging: 2,
-  Provisional: 3,
+  Gold: 0,
+  Silver: 1,
+  Bronze: 2,
+  Pending: 3,
   Watch: 4,
-  Inactive: 5,
+  Dormant: 5,
 };
 
 export type ConfidenceLabel = 'high' | 'moderate' | 'low' | 'insufficient';

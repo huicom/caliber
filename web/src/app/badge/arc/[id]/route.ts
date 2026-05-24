@@ -15,13 +15,14 @@ import { db, agents, ratingSnapshots } from '@/lib/db';
 import { eq, and, desc } from 'drizzle-orm';
 import type { CaliberTier } from '@/lib/api';
 
+// v2.0.1 metallurgical tier palette — must mirror --tier-* tokens in globals.css.
 const TIER_COLORS: Record<CaliberTier, { border: string; bg: string; text: string }> = {
-  Established: { border: '#00B894', bg: '#E6F7F2', text: '#047857' },
-  Proven:      { border: '#0EA5E9', bg: '#E0F2FE', text: '#075985' },
-  Emerging:    { border: '#14B8A6', bg: '#DDF4F0', text: '#0F766E' },
-  Provisional: { border: '#94A3B8', bg: '#EEF2F6', text: '#475569' },
-  Watch:       { border: '#F59E0B', bg: '#FEF3E2', text: '#B45309' },
-  Inactive:    { border: '#1F2937', bg: '#E6E8EB', text: '#111827' },
+  Gold:    { border: '#B8862B', bg: '#FBF5EC', text: '#B8862B' },
+  Silver:  { border: '#7E8690', bg: '#F0F1F3', text: '#7E8690' },
+  Bronze:  { border: '#8C5A2C', bg: '#F8F0E8', text: '#8C5A2C' },
+  Pending: { border: '#98948C', bg: '#F4F2EE', text: '#98948C' },
+  Watch:   { border: '#B45309', bg: '#FCF1E6', text: '#B45309' },
+  Dormant: { border: '#A8A39A', bg: '#F4F2EE', text: '#A8A39A' },
 };
 
 function escapeXml(s: string): string {
@@ -40,9 +41,9 @@ function buildBadge(opts: {
 }): string {
   const W = 200;
   const H = 56;
-  const colors = opts.tier ? TIER_COLORS[opts.tier] : TIER_COLORS.Provisional;
+  const colors = opts.tier ? TIER_COLORS[opts.tier] : TIER_COLORS.Pending;
   const tierLabel = opts.tier ?? 'UNRATED';
-  const subline = `agent #${opts.agentId} · caliber v2.0`;
+  const subline = `agent #${opts.agentId} · caliber v2.0.1`;
   // Truncate display name to a width that fits the badge — ~16 chars max
   const safeName = opts.name.length > 18 ? opts.name.slice(0, 17) + '…' : opts.name;
 
