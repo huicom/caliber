@@ -329,7 +329,12 @@ export function PostJobForm() {
     };
   }, [targetAgentId, minTier]);
 
-  const tierGapBlocked = targetCheck.status === 'rated' && !targetCheck.meetsTier;
+  // DEMO TEMP (remove after Loom recording): bypass the pre-flight tier-gap
+  // block so the gateway error surfaces at submit-time on stage. Set back to
+  // `false` to restore pre-flight blocking + the BLOCKED banner.
+  const DEMO_BYPASS_PREFLIGHT = true;
+  const tierGapBlocked =
+    !DEMO_BYPASS_PREFLIGHT && targetCheck.status === 'rated' && !targetCheck.meetsTier;
   // Disabled until the four essentials are filled + tier check is passing.
   // Wallet-connection state is rendered via the Hire button text instead of
   // disabling the button — clicking when disconnected opens the wallet picker.
@@ -1124,18 +1129,22 @@ function TargetGateStatus({
     );
   }
 
-  return (
-    <div className="border-l-2 border-[var(--color-signal-down)] bg-white rounded-[2px] px-4 py-3 text-sm">
-      <div className="font-mono text-[11px] text-[var(--color-signal-down)] uppercase tracking-[0.05em] mb-1">
-        ✗ pre-flight · blocked
-      </div>
-      <div className="text-[var(--color-ink)]">
-        Agent is <strong className="font-mono">{check.tier}</strong>, requires{' '}
-        <strong className="font-mono">{minTierName}</strong>. Lower the minimum tier or pick a
-        higher-tier agent — submit is disabled until the gap closes.
-      </div>
-    </div>
-  );
+  // DEMO TEMP (remove after Loom recording): suppress the BLOCKED banner so
+  // the gateway error surfaces at submit-time instead of being pre-empted by
+  // a client-side pre-flight block. Restore the JSX below to re-enable.
+  return null;
+  // return (
+  //   <div className="border-l-2 border-[var(--color-signal-down)] bg-white rounded-[2px] px-4 py-3 text-sm">
+  //     <div className="font-mono text-[11px] text-[var(--color-signal-down)] uppercase tracking-[0.05em] mb-1">
+  //       ✗ pre-flight · blocked
+  //     </div>
+  //     <div className="text-[var(--color-ink)]">
+  //       Agent is <strong className="font-mono">{check.tier}</strong>, requires{' '}
+  //       <strong className="font-mono">{minTierName}</strong>. Lower the minimum tier or pick a
+  //       higher-tier agent — submit is disabled until the gap closes.
+  //     </div>
+  //   </div>
+  // );
 }
 
 /**
