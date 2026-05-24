@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { POKOBLUE_AVATAR_URL } from '@/lib/brand';
 
 export const runtime = 'nodejs';
 export const contentType = 'image/png';
@@ -140,7 +141,7 @@ export default async function Image() {
             }}
           >
             <img
-              src="https://ipfs.io/ipfs/QmRQ6SnphN8Bepmve8VSSsdqSuEgFNbSorRhWpD824Rskh"
+              src={POKOBLUE_AVATAR_URL}
               alt="PokoBlue"
               width={64}
               height={64}
