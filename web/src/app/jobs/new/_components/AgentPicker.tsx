@@ -24,6 +24,7 @@ interface Agent {
   jobs: number;
   score: number;
   confidence: string;
+  category: string | null;
 }
 
 interface Props {
@@ -91,6 +92,7 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
             jobs: a.jobsCompleted ?? 0,
             score: ratingMap[a.agentId]?.score ?? 0,
             confidence: ratingMap[a.agentId]?.confidence ?? 'low',
+            category: a.agentType ?? null,
           }))
           .filter((a) => {
             const r = ratingMap[a.id];
@@ -172,22 +174,25 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
             {filtered.map((a) => {
               const selected = selectedId === a.id;
               return (
-                <li key={a.id}>
+                <li key={a.id} className={selected ? 'bg-[var(--color-bg-elev)]' : ''}>
                   <button
                     type="button"
                     onClick={() => onSelect(a.id)}
                     className={
-                      'w-full text-left px-3 py-2 flex items-center gap-3 transition ' +
-                      (selected
-                        ? 'bg-[var(--color-bg-elev)]'
-                        : 'hover:bg-[var(--color-bg-elev)]/50')
+                      'w-full text-left px-3 pt-2 pb-1 flex items-center gap-3 transition ' +
+                      (selected ? '' : 'hover:bg-[var(--color-bg-elev)]/50')
                     }
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
+                      <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="font-medium text-sm text-[var(--color-ink)] truncate">
                           {a.name}
                         </span>
+                        {a.category && (
+                          <span className="font-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-0.5 rounded-[2px] bg-[var(--color-bg-elev)] border border-[var(--color-hairline)] text-[var(--color-mute)] shrink-0">
+                            {a.category}
+                          </span>
+                        )}
                         {selected && (
                           <span className="font-mono text-[10px] text-[var(--color-copper)] shrink-0">
                             ✓ selected
@@ -207,6 +212,17 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
                       {a.tier}
                     </span>
                   </button>
+                  <div className="px-3 pb-2 -mt-0.5">
+                    <a
+                      href={`/passport/arc/${a.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-mono text-[var(--color-copper)] hover:underline"
+                    >
+                      view passport ↗
+                    </a>
+                  </div>
                 </li>
               );
             })}

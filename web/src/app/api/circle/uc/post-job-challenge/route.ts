@@ -34,6 +34,7 @@ const bodySchema = z.object({
   targetAgentId: z.string().regex(/^\d+$/),
   evaluatorAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
   deadline: z.string().optional(),
+  bondRequired: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
         poster: body.posterAddress,
         targetAgentId: body.targetAgentId,
         deadline: new Date(deadlineIso).toISOString(),
+        bondRequired: body.bondRequired === true,
       }),
     });
     if (!draftRes.ok) {

@@ -10,6 +10,7 @@ import {
   timestamp,
   index,
   customType,
+  boolean,
 } from 'drizzle-orm/pg-core';
 
 // pgvector column — drizzle doesn't know the vector type natively, so we
@@ -226,6 +227,10 @@ export const jobDrafts = pgTable(
     minConfidence: smallint('min_confidence').notNull(),
     deadline: timestamp('deadline', { withTimezone: true }).notNull(),
     onchainJobId: text('onchain_job_id'),
+    // Caliber bond is opt-in per job. When false (default), /jobs/[id]
+    // hides the bond panel entirely. When true, the panel renders and the
+    // agent is expected to post a bond before accepting.
+    bondRequired: boolean('bond_required').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
@@ -345,3 +350,17 @@ export const watchlistWebhooks = pgTable(
 
 export type WatchlistWebhook = typeof watchlistWebhooks.$inferSelect;
 export type NewWatchlistWebhook = typeof watchlistWebhooks.$inferInsert;
+
+// D2: judge-demo funded wallet tracking. When a user creates a Circle wallet
+// via Google or Email OTP, the server drips a small amount of test USDC from
+// the TEST_FUNDER wallet so judges can walk the full gated-job demo without
+// hitting Circle's faucet. Primary-keyed on address for idempotency — repeat
+// calls return the original txHash instead of double-funding.
+export const fundedWallets = pgTable('funded_wallets', {
+  address: text('address').primaryKey(),
+  txHash: text('tx_hash').notNull(),
+  amountUsdc: text('amount_usdc').notNull(),
+  fundedAt: timestamp('funded_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type FundedWallet = typeof fundedWallets.$inferSelect;

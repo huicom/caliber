@@ -240,7 +240,10 @@ function JobList() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
-      <h1 className="text-3xl font-bold mb-6">Jobs</h1>
+      <div className="flex items-baseline justify-between gap-3 flex-wrap mb-6">
+        <h1 className="text-3xl font-bold">Jobs</h1>
+        <CompletedExampleLink />
+      </div>
 
       <div className="flex flex-col sm:flex-row gap-3 mb-3">
         <div className="flex gap-1 flex-wrap">
@@ -454,5 +457,41 @@ function GateCell({
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * D3: small inline link in the page header that points to the most recent
+ * completed job. Lets first-time visitors see what a finished gated job
+ * looks like before browsing.
+ */
+function CompletedExampleLink() {
+  const [jobId, setJobId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .jobs({ status: 'Completed', limit: 1, sort: 'recent' })
+      .then((d) => {
+        if (cancelled) return;
+        const j = (d.jobs[0] as { jobId?: string | number } | undefined);
+        if (j?.jobId) setJobId(String(j.jobId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!jobId) return null;
+  return (
+    <p className="font-mono text-[11px] text-[var(--color-mute)]">
+      <span className="uppercase tracking-[0.05em] text-[10px] mr-1">//see_example</span>
+      latest completed job:{' '}
+      <a
+        href={`/jobs/${jobId}`}
+        className="text-[var(--color-copper)] hover:underline"
+      >
+        #{jobId} →
+      </a>
+    </p>
   );
 }

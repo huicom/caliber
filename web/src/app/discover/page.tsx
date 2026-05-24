@@ -108,6 +108,53 @@ async function loadCategoryCards(): Promise<CategoryCardData[]> {
   }));
 }
 
+interface RecentAgentRow {
+  agent_id: string;
+  name: string;
+  category: string | null;
+  tier: string | null;
+  registered_at: Date | null;
+}
+
+async function loadRecentAgents(limit = 12): Promise<RecentAgentRow[]> {
+  const r: any = await db.execute(
+    drizzleSql.raw(`
+    SELECT
+      a.agent_id::text AS agent_id,
+      a.name,
+      a.category,
+      a.registered_at,
+      s.tier
+    FROM agents a
+    LEFT JOIN LATERAL (
+      SELECT tier FROM rating_snapshots WHERE agent_id = a.agent_id AND view = 'PIT'
+      ORDER BY computed_at DESC LIMIT 1
+    ) s ON true
+    WHERE a.name IS NOT NULL
+    ORDER BY a.registered_at DESC NULLS LAST
+    LIMIT ${limit};
+  `),
+  );
+  return ((r.rows ?? r) as Array<any>).map((row) => ({
+    ...row,
+    registered_at: row.registered_at ? new Date(row.registered_at) : null,
+  }));
+}
+
+function relativeTime(d: Date | null): string {
+  if (!d) return '—';
+  const ms = Date.now() - d.getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d ago`;
+  return d.toLocaleDateString();
+}
+
 async function searchAgents(q: string, category?: string) {
   const embedding = await embedText(q);
   const vec = toVectorLiteral(embedding);
@@ -191,9 +238,110 @@ export default async function DiscoverPage({
           <SearchResults q={q} category={category} />
         </Suspense>
       ) : (
-        <CategoriesGrid />
+        <>
+          <Suspense fallback={null}>
+            <RecentlyRegistered />
+          </Suspense>
+          <CategoriesGrid />
+          <FullRegistryLink />
+        </>
       )}
     </main>
+  );
+}
+
+const TIER_PILL: Record<string, string> = {
+  Established: 'text-[#047857] bg-[#E6F7F2] border-[#00B894]/40',
+  Proven: 'text-[#075985] bg-[#E0F2FE] border-[#0EA5E9]/40',
+  Emerging: 'text-[#0F766E] bg-[#CCFBF1] border-[#14B8A6]/40',
+  Provisional: 'text-[#475569] bg-[#F1F5F9] border-[#94A3B8]/40',
+  Watch: 'text-[#B45309] bg-[#FEF3E2] border-[#F59E0B]/40',
+  Inactive: 'text-[#111827] bg-[#E5E7EB] border-[#1F2937]/40',
+};
+
+async function RecentlyRegistered() {
+  const rows = await loadRecentAgents(12);
+  if (rows.length === 0) return null;
+  const newestIso = rows[0]?.registered_at?.toISOString().slice(0, 16) ?? '';
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
+          //recently_registered
+        </h2>
+        <span className="font-mono text-[10px] text-[var(--color-mute)]">
+          latest indexed at {newestIso}Z · refreshes on every load
+        </span>
+      </div>
+      <ul className="border border-[var(--color-hairline)] bg-white rounded-[2px] divide-y divide-[var(--color-hairline)]">
+        {rows.map((r) => (
+          <li
+            key={r.agent_id}
+            className="flex items-center gap-3 px-3 py-2 hover:bg-[var(--color-bg-elev)] transition"
+          >
+            <span className="font-mono text-[10px] w-16 shrink-0 text-[var(--color-mute)]">
+              {relativeTime(r.registered_at)}
+            </span>
+            <Link
+              href={`/passport/arc/${r.agent_id}`}
+              className="flex-1 min-w-0 text-sm text-[var(--color-ink)] hover:text-[var(--color-copper)] truncate"
+            >
+              {r.name}
+              <span className="font-mono text-[10px] text-[var(--color-mute)] ml-2">
+                #{r.agent_id}
+              </span>
+            </Link>
+            {r.category && (
+              <span className="font-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-0.5 rounded-[2px] bg-[var(--color-bg-elev)] border border-[var(--color-hairline)] text-[var(--color-mute)] shrink-0 hidden sm:inline-block">
+                {r.category}
+              </span>
+            )}
+            <span
+              className={
+                'shrink-0 font-mono text-[10px] uppercase tracking-[0.04em] px-1.5 py-0.5 rounded-[2px] border ' +
+                (r.tier ? TIER_PILL[r.tier] ?? TIER_PILL.Provisional : 'text-[var(--color-mute)] border-[var(--color-hairline)] bg-white')
+              }
+            >
+              {r.tier ?? 'unrated'}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="font-mono text-[10px] text-[var(--color-mute)] leading-snug">
+        // newest ERC-8004 registrations the indexer has seen. Times are in UTC; tier is the
+        latest Sentinel snapshot (refreshes daily 04:00 UTC).
+      </p>
+    </section>
+  );
+}
+
+function FullRegistryLink() {
+  return (
+    <section className="space-y-3">
+      <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
+        //browse_full_registry
+      </h2>
+      <Link
+        href="/agents"
+        className="block border border-[var(--color-hairline)] bg-white rounded-[2px] p-4 hover:border-[var(--color-ink)] hover:bg-[var(--color-bg-elev)] transition group"
+      >
+        <div className="flex items-baseline justify-between gap-3 mb-1">
+          <h3 className="font-medium text-[var(--color-ink)]">
+            All Agents — raw ERC-8004 registry
+          </h3>
+          <span className="font-mono text-xs text-[var(--color-copper)] group-hover:underline">
+            open /agents →
+          </span>
+        </div>
+        <p className="text-sm text-[var(--color-mute)] leading-snug">
+          Every on-chain registration, unfiltered. Filter by tier (Established → Inactive),
+          search by name / address / agent id, toggle &ldquo;rated only&rdquo;.
+          ~88% of Arc Testnet agents ship without fetchable metadata — useful if you&rsquo;re
+          looking for a specific id or doing taxonomy work.
+        </p>
+      </Link>
+    </section>
   );
 }
 

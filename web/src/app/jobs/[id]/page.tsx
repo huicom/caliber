@@ -1,18 +1,15 @@
 import { notFound } from 'next/navigation';
-import { db, agents, jobs, jobEvents } from '@/lib/db';
+import { db, agents, jobs, jobEvents, jobDrafts } from '@/lib/db';
 import { eq, asc } from 'drizzle-orm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Address } from '@/components/ui/Address';
-import { TxLink } from '@/components/ui/TxLink';
 import { formatUSDC } from '@/lib/format';
-import { CheckCircle, Circle, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { OnChainJobState } from './_components/OnChainJobState';
 import { JobActions } from './_components/JobActions';
 import { CaliberBondPanel } from './_components/CaliberBondPanel';
-
-const STEP_ORDER = ['Open', 'Funded', 'Submitted', 'Completed'];
+import { LifecycleTimeline } from './_components/LifecycleTimeline';
 
 export default async function JobDetailPage({
   params,
@@ -46,11 +43,21 @@ export default async function JobDetailPage({
       .limit(1),
   ]);
 
+  // Pull bond_required from the job draft so CaliberBondPanel renders only
+  // when the poster opted in at post-time. Draft hash is embedded in the
+  // on-chain description as `arcagents:draft:<hash>`.
+  let bondRequired = false;
+  const descMatch = job.description?.match(/arcagents:draft:(0x[a-fA-F0-9]+)/);
+  if (descMatch?.[1]) {
+    const draft = await db
+      .select({ bondRequired: jobDrafts.bondRequired })
+      .from(jobDrafts)
+      .where(eq(jobDrafts.draftHash, descMatch[1]))
+      .limit(1);
+    bondRequired = draft[0]?.bondRequired ?? false;
+  }
+
   const status = job.status ?? '';
-  const isRejected = status === 'Rejected';
-  const currentStepIdx = isRejected
-    ? STEP_ORDER.indexOf('Submitted')
-    : STEP_ORDER.indexOf(status);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8">
@@ -116,87 +123,25 @@ export default async function JobDetailPage({
         <JobActions jobId={id} />
       </div>
 
-      <div className="mb-8">
-        <CaliberBondPanel
-          jobId={id}
-          providerAddress={job.providerAddress}
-          providerAgentId={provider[0]?.agentId ? String(provider[0].agentId) : null}
-          budgetRaw={job.budgetRaw}
-          jobStatus={status}
-        />
-      </div>
-
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Lifecycle</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            {STEP_ORDER.map((step, i) => {
-              const reached = i <= currentStepIdx;
-              const isCurrent = i === currentStepIdx;
-              const Icon = reached
-                ? isCurrent && isRejected
-                  ? XCircle
-                  : CheckCircle
-                : Circle;
-              const iconColor = reached
-                ? isCurrent && isRejected
-                  ? 'text-danger'
-                  : 'text-success'
-                : 'text-text-dim';
-              return (
-                <div
-                  key={step}
-                  className="flex flex-col items-center flex-1"
-                >
-                  <Icon
-                    className={`w-6 h-6 ${iconColor} ${isCurrent ? 'animate-pulse' : ''}`}
-                  />
-                  <span
-                    className={`text-xs mt-1 ${reached ? 'text-text' : 'text-text-dim'}`}
-                  >
-                    {isCurrent && isRejected ? 'Rejected' : step}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {timeline.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Event Timeline</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {timeline.map((e, i) => (
-                <div key={i} className="flex gap-3 text-sm">
-                  <div className="flex flex-col items-center">
-                    <div className="w-2 h-2 rounded-full bg-brand mt-1.5" />
-                    {i < timeline.length - 1 && (
-                      <div className="w-px flex-1 bg-border mt-1" />
-                    )}
-                  </div>
-                  <div className="flex-1 pb-3">
-                    <div className="font-medium capitalize">
-                      {e.eventType}
-                    </div>
-                    <div className="text-xs text-text-dim space-x-2">
-                      <span>Block {String(e.blockNumber)}</span>
-                      <span>
-                        <TxLink hash={e.txHash} />
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {bondRequired && (
+        <div className="mb-8">
+          <CaliberBondPanel
+            jobId={id}
+            providerAddress={job.providerAddress}
+            providerAgentId={provider[0]?.agentId ? String(provider[0].agentId) : null}
+            budgetRaw={job.budgetRaw}
+            jobStatus={status}
+          />
+        </div>
       )}
+
+      <LifecycleTimeline
+        status={status}
+        events={timeline}
+        clientAddress={job.clientAddress}
+        providerAddress={job.providerAddress}
+        evaluatorAddress={job.evaluatorAddress}
+      />
     </main>
   );
 }

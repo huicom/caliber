@@ -37,6 +37,48 @@ const TIER_OPTIONS = [
   { value: 3, label: 'Provisional or better (loosest)' },
 ];
 
+// v2.0 bond rate in basis points per tier, used for the bond preview
+// shown to the poster before they commit. Mirrors CaliberEscrow's
+// initial table (50/150/500/1500/0/0).
+const BOND_BPS_BY_TIER: Record<CaliberTier, number> = {
+  Established: 50,
+  Proven: 150,
+  Emerging: 500,
+  Provisional: 1500,
+  Watch: 0,
+  Inactive: 0,
+};
+
+// Sample templates for B4 — let judges fill the form in one click.
+const SAMPLE_TEMPLATES: Array<{
+  label: string;
+  title: string;
+  description: string;
+  budget: string;
+}> = [
+  {
+    label: 'translation',
+    title: 'translate marketing copy to thai',
+    description:
+      'Translate 500 words of marketing copy from English to Thai. Tone should be casual but professional. Return as a single markdown document with the original and translation side-by-side.',
+    budget: '5',
+  },
+  {
+    label: 'pdf summary',
+    title: 'summarize PDF report',
+    description:
+      'Read the attached 20-page market research PDF and produce a 1-page executive summary: 3 key findings, 2 risks, 1 recommendation. Use bullet points.',
+    budget: '3',
+  },
+  {
+    label: 'tweet thread',
+    title: 'tweet thread about agent commerce',
+    description:
+      'Write a 5-tweet thread about why agent-to-agent commerce needs trust primitives. Use accessible language for a crypto-native audience.',
+    budget: '2',
+  },
+];
+
 const CONFIDENCE_OPTIONS = [
   { value: 0, label: 'High (≥75 completed jobs)' },
   { value: 1, label: 'Moderate (≥25 completed)' },
@@ -126,6 +168,10 @@ export function PostJobForm() {
   });
   const [targetAgentId, setTargetAgentId] = useState('');
   const [evaluatorAddress, setEvaluatorAddress] = useState('');
+  // Caliber bond is opt-in per job. When true, the agent is expected to
+  // post a bond before accepting; CaliberBondPanel only renders on
+  // /jobs/[id] when this flag was set at post-time.
+  const [bondRequired, setBondRequired] = useState(false);
 
   // Pre-fill agent from ?agent=arc:<id> query (set by /agents "Hire" link).
   useEffect(() => {
@@ -175,8 +221,9 @@ export function PostJobForm() {
       targetAgentId,
       evaluatorAddress: evaluatorAddress || undefined,
       deadline: mode === 'advanced' ? deadline : undefined,
+      bondRequired,
     };
-  }, [title, description, budget, minTier, minConfidence, targetAgentId, evaluatorAddress, deadline, mode]);
+  }, [title, description, budget, minTier, minConfidence, targetAgentId, evaluatorAddress, deadline, mode, bondRequired]);
 
   // Pre-flight tier-gap check: as soon as the user picks an agent + tier,
   // hit /v1/ratings/bulk to surface "agent is Caliber-BB, requires Caliber-A"
@@ -258,6 +305,7 @@ export function PostJobForm() {
           poster: address,
           targetAgentId,
           deadline: new Date(deadline).toISOString(),
+          bondRequired,
         }),
       });
       if (!draftRes.ok) {
@@ -558,6 +606,17 @@ export function PostJobForm() {
 
       {step === 'form' && (
         <div className="border border-[var(--color-hairline)] bg-white rounded-[2px] p-6 space-y-4">
+          {/* === B1: 4-step progress bar ================================= */}
+          <ProgressBar
+            connected={wallet.isConnected}
+            walletLabel={wallet.label}
+            filled={Boolean(title && description && budget && targetAgentId)}
+          />
+
+          {/* === D3: link to a real completed job so judges can preview the
+              happy path before posting their own. */}
+          <CompletedExampleLink />
+
           <div className="flex items-baseline justify-between pb-2 border-b-2 border-[var(--color-ink)]">
             <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em]">
               //job_details
@@ -565,6 +624,28 @@ export function PostJobForm() {
             <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
               mode · {mode}
             </span>
+          </div>
+
+          {/* === B4: sample templates ==================================== */}
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
+              //quick_start
+            </span>
+            {SAMPLE_TEMPLATES.map((t) => (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => {
+                  setTitle(t.title);
+                  setDescription(t.description);
+                  setBudget(t.budget);
+                }}
+                className="font-mono text-[11px] px-2 py-0.5 border border-[var(--color-hairline)] hover:border-[var(--color-copper)] text-[var(--color-mute)] hover:text-[var(--color-copper)] rounded-[2px] transition"
+                title={`Title: ${t.title} · ${t.budget} USDC`}
+              >
+                {t.label} →
+              </button>
+            ))}
           </div>
 
           <div>
@@ -623,7 +704,7 @@ export function PostJobForm() {
               selectedId={targetAgentId}
               onSelect={setTargetAgentId}
               minTierOrdinal={minTier}
-              showTierFilter={mode === 'advanced'}
+              showTierFilter
             />
             <input
               type="text"
@@ -635,9 +716,10 @@ export function PostJobForm() {
             <p className={noteClass}>
               Pick from the list above (filtered to demo-ready agents) or paste any id.
             </p>
+
           </div>
 
-          {/* === Advanced fields (deadline, tier, confidence, evaluator) === */}
+          {/* === Advanced fields (deadline, tier, confidence, evaluator, bond) === */}
           {mode === 'advanced' && (
             <div className="space-y-4 pt-4 border-t border-dashed border-[var(--color-hairline)]">
               <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)]">
@@ -667,6 +749,20 @@ export function PostJobForm() {
                     ))}
                   </select>
                   <p className={noteClass}>Gateway refuses agents below this tier. Default: Provisional or better.</p>
+                  {/* A1: per-tier bond rate cheat-sheet so the poster knows
+                      what their tier choice implies for the agent's bond. */}
+                  <details className="mt-1.5 text-[11px] text-[var(--color-mute)]">
+                    <summary className="cursor-pointer hover:text-[var(--color-ink)] font-mono">
+                      what does each tier mean?
+                    </summary>
+                    <ul className="mt-1.5 space-y-0.5 pl-3 font-mono leading-relaxed">
+                      <li><strong className="text-[var(--color-ink)]">Established</strong>: score ≥80 + ≥50 jobs. Bond: 0.5% of budget.</li>
+                      <li><strong className="text-[var(--color-ink)]">Proven</strong>: score ≥65 + ≥20 jobs. Bond: 1.5%.</li>
+                      <li><strong className="text-[var(--color-ink)]">Emerging</strong>: score ≥50 + ≥5 jobs. Bond: 5%.</li>
+                      <li><strong className="text-[var(--color-ink)]">Provisional</strong>: fallback when above not met. Bond: 15%.</li>
+                      <li>Watch / Inactive: refused by gateway regardless of selection.</li>
+                    </ul>
+                  </details>
                 </div>
               </div>
 
@@ -708,6 +804,60 @@ export function PostJobForm() {
                     Defaults to your wallet (self-eval). Demo path uses the Circle wallet automatically.
                   </p>
                 </div>
+              </div>
+
+              {/* Caliber bond — opt-in per job. Lives in advanced because
+                  it's the v2.0 reference-implementation feature, not the
+                  default flow. When unchecked, /jobs/[id] won't render the
+                  bond panel at all. */}
+              <div className="border-t border-dashed border-[var(--color-hairline)] pt-4 space-y-2">
+                <label className="flex items-start gap-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={bondRequired}
+                    onChange={(e) => setBondRequired(e.target.checked)}
+                    className="mt-0.5 accent-[var(--color-copper)]"
+                  />
+                  <span className="text-sm text-[var(--color-ink)] leading-snug">
+                    <span className="font-medium">Require Caliber bond from the agent</span>
+                    <span className="block text-xs text-[var(--color-mute)] mt-0.5">
+                      Agent locks USDC sized by their tier as skin in the game. Returns on
+                      completion; slashes to you on rejection/expiry. Opt-in per job — leave
+                      unchecked to skip the bond step entirely.
+                    </span>
+                  </span>
+                </label>
+
+                {/* A3: bond preview — only meaningful when bond is required
+                    AND an agent + budget have been picked. */}
+                {bondRequired && targetCheck.status === 'rated' && budget && (
+                  <div className="border-l-2 border-[var(--color-copper)] bg-[var(--color-bg-elev)] px-3 py-2 text-xs space-y-0.5 ml-6">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-copper)]">
+                      //bond_preview
+                    </p>
+                    {(() => {
+                      const bondBps = BOND_BPS_BY_TIER[targetCheck.tier] ?? 0;
+                      const budgetNum = parseFloat(budget) || 0;
+                      const bondAmount = (budgetNum * bondBps) / 10_000;
+                      if (bondBps === 0) {
+                        return (
+                          <p className="text-[var(--color-ink)]">
+                            Agent is <strong>{targetCheck.tier}</strong> — gateway refuses this tier.
+                            Bond is not posted because the job won&apos;t be accepted.
+                          </p>
+                        );
+                      }
+                      return (
+                        <p className="text-[var(--color-ink)] leading-relaxed">
+                          Agent is <strong>{targetCheck.tier}</strong>. If they accept this job
+                          they&apos;ll lock{' '}
+                          <strong className="font-mono">{bondAmount.toFixed(4)} USDC</strong>{' '}
+                          ({(bondBps / 100).toFixed(2)}% of {budget} USDC budget) as a Caliber bond.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -788,36 +938,84 @@ export function PostJobForm() {
       )}
 
       {step === 'success' && (
-        <div className="border-l-2 border-[var(--color-signal-up)] bg-[var(--color-bg-elev)] rounded-[2px] p-6 space-y-3">
-          <h2 className="font-mono text-[13px] text-[var(--color-signal-up)] tracking-[0.02em] uppercase">
-            ✓ job submitted
-          </h2>
-          <p className="text-sm text-[var(--color-ink)]">
-            Job posted via gateway. <strong>Next:</strong> the agent calls{' '}
-            <code className="font-mono text-xs">setBudget</code> on AgenticCommerce, then you return to
-            the job page and click <strong>Fund Job</strong> (popup #3) to release escrow.
-          </p>
-          <div className="flex flex-wrap gap-2">
+        <div className="border-l-2 border-[var(--color-signal-up)] bg-[var(--color-bg-elev)] rounded-[2px] p-6 space-y-5">
+          <div className="space-y-1">
+            <h2 className="font-mono text-[13px] text-[var(--color-signal-up)] tracking-[0.02em] uppercase">
+              ✓ your job is on chain
+            </h2>
             {createdJobId ? (
-              <a
-                href={`/jobs/${createdJobId}`}
-                className="inline-block px-4 py-2 bg-[var(--color-ink)] text-[var(--color-paper)] rounded-[2px] text-sm font-medium hover:bg-[#1c2028]"
-              >
-                view job #{createdJobId}
-              </a>
+              <p className="text-xs text-[var(--color-mute)] font-mono">
+                job #{createdJobId} · gated by Caliber · funded in USDC
+              </p>
             ) : (
-              <>
-                <span className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] rounded-[2px] text-sm text-[var(--color-mute)] font-mono">
-                  scanning chain for jobId…
-                </span>
+              <p className="text-xs text-[var(--color-mute)] font-mono">
+                scanning chain for jobId… (post tx confirmed)
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)] mb-2">
+              //what_happens_next
+            </p>
+            <ol className="text-sm text-[var(--color-ink)] space-y-1.5 leading-relaxed pl-5 list-decimal">
+              <li>
+                The agent reviews your job and calls{' '}
+                <code className="font-mono text-xs">setBudget</code> on AgenticCommerce
+                to accept it.
+              </li>
+              <li>
+                The agent commits a USDC bond keyed to their Caliber tier
+                (skin in the game — slashed to you on rejection/expiry).
+              </li>
+              <li>The agent submits the deliverable.</li>
+              <li>Your evaluator approves or rejects.</li>
+              <li>
+                USDC settles: bond returns to agent, budget releases on
+                approval (or refunds to you on rejection).
+              </li>
+            </ol>
+          </div>
+
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-mute)] mb-2">
+              //watch_the_action
+            </p>
+            <div className="flex flex-wrap gap-2 text-sm">
+              {createdJobId ? (
+                <a
+                  href={`/jobs/${createdJobId}`}
+                  className="inline-block px-4 py-2 bg-[var(--color-ink)] text-[var(--color-paper)] rounded-[2px] font-medium hover:bg-[#1c2028]"
+                >
+                  view job #{createdJobId} →
+                </a>
+              ) : (
                 <a
                   href="/jobs"
-                  className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] rounded-[2px] text-sm text-[var(--color-copper)] hover:underline"
+                  className="inline-block px-4 py-2 bg-[var(--color-ink)] text-[var(--color-paper)] rounded-[2px] font-medium hover:bg-[#1c2028]"
                 >
-                  or browse all jobs →
+                  browse all jobs →
                 </a>
-              </>
-            )}
+              )}
+              <a
+                href="/watchlist"
+                className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] hover:border-[var(--color-ink)] rounded-[2px]"
+                title="See tier transitions fired by Sentinel"
+              >
+                watchlist
+              </a>
+              {wallet.address && (
+                <a
+                  href={`https://testnet.arcscan.app/address/${wallet.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block px-4 py-2 bg-white border border-[var(--color-hairline)] hover:border-[var(--color-ink)] rounded-[2px]"
+                  title="See your wallet's on-chain activity"
+                >
+                  on Arcscan ↗
+                </a>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -896,6 +1094,111 @@ function TargetGateStatus({
         higher-tier agent — submit is disabled until the gap closes.
       </div>
     </div>
+  );
+}
+
+/**
+ * B1: 4-step progress bar that frames where the user is in the post-job
+ * flow. Steps:
+ *   1. Fill form           → active until all 4 essentials are entered
+ *   2. Connect wallet      → active once form is filled but no wallet connected
+ *   3. Sign on-chain       → active when wallet is connected, awaiting Hire click
+ *   4. Job posted          → reached only post-success (covered by step='success' branch)
+ *
+ * Renders compact, never disabled / clickable. Pure visual cue for judges.
+ */
+function ProgressBar({
+  connected,
+  walletLabel,
+  filled,
+}: {
+  connected: boolean;
+  walletLabel: string | null;
+  filled: boolean;
+}) {
+  const current = !filled ? 0 : !connected ? 1 : 2;
+  const steps = [
+    { label: 'fill form' },
+    { label: 'connect wallet' },
+    { label: `sign on-chain${walletLabel ? ` · ${walletLabel.toLowerCase()}` : ''}` },
+    { label: 'job posted' },
+  ];
+  return (
+    <ol className="flex items-center gap-1.5 flex-wrap pb-1">
+      {steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <li key={s.label} className="flex items-center gap-1.5">
+            <span
+              className={
+                'flex items-center justify-center w-5 h-5 rounded-full font-mono text-[10px] border ' +
+                (done
+                  ? 'bg-[var(--color-ink)] text-[var(--color-paper)] border-[var(--color-ink)]'
+                  : active
+                    ? 'bg-[var(--color-copper)] text-white border-[var(--color-copper)] animate-pulse'
+                    : 'bg-white text-[var(--color-mute)] border-[var(--color-hairline)]')
+              }
+            >
+              {done ? '✓' : i + 1}
+            </span>
+            <span
+              className={
+                'font-mono text-[10px] uppercase tracking-[0.05em] ' +
+                (active
+                  ? 'text-[var(--color-ink)]'
+                  : done
+                    ? 'text-[var(--color-mute)]'
+                    : 'text-[var(--color-mute)] opacity-60')
+              }
+            >
+              {s.label}
+            </span>
+            {i < steps.length - 1 && (
+              <span className="text-[10px] text-[var(--color-mute)] opacity-50 mx-0.5">·</span>
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/**
+ * D3: small inline link that points to the most recent completed job so
+ * judges have a happy-path example to view before posting their own.
+ * Fetches once on mount; silently absent if no completed jobs exist yet.
+ */
+function CompletedExampleLink() {
+  const [jobId, setJobId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .jobs({ status: 'Completed', limit: 1, sort: 'recent' })
+      .then((d) => {
+        if (cancelled) return;
+        const j = d.jobs[0] as { jobId?: string | number } | undefined;
+        if (j?.jobId) setJobId(String(j.jobId));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (!jobId) return null;
+  return (
+    <p className="font-mono text-[11px] text-[var(--color-mute)]">
+      <span className="uppercase tracking-[0.05em] text-[10px] mr-1">//see_example</span>
+      curious what a completed gated job looks like?{' '}
+      <a
+        href={`/jobs/${jobId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[var(--color-copper)] hover:underline"
+      >
+        view job #{jobId} ↗
+      </a>
+    </p>
   );
 }
 
