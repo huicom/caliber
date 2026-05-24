@@ -112,7 +112,10 @@ export function CaliberBondPanel({
       return;
     }
     let cancelled = false;
-    fetch(`${RATING_API_BASE}/v1/agents/arc/${providerAgentId}/attest`, {
+    // Routes through the server-side proxy so the bond preview/attestation
+    // fetch doesn't trip x402 — bond signing has its own gas cost and we
+    // don't want to double-toll the bond flow during the hackathon.
+    fetch(`/api/proxy/attest?chain=arc&id=${providerAgentId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ minTier: 'Pending', minConfidence: 'low' }),

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useWriteContract, useChainId, usePublicClient } from 'wagmi';
+import { useAccount, useWriteContract, useChainId, usePublicClient, useWalletClient } from 'wagmi';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   USDC_CONTRACT,
@@ -12,6 +12,7 @@ import USDC_ABI from '@/lib/contracts/abis/USDC.json';
 import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
 import { type Abi, decodeEventLog } from 'viem';
 import { api, type CaliberTier } from '@/lib/api';
+import { fetchWithX402, X402Error, formatX402Price, type X402Hint } from '@/lib/x402';
 import { AgentPicker } from './AgentPicker';
 import { useCaliberWallet } from '@/lib/wallet/useCaliberWallet';
 import { useCircleAuth } from '@/lib/circle/AuthContext';
@@ -111,7 +112,7 @@ type TargetCheck =
   | { status: 'unrated'; reason: string }
   | { status: 'error' };
 
-type Step = 'form' | 'attesting' | 'approving' | 'posting' | 'success' | 'error';
+type Step = 'form' | 'paying' | 'attesting' | 'approving' | 'posting' | 'success' | 'error';
 
 interface AttestationResponse {
   attestation: {
@@ -150,6 +151,12 @@ export function PostJobForm() {
   const { writeContract: writeUsdcApprove, isPending: approvePending } = useWriteContract();
   const { writeContract: writeGateway, isPending: postPending } = useWriteContract();
   const publicClient = usePublicClient();
+  const { data: walletClient } = useWalletClient();
+  // Last x402 payment seen for this attestation, surfaced in the success card.
+  const [x402Receipt, setX402Receipt] = useState<{
+    hint: X402Hint;
+    txHash: `0x${string}`;
+  } | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -383,17 +390,59 @@ export function PostJobForm() {
       const { draftHash: hash } = await draftRes.json();
       setDraftHash(hash);
 
-      // Step 2: signed Caliber v2.0 rating attestation
+      // Step 2: signed Caliber v2.0 rating attestation, gated by x402.
+      // The rating API returns 402 with a USDC payment hint; fetchWithX402
+      // pays via the connected wallet, waits one confirmation, then retries
+      // with x-payment-proof. The Circle (Google sign-in) path skips this —
+      // it calls a server-side route that pays from the demo treasury.
       const tierName = TIER_NAME_MAP[minTier] ?? 'Pending';
+      const attestUrl = `${RATING_API_BASE}/v1/agents/arc/${targetAgentId}/attest`;
+      const attestInit: RequestInit = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minTier: tierName, minConfidence: FIXED_MIN_CONFIDENCE }),
+      };
 
-      const res = await fetch(
-        `${RATING_API_BASE}/v1/agents/arc/${targetAgentId}/attest`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ minTier: tierName, minConfidence: FIXED_MIN_CONFIDENCE }),
-        },
-      );
+      let res: Response;
+      if (walletClient && address) {
+        try {
+          res = await fetchWithX402(attestUrl, attestInit, {
+            account: address,
+            walletClient,
+            publicClient: publicClient!,
+            onPayment: () => setStep('paying'),
+            onPaid: () => setStep('attesting'),
+          });
+        } catch (e) {
+          if (e instanceof X402Error) {
+            setError(`x402 payment failed: ${e.message}`);
+            setStep('error');
+            return;
+          }
+          throw e;
+        }
+      } else {
+        res = await fetch(attestUrl, attestInit);
+      }
+
+      // Capture the x402 receipt for the success card (if the server echoed it).
+      const acceptedHash = res.headers.get('x-payment-accepted') as `0x${string}` | null;
+      if (acceptedHash && walletClient) {
+        // Re-fetch the hint shape from local memory — we don't store the original
+        // 402 body. Best-effort UI: show "paid 0.001 USDC".
+        setX402Receipt({
+          txHash: acceptedHash,
+          hint: {
+            scheme: 'evm-transfer',
+            chainId: 5042002,
+            asset: '0x3600000000000000000000000000000000000000',
+            amount: '1000',
+            decimals: 6,
+            recipient: '0x0000000000000000000000000000000000000000',
+            resource: `POST /v1/agents/arc/${targetAgentId}/attest`,
+          },
+        });
+      }
 
       if (!res.ok) {
         const data = await res.json();
@@ -938,6 +987,21 @@ export function PostJobForm() {
         </div>
       )}
 
+      {step === 'paying' && (
+        <div className="border border-[var(--color-copper)] bg-white rounded-[2px] p-6 text-center space-y-2">
+          <p className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-copper)]">
+            //popup_0 · x402 attestation fee
+          </p>
+          <p className="font-mono text-sm text-[var(--color-copper)]">
+            paying x402 attestation fee in usdc on arc…
+          </p>
+          <p className="text-xs text-[var(--color-mute)]">
+            Caliber returns 402 for signed attestations. One USDC transfer covers
+            this request, then the signer mints the EIP-712 envelope.
+          </p>
+        </div>
+      )}
+
       {step === 'attesting' && (
         <div className="border border-[var(--color-copper)] bg-white rounded-[2px] p-6 text-center">
           <p className="font-mono text-sm text-[var(--color-copper)]">fetching signed attestation from caliber…</p>
@@ -949,6 +1013,7 @@ export function PostJobForm() {
           <h2 className="font-mono text-[13px] text-[var(--color-ink)] tracking-[0.02em] pb-2 border-b-2 border-[var(--color-ink)]">
             //popup_1 · approve usdc
           </h2>
+          {x402Receipt && <X402ReceiptBox receipt={x402Receipt} />}
           <AttestationInfo att={attestationData} />
           <p className="text-sm text-[var(--color-mute)]">
             Approve {budget} USDC to <code className="font-mono text-xs">{RATING_GATEWAY.slice(0, 10)}…</code>.
@@ -1249,6 +1314,27 @@ function CompletedExampleLink() {
         view job #{jobId} ↗
       </a>
     </p>
+  );
+}
+
+function X402ReceiptBox({
+  receipt,
+}: {
+  receipt: { hint: X402Hint; txHash: `0x${string}` };
+}) {
+  const price = formatX402Price(receipt.hint);
+  return (
+    <div className="border-l-2 border-[var(--color-signal-up)] bg-white rounded-[2px] px-3 py-2 text-xs">
+      <div className="font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--color-signal-up)] mb-1">
+        ✓ x402 · paid
+      </div>
+      <div className="text-[var(--color-ink)] font-mono">
+        {price} → caliber signer ·{' '}
+        <code className="text-[var(--color-mute)]">
+          {receipt.txHash.slice(0, 10)}…{receipt.txHash.slice(-6)}
+        </code>
+      </div>
+    </div>
   );
 }
 

@@ -80,12 +80,17 @@ export async function POST(req: Request) {
     }
     const { draftHash } = (await draftRes.json()) as { draftHash: string };
 
-    // 2. Fetch signed attestation
+    // 2. Fetch signed attestation. Server-to-server bypass token skips
+    // x402 — Circle UC flow already has its own per-tx server signing.
+    const attestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (process.env.X402_BYPASS_TOKEN) {
+      attestHeaders['x-x402-bypass'] = process.env.X402_BYPASS_TOKEN;
+    }
     const attestRes = await fetch(
       `${RATING_API_BASE}/v1/agents/arc/${body.targetAgentId}/attest`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: attestHeaders,
         body: JSON.stringify({ minTier: body.minTier, minConfidence: body.minConfidence }),
       },
     );

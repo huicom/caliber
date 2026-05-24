@@ -193,7 +193,10 @@ export function VerifyForm() {
         body = JSON.stringify({});
       } else {
         if (!prefillChain) throw new Error('rating prefill requires ?chain=...');
-        url = `${RATING_API_BASE}/v1/agents/${prefillChain}/${prefillId}/attest`;
+        // Server-side proxy adds the x402 bypass token — verifier prefill is
+        // an inspection tool, not a real economic touchpoint, so it stays
+        // free.
+        url = `/api/proxy/attest?chain=${prefillChain}&id=${prefillId}`;
         body = JSON.stringify({ minTier: 'Dormant' });
       }
       const res = await fetch(url, {

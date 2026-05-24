@@ -10,6 +10,7 @@ import { ratingHistoryRoute } from './history';
 import { distributionHistoryRoute } from './distribution-history';
 import { exposureSummaryRoute } from './exposure-summary';
 import { transitionAttestRoute } from './transitions';
+import { x402Middleware } from './x402';
 
 const app = express();
 
@@ -17,7 +18,8 @@ const app = express();
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-payment-proof');
+  res.setHeader('Access-Control-Expose-Headers', 'x-payment-accepted');
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;
@@ -29,7 +31,7 @@ app.use(express.json({ limit: '64kb' }));
 
 app.get('/v1/agents/:chain/:id/rating', ratingRoute);
 app.get('/v1/agents/:chain/:id/rating/history', ratingHistoryRoute);
-app.post('/v1/agents/:chain/:id/attest', attestRoute);
+app.post('/v1/agents/:chain/:id/attest', x402Middleware, attestRoute);
 app.get('/v1/ratings/bulk', bulkRatingsRoute);
 app.post('/v1/ratings/bulk', bulkRatingsRoute);
 app.get('/v1/ratings/distribution', distributionRoute);

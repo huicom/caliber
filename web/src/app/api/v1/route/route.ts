@@ -150,12 +150,19 @@ export async function POST(req: Request) {
       );
     }
 
-    // Forward to the rating service to sign the attestation.
+    // Forward to the rating service to sign the attestation. Server-to-server
+    // bypass header skips x402 — the AI route endpoint already charges its
+    // own consumers indirectly (caller-routed economics) so no need to
+    // double-toll here.
+    const attestHeaders: Record<string, string> = { 'content-type': 'application/json' };
+    if (process.env.X402_BYPASS_TOKEN) {
+      attestHeaders['x-x402-bypass'] = process.env.X402_BYPASS_TOKEN;
+    }
     const attestRes = await fetch(
       `${RATING_API_BASE}/v1/agents/${chain}/${chosen.agent_id}/attest`,
       {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: attestHeaders,
         body: JSON.stringify({ minTier: min_tier }),
         cache: 'no-store',
       },

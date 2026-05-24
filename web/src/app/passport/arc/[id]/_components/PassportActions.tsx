@@ -24,7 +24,10 @@ export function PassportActions({ chain, agentId, agentName, passportUrl }: Prop
   async function downloadAttestation() {
     setDownloadState('fetching');
     try {
-      const res = await fetch(`${RATING_API_BASE}/v1/agents/${chain}/${agentId}/attest`, {
+      // Routes through the server-side proxy so x402 is bypassed for this
+      // viewer-side "download my attestation" path. The proxy adds the
+      // trusted bypass header before forwarding to the rating API.
+      const res = await fetch(`/api/proxy/attest?chain=${chain}&id=${agentId}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ minTier: 'Dormant' }), // unconditional fetch — always returns current attestation
