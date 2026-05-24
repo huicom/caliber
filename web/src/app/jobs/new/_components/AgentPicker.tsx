@@ -145,6 +145,18 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
       });
   }, [allAgents, search, filterFloor]);
 
+  // Cumulative counts per filter floor so each chip shows its yield —
+  // proves the filter is actually firing even when the top of the list
+  // (highest tiers first) looks identical across adjacent floors.
+  const tierCounts = useMemo(() => {
+    const c: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
+    for (const a of allAgents) {
+      const ord = TIER_ORDINAL[a.tier];
+      for (let f = 0; f <= 3; f++) if (ord <= f) c[f]++;
+    }
+    return c;
+  }, [allAgents]);
+
   return (
     <div className="border border-[var(--color-hairline)] rounded-[2px] bg-[var(--color-bg-elev)] p-3 space-y-2">
       <div className="flex items-baseline justify-between gap-2 flex-wrap">
@@ -165,7 +177,7 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
                     : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)]')
                 }
               >
-                ≥ {TIER_LABEL[floor]}
+                ≥ {TIER_LABEL[floor]}{!loading && ` (${tierCounts[floor]})`}
               </button>
             ))}
           </div>

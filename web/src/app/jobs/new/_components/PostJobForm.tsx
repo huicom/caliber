@@ -79,12 +79,6 @@ const SAMPLE_TEMPLATES: Array<{
   },
 ];
 
-const CONFIDENCE_OPTIONS = [
-  { value: 0, label: 'High (≥50 completed jobs)' },
-  { value: 1, label: 'Moderate (≥20 completed)' },
-  { value: 2, label: 'Low (≥5 completed, warned)' },
-];
-
 const TIER_NAME_MAP: Record<number, string> = {
   0: 'Gold',
   1: 'Silver',
@@ -105,7 +99,10 @@ const TIER_TO_ORDINAL: Record<CaliberTier, number> = {
   Dormant: 5,
 };
 
-const CONFIDENCE_NAMES = ['high', 'moderate', 'low'] as const;
+// Confidence floor is fixed at "low" — any agent with a tier already has ≥5
+// interactions (the engine refuses to issue a tier below that). Tier alone is
+// the user-facing trust axis.
+const FIXED_MIN_CONFIDENCE = 'low' as const;
 
 type TargetCheck =
   | { status: 'idle' }
@@ -160,7 +157,6 @@ export function PostJobForm() {
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
   const [minTier, setMinTier] = useState(3);
-  const [minConfidence, setMinConfidence] = useState(1);
   const [deadline, setDeadline] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 7);
@@ -199,7 +195,6 @@ export function PostJobForm() {
         description: string;
         budget: string;
         minTier: number;
-        minConfidence: number;
         deadline: string;
         targetAgentId: string;
         evaluatorAddress: string;
@@ -210,7 +205,6 @@ export function PostJobForm() {
       if (d.description) setDescription(d.description);
       if (d.budget) setBudget(d.budget);
       if (typeof d.minTier === 'number') setMinTier(d.minTier);
-      if (typeof d.minConfidence === 'number') setMinConfidence(d.minConfidence);
       if (d.deadline) setDeadline(d.deadline);
       if (d.targetAgentId) setTargetAgentId(d.targetAgentId);
       if (d.evaluatorAddress) setEvaluatorAddress(d.evaluatorAddress);
@@ -232,7 +226,6 @@ export function PostJobForm() {
           description,
           budget,
           minTier,
-          minConfidence,
           deadline,
           targetAgentId,
           evaluatorAddress,
@@ -247,7 +240,6 @@ export function PostJobForm() {
     description,
     budget,
     minTier,
-    minConfidence,
     deadline,
     targetAgentId,
     evaluatorAddress,
@@ -268,9 +260,9 @@ export function PostJobForm() {
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
   const [targetCheck, setTargetCheck] = useState<TargetCheck>({ status: 'idle' });
 
-  // Basic mode hides advanced inputs (deadline, min tier, min confidence,
-  // evaluator) and uses sensible defaults. Toggle reveals everything for
-  // power users / integrators who need to override.
+  // Basic mode hides advanced inputs (deadline, min tier, evaluator) and
+  // uses sensible defaults. Toggle reveals everything for power users /
+  // integrators who need to override.
   const [mode, setMode] = useState<'basic' | 'advanced'>('basic');
 
   // Form-data getter used by the Circle Hire dispatcher. Returns null until
@@ -280,22 +272,18 @@ export function PostJobForm() {
     if (!title || !description || !budget || !targetAgentId) return null;
     const tierName = (['Gold', 'Silver', 'Bronze', 'Pending'][minTier] ??
       'Pending') as 'Gold' | 'Silver' | 'Bronze' | 'Pending';
-    const confName = (['high', 'moderate', 'low'][minConfidence] ?? 'moderate') as
-      | 'high'
-      | 'moderate'
-      | 'low';
     return {
       title,
       description,
       budgetUsdc: budget,
       minTier: tierName,
-      minConfidence: confName,
+      minConfidence: FIXED_MIN_CONFIDENCE,
       targetAgentId,
       evaluatorAddress: evaluatorAddress || undefined,
       deadline: mode === 'advanced' ? deadline : undefined,
       bondRequired,
     };
-  }, [title, description, budget, minTier, minConfidence, targetAgentId, evaluatorAddress, deadline, mode, bondRequired]);
+  }, [title, description, budget, minTier, targetAgentId, evaluatorAddress, deadline, mode, bondRequired]);
 
   // Pre-flight tier-gap check: as soon as the user picks an agent + tier,
   // hit /v1/ratings/bulk to surface "agent is Caliber-BB, requires Caliber-A"
@@ -372,7 +360,7 @@ export function PostJobForm() {
           description,
           budgetUsdc: budget,
           minTier,
-          minConfidence,
+          minConfidence: 2, // fixed "low" floor (ordinal 2)
           chainId: 'arc',
           poster: address,
           targetAgentId,
@@ -389,14 +377,13 @@ export function PostJobForm() {
 
       // Step 2: signed Caliber v2.0 rating attestation
       const tierName = TIER_NAME_MAP[minTier] ?? 'Pending';
-      const confName = CONFIDENCE_NAMES[minConfidence] ?? 'moderate';
 
       const res = await fetch(
         `${RATING_API_BASE}/v1/agents/arc/${targetAgentId}/attest`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ minTier: tierName, minConfidence: confName }),
+          body: JSON.stringify({ minTier: tierName, minConfidence: FIXED_MIN_CONFIDENCE }),
         },
       );
 
@@ -414,10 +401,6 @@ export function PostJobForm() {
           } else if (data.reason === 'rating_below_threshold') {
             setError(
               `This agent's tier (${data.tier}) does not meet your minimum (${tierName}). Lower the minimum or pick a higher-tier agent.`,
-            );
-          } else if (data.reason === 'confidence_below_threshold') {
-            setError(
-              `This agent's confidence (${data.confidence}) is below your minimum. Allow lower confidence or pick a more-interacted agent.`,
             );
           } else {
             setError(data.detail || data.reason || 'Attestation failed');
@@ -438,7 +421,6 @@ export function PostJobForm() {
   }, [
     targetAgentId,
     minTier,
-    minConfidence,
     address,
     title,
     description,
@@ -548,7 +530,6 @@ export function PostJobForm() {
     title,
     budgetWei,
     minTier,
-    minConfidence,
     writeGateway,
     draftHash,
     publicClient,
@@ -838,44 +819,29 @@ export function PostJobForm() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Minimum confidence</label>
-                  <select
-                    value={minConfidence}
-                    onChange={(e) => setMinConfidence(Number(e.target.value))}
-                    className={inputClass}
-                  >
-                    {CONFIDENCE_OPTIONS.map((c) => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
-                  </select>
-                  <p className={noteClass}>Default: Moderate (≥20 completed jobs).</p>
+              <div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <label className={labelClass.replace('mb-1', '')}>Evaluator</label>
+                  {address && evaluatorAddress !== address && (
+                    <button
+                      type="button"
+                      onClick={() => setEvaluatorAddress(address)}
+                      className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
+                    >
+                      use my wallet
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <div className="flex items-baseline justify-between mb-1">
-                    <label className={labelClass.replace('mb-1', '')}>Evaluator</label>
-                    {address && evaluatorAddress !== address && (
-                      <button
-                        type="button"
-                        onClick={() => setEvaluatorAddress(address)}
-                        className="text-[11px] font-mono text-[var(--color-copper)] hover:underline"
-                      >
-                        use my wallet
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={evaluatorAddress}
-                    onChange={(e) => setEvaluatorAddress(e.target.value)}
-                    className={inputClass}
-                    placeholder="0x…"
-                  />
-                  <p className={noteClass}>
-                    Defaults to your wallet (self-eval). Demo path uses the Circle wallet automatically.
-                  </p>
-                </div>
+                <input
+                  type="text"
+                  value={evaluatorAddress}
+                  onChange={(e) => setEvaluatorAddress(e.target.value)}
+                  className={inputClass}
+                  placeholder="0x…"
+                />
+                <p className={noteClass}>
+                  Defaults to your wallet (self-eval). Demo path uses the Circle wallet automatically.
+                </p>
               </div>
 
               {/* Caliber bond — opt-in per job. Lives in advanced because
