@@ -105,6 +105,8 @@ export interface PostJobInput {
   targetAgentId: string;
   evaluatorAddress?: string;
   deadline?: string;
+  /** Opt-in Caliber bond — when true, /jobs/[id] renders the bond panel. */
+  bondRequired?: boolean;
 }
 
 type W3SSdkType = {

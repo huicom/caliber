@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       poster,
       targetAgentId,
       deadline,
+      bondRequired,
     } = body;
 
     if (!title || typeof title !== 'string' || title.length === 0 || title.length > 60) {
@@ -89,6 +90,7 @@ export async function POST(req: NextRequest) {
         minTier,
         minConfidence,
         deadline: deadlineDate,
+        bondRequired: bondRequired === true,
       })
       .returning();
 

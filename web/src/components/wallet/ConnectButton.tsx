@@ -27,9 +27,19 @@ export function ConnectButton() {
 
   // Local UI state for the auto-create-wallet flow.
   const [autoCreateState, setAutoCreateState] = useState<
-    'idle' | 'initializing' | 'executing' | 'refreshing' | 'done' | 'error'
+    'idle' | 'initializing' | 'executing' | 'refreshing' | 'funding' | 'done' | 'error'
   >('idle');
   const [autoCreateError, setAutoCreateError] = useState<string | null>(null);
+
+  // D2: judge-demo funded wallet drip.
+  const [fundState, setFundState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'pending' }
+    | { kind: 'funded'; amount: string; txHash: string; alreadyFunded: boolean }
+    | { kind: 'unavailable'; faucetUrl: string }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
+  const fundAttempted = useRef(false);
 
   // After Google / Email sign-in: session exists but no wallet yet → kick off
   // the initialize-user challenge. Circle SDK opens a confirmation modal for
@@ -75,8 +85,59 @@ export function ConnectButton() {
       autoCreateAttempted.current = false;
       setAutoCreateState('idle');
       setAutoCreateError(null);
+      fundAttempted.current = false;
+      setFundState({ kind: 'idle' });
     }
   }, [circle, autoCreateState]);
+
+  // D2: drip test USDC to the freshly-created Circle wallet so the judge can
+  // walk the gated-job demo without visiting Circle's faucet. Runs once per
+  // wallet address. Server-side endpoint is idempotent on address — repeat
+  // calls return the original txHash.
+  useEffect(() => {
+    if (
+      wallet.isConnected &&
+      wallet.type === 'circle' &&
+      wallet.address &&
+      !fundAttempted.current &&
+      fundState.kind === 'idle'
+    ) {
+      fundAttempted.current = true;
+      setFundState({ kind: 'pending' });
+      (async () => {
+        try {
+          const r = await fetch('/api/circle/fund-wallet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address: wallet.address }),
+          });
+          const data = await r.json();
+          if (r.status === 503) {
+            setFundState({
+              kind: 'unavailable',
+              faucetUrl: data.faucetUrl ?? 'https://faucet.circle.com',
+            });
+            return;
+          }
+          if (!r.ok) {
+            setFundState({ kind: 'error', message: data.message ?? 'funding failed' });
+            return;
+          }
+          setFundState({
+            kind: 'funded',
+            amount: data.amount,
+            txHash: data.txHash,
+            alreadyFunded: !!data.alreadyFunded,
+          });
+        } catch (err) {
+          setFundState({
+            kind: 'error',
+            message: err instanceof Error ? err.message : 'funding failed',
+          });
+        }
+      })();
+    }
+  }, [wallet.isConnected, wallet.type, wallet.address, fundState.kind]);
 
   // Close menu when clicking outside.
   useEffect(() => {
@@ -94,6 +155,9 @@ export function ConnectButton() {
   // Connected: show address + brand + dropdown menu.
   if (wallet.isConnected && wallet.address) {
     const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`;
+    const showFundChip =
+      wallet.type === 'circle' &&
+      (fundState.kind === 'pending' || fundState.kind === 'funded');
     return (
       <div className="relative" ref={dropdownRef}>
         <button
@@ -104,9 +168,21 @@ export function ConnectButton() {
         >
           <span className="font-mono">{short}</span>
           <span className="ml-1.5 text-[10px] opacity-70">· {wallet.label}</span>
+          {showFundChip && (
+            <span
+              className={`ml-1.5 text-[10px] px-1 py-0.5 rounded-sm ${
+                fundState.kind === 'funded'
+                  ? 'bg-[var(--color-signal-up)]/15 text-[var(--color-signal-up)]'
+                  : 'bg-[var(--color-copper)]/15 text-[var(--color-copper)] animate-pulse'
+              }`}
+              title={fundState.kind === 'funded' ? 'test USDC funded' : 'funding test wallet…'}
+            >
+              {fundState.kind === 'funded' ? `+$${fundState.amount}` : '$…'}
+            </span>
+          )}
         </button>
         {menuOpen && (
-          <div className="absolute right-0 mt-2 w-56 bg-white border border-[var(--color-hairline)] rounded-[2px] shadow-lg z-50">
+          <div className="absolute right-0 mt-2 w-72 bg-white border border-[var(--color-hairline)] rounded-[2px] shadow-lg z-50">
             {wallet.email && (
               <div className="px-3 py-2 border-b border-[var(--color-hairline)] text-[11px] font-mono text-[var(--color-mute)] break-all">
                 {wallet.email}
@@ -115,6 +191,47 @@ export function ConnectButton() {
             <div className="px-3 py-2 text-[11px] font-mono text-[var(--color-mute)] break-all border-b border-[var(--color-hairline)]">
               {wallet.address}
             </div>
+            {wallet.type === 'circle' && (
+              <div className="px-3 py-2 border-b border-[var(--color-hairline)] text-[11px]">
+                {fundState.kind === 'pending' && (
+                  <span className="text-[var(--color-copper)] font-mono">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse mr-1.5" />
+                    funding test wallet…
+                  </span>
+                )}
+                {fundState.kind === 'funded' && (
+                  <div className="space-y-0.5">
+                    <div className="text-[var(--color-signal-up)] font-mono">
+                      ✓ ${fundState.amount} USDC{' '}
+                      {fundState.alreadyFunded ? '(prev funded)' : 'funded'}
+                    </div>
+                    <a
+                      href={`https://testnet.arcscan.app/tx/${fundState.txHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono text-[var(--color-mute)] hover:underline break-all"
+                    >
+                      {fundState.txHash.slice(0, 10)}…
+                    </a>
+                  </div>
+                )}
+                {fundState.kind === 'unavailable' && (
+                  <a
+                    href={fundState.faucetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[var(--color-copper)] underline font-mono"
+                  >
+                    fund with Circle faucet →
+                  </a>
+                )}
+                {fundState.kind === 'error' && (
+                  <span className="text-[var(--color-signal-down)] font-mono">
+                    funding failed: {fundState.message.slice(0, 60)}
+                  </span>
+                )}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
