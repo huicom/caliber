@@ -152,17 +152,23 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
       });
   }, [allAgents, search, tierPick, minTierOrdinal]);
 
-  // Per-tier counts (post-minTierOrdinal-gate) so each chip shows exactly
-  // how many agents that tier yields. "All" sums them.
+  // True per-tier counts across the loaded cohort — independent of the
+  // poster's minTierOrdinal so users can see "Bronze (7) — your Silver
+  // floor is hiding these" instead of an unexplained Bronze (0).
   const tierCounts = useMemo(() => {
     const c: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     for (const a of allAgents) {
       const ord = TIER_ORDINAL[a.tier];
-      if (ord <= minTierOrdinal && ord in c) c[ord]++;
+      if (ord in c) c[ord]++;
     }
     return c;
-  }, [allAgents, minTierOrdinal]);
-  const totalCount = tierCounts[0] + tierCounts[1] + tierCounts[2] + tierCounts[3];
+  }, [allAgents]);
+  // "All" only counts tiers the gateway will accept.
+  const totalAllowed = useMemo(() => {
+    let n = 0;
+    for (let ord = 0; ord <= 3; ord++) if (ord <= minTierOrdinal) n += tierCounts[ord];
+    return n;
+  }, [tierCounts, minTierOrdinal]);
 
   return (
     <div className="border border-[var(--color-hairline)] rounded-[2px] bg-[var(--color-bg-elev)] p-3 space-y-2">
@@ -182,24 +188,36 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
                   : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)]')
               }
             >
-              All{!loading && ` (${totalCount})`}
+              All{!loading && ` (${totalAllowed})`}
             </button>
-            {([0, 1, 2, 3] as const).map((ord) => (
-              <button
-                key={ord}
-                type="button"
-                onClick={() => setTierPick(ord)}
-                disabled={!loading && tierCounts[ord] === 0}
-                className={
-                  'font-mono text-[10px] px-1.5 py-0.5 rounded-[2px] border transition ' +
-                  (tierPick === ord
-                    ? 'border-[var(--color-copper)] text-[var(--color-copper)] bg-white'
-                    : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)] disabled:opacity-40 disabled:cursor-not-allowed')
-                }
-              >
-                {TIER_LABEL[ord]}{!loading && ` (${tierCounts[ord]})`}
-              </button>
-            ))}
+            {([0, 1, 2, 3] as const).map((ord) => {
+              const gateBlocked = ord > minTierOrdinal;
+              const emptyTier = !loading && tierCounts[ord] === 0;
+              const disabled = gateBlocked || emptyTier;
+              const title = gateBlocked
+                ? `Your Minimum rating refuses this tier — lower it in advanced mode to allow ${TIER_LABEL[ord]}.`
+                : emptyTier
+                  ? `No ${TIER_LABEL[ord]} agents in the current cohort.`
+                  : undefined;
+              return (
+                <button
+                  key={ord}
+                  type="button"
+                  onClick={() => setTierPick(ord)}
+                  disabled={disabled}
+                  title={title}
+                  className={
+                    'font-mono text-[10px] px-1.5 py-0.5 rounded-[2px] border transition ' +
+                    (tierPick === ord
+                      ? 'border-[var(--color-copper)] text-[var(--color-copper)] bg-white'
+                      : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)] disabled:opacity-40 disabled:cursor-not-allowed')
+                  }
+                >
+                  {TIER_LABEL[ord]}{!loading && ` (${tierCounts[ord]})`}
+                  {gateBlocked && !loading && tierCounts[ord] > 0 && ' ✕'}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

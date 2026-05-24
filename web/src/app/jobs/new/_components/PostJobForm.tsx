@@ -184,7 +184,10 @@ export function PostJobForm() {
   // back on /jobs/new after sign-in, they see their work intact. Cleared
   // on successful submit. sessionStorage (not localStorage) so it
   // naturally clears when the tab closes — no stale drafts from yesterday.
-  const DRAFT_KEY = 'caliber:job-draft:v1';
+  // Bumped to v2 after dropping minConfidence — old v1 drafts had stale
+  // Silver-or-better defaults persisted from earlier testing that the
+  // basic-mode form no longer let users change.
+  const DRAFT_KEY = 'caliber:job-draft:v2';
   // Restore on mount (single shot)
   useEffect(() => {
     try {
