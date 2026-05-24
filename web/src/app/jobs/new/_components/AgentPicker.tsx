@@ -61,14 +61,20 @@ const TIER_COLOR: Record<CaliberTier, string> = {
   Dormant: 'text-[#A8A39A] bg-[#A8A39A]/12 border-[#A8A39A]/45',
 };
 
+// "all" means no per-tier filter; otherwise an ordinal 0..3 picks the exact
+// tier. The minTierOrdinal prop (poster's gateway floor) still applies as a
+// hard lower bound — chips never let the user pick an agent the gateway would
+// refuse.
+type FilterPick = number | 'all';
+
 export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilter = false }: Props) {
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterFloor, setFilterFloor] = useState<number>(minTierOrdinal);
+  const [tierPick, setTierPick] = useState<FilterPick>('all');
 
   useEffect(() => {
-    setFilterFloor(minTierOrdinal);
+    setTierPick('all');
   }, [minTierOrdinal]);
 
   useEffect(() => {
@@ -135,7 +141,8 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allAgents
-      .filter((a) => TIER_ORDINAL[a.tier] <= filterFloor)
+      .filter((a) => TIER_ORDINAL[a.tier] <= minTierOrdinal)
+      .filter((a) => tierPick === 'all' || TIER_ORDINAL[a.tier] === tierPick)
       .filter(
         (a) => !q || a.name.toLowerCase().includes(q) || a.id.includes(q),
       )
@@ -143,19 +150,19 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
         const t = TIER_ORDINAL[a.tier] - TIER_ORDINAL[b.tier];
         return t !== 0 ? t : b.jobs - a.jobs;
       });
-  }, [allAgents, search, filterFloor]);
+  }, [allAgents, search, tierPick, minTierOrdinal]);
 
-  // Cumulative counts per filter floor so each chip shows its yield —
-  // proves the filter is actually firing even when the top of the list
-  // (highest tiers first) looks identical across adjacent floors.
+  // Per-tier counts (post-minTierOrdinal-gate) so each chip shows exactly
+  // how many agents that tier yields. "All" sums them.
   const tierCounts = useMemo(() => {
     const c: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
     for (const a of allAgents) {
       const ord = TIER_ORDINAL[a.tier];
-      for (let f = 0; f <= 3; f++) if (ord <= f) c[f]++;
+      if (ord <= minTierOrdinal && ord in c) c[ord]++;
     }
     return c;
-  }, [allAgents]);
+  }, [allAgents, minTierOrdinal]);
+  const totalCount = tierCounts[0] + tierCounts[1] + tierCounts[2] + tierCounts[3];
 
   return (
     <div className="border border-[var(--color-hairline)] rounded-[2px] bg-[var(--color-bg-elev)] p-3 space-y-2">
@@ -164,20 +171,33 @@ export function AgentPicker({ selectedId, onSelect, minTierOrdinal, showTierFilt
           //featured · {loading ? 'loading…' : `${filtered.length} agents demo-ready`}
         </p>
         {showTierFilter && (
-          <div className="flex gap-1">
-            {[3, 2, 1, 0].map((floor) => (
+          <div className="flex gap-1 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setTierPick('all')}
+              className={
+                'font-mono text-[10px] px-1.5 py-0.5 rounded-[2px] border transition ' +
+                (tierPick === 'all'
+                  ? 'border-[var(--color-copper)] text-[var(--color-copper)] bg-white'
+                  : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)]')
+              }
+            >
+              All{!loading && ` (${totalCount})`}
+            </button>
+            {([0, 1, 2, 3] as const).map((ord) => (
               <button
-                key={floor}
+                key={ord}
                 type="button"
-                onClick={() => setFilterFloor(floor)}
+                onClick={() => setTierPick(ord)}
+                disabled={!loading && tierCounts[ord] === 0}
                 className={
                   'font-mono text-[10px] px-1.5 py-0.5 rounded-[2px] border transition ' +
-                  (filterFloor === floor
+                  (tierPick === ord
                     ? 'border-[var(--color-copper)] text-[var(--color-copper)] bg-white'
-                    : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)]')
+                    : 'border-[var(--color-hairline)] text-[var(--color-mute)] hover:border-[var(--color-ink)] disabled:opacity-40 disabled:cursor-not-allowed')
                 }
               >
-                ≥ {TIER_LABEL[floor]}{!loading && ` (${tierCounts[floor]})`}
+                {TIER_LABEL[ord]}{!loading && ` (${tierCounts[ord]})`}
               </button>
             ))}
           </div>
