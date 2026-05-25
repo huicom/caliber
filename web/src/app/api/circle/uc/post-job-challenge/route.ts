@@ -13,7 +13,11 @@ import { z } from 'zod';
 import { encodeFunctionData, type Abi } from 'viem';
 import { RATING_GATEWAY } from '@/lib/contracts/addresses';
 import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
-import { createContractExecutionChallenge, getUserTransactionStatus } from '@/lib/circle/user-controlled';
+import {
+  createContractExecutionChallenge,
+  getUserTransactionStatus,
+  findTransactionByRefId,
+} from '@/lib/circle/user-controlled';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,6 +44,10 @@ const bodySchema = z.object({
   // x402 paywall, instead of the bypass token. Lets the Circle path
   // exercise the real x402 verification path end-to-end.
   x402TransactionId: z.string().optional(),
+  // Alternative path: Circle's SDK callback for CONTRACT_EXECUTION doesn't
+  // surface the transactionId, so the browser sends the refId we tagged
+  // the challenge with, and the server looks up the transaction itself.
+  x402RefId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -92,15 +100,42 @@ export async function POST(req: Request) {
     //    (b) No x402TransactionId → fall back to the bypass token
     //        (server-to-server trusted-caller path).
     const attestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (body.x402TransactionId) {
+    if (body.x402TransactionId || body.x402RefId) {
+      // Resolve to a Circle transactionId either directly or via refId
+      // lookup. CONTRACT_EXECUTION challenges don't expose the
+      // transactionId in the SDK callback, so the refId path is the
+      // common one — we tagged the challenge at create-time and look it
+      // up here.
+      let txId = body.x402TransactionId ?? null;
+      if (!txId && body.x402RefId) {
+        for (let i = 0; i < 10 && !txId; i++) {
+          const found = await findTransactionByRefId(body.userToken, body.x402RefId).catch(
+            () => null,
+          );
+          if (found?.id) {
+            txId = found.id;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      if (!txId) {
+        return NextResponse.json(
+          {
+            error: 'x402_transaction_not_found',
+            detail: `no Circle tx for refId ${body.x402RefId} after 10s`,
+          },
+          { status: 504 },
+        );
+      }
+
       // Poll Circle for the on-chain txHash. Circle submits the tx async;
-      // the hash appears once it lands. Try ~10s with 1s intervals.
+      // the hash appears once it lands. Try ~15s with 1s intervals.
       let paymentTxHash: string | null = null;
-      for (let i = 0; i < 10; i++) {
-        const status = await getUserTransactionStatus(
-          body.userToken,
-          body.x402TransactionId,
-        ).catch(() => null);
+      for (let i = 0; i < 15; i++) {
+        const status = await getUserTransactionStatus(body.userToken, txId).catch(
+          () => null,
+        );
         if (status?.txHash) {
           paymentTxHash = status.txHash;
           break;
@@ -118,7 +153,7 @@ export async function POST(req: Request) {
       }
       if (!paymentTxHash) {
         return NextResponse.json(
-          { error: 'x402_payment_timeout', detail: 'Circle tx hash not available after 10s' },
+          { error: 'x402_payment_timeout', detail: 'Circle tx hash not available after 15s' },
           { status: 504 },
         );
       }

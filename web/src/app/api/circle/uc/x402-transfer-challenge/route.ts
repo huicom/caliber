@@ -77,6 +77,11 @@ export async function POST(req: Request) {
     }
 
     // 2. Build a Circle CONTRACT_EXECUTION challenge for USDC.transfer.
+    // refId is the lookup key the browser will send back to the post-job
+    // endpoint — Circle's SDK callback doesn't expose the transactionId
+    // for CONTRACT_EXECUTION, so we tag it here and look it up by refId
+    // after the user signs.
+    const refId = `caliber-uc:x402:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
     const callData = encodeFunctionData({
       abi: USDC_ABI as Abi,
       functionName: 'transfer',
@@ -87,7 +92,7 @@ export async function POST(req: Request) {
       walletId,
       contractAddress: USDC_CONTRACT as `0x${string}`,
       callData,
-      refId: `caliber-uc:x402:${Date.now().toString(36)}`,
+      refId,
     });
 
     // Return the hint alongside the challengeId so the UI can show the price
@@ -96,6 +101,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       challengeId,
+      refId,
       recipient: hint.recipient,
       amount: hint.amount,
       decimals: hint.decimals,

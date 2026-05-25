@@ -141,12 +141,13 @@ interface CircleAuthState {
   /** Returns the contract-execution challenge id for a USDC.approve(gateway,budget). */
   approveChallenge: (budgetUsdc: string) => Promise<string>;
   /** Creates a Circle CONTRACT_EXECUTION challenge for USDC.transfer to the
-   *  x402 recipient. Returns the challengeId + price details for UI display.
-   *  The caller runs the challenge, captures the transactionId from the SDK
-   *  callback, then passes it to postJobChallenge as x402TransactionId. */
-  x402TransferChallenge: () => Promise<{ challengeId: string; priceUsdc: string; recipient: string }>;
+   *  x402 recipient. Returns the challengeId + refId + price details for UI
+   *  display. The caller runs the challenge (no result inspection needed),
+   *  then passes refId to postJobChallenge so the server can look up the
+   *  underlying Circle transaction. */
+  x402TransferChallenge: () => Promise<{ challengeId: string; refId: string; priceUsdc: string; recipient: string }>;
   /** Returns the contract-execution challenge id for a postGatedJob call. */
-  postJobChallenge: (form: PostJobInput, opts?: { x402TransactionId?: string }) => Promise<{ challengeId: string; draftHash: string }>;
+  postJobChallenge: (form: PostJobInput, opts?: { x402TransactionId?: string; x402RefId?: string }) => Promise<{ challengeId: string; draftHash: string }>;
   /** Wraps sdk.execute as a Promise — resolves with txHash on success.
    *  transactionId is Circle's internal id; needed for follow-up polls
    *  (e.g., the x402 flow polls Circle until the on-chain txHash lands). */
@@ -613,13 +614,14 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
     }
     return (await res.json()) as {
       challengeId: string;
+      refId: string;
       priceUsdc: string;
       recipient: string;
     };
   }, [session]);
 
   const postJobChallenge = useCallback(
-    async (form: PostJobInput, opts?: { x402TransactionId?: string }) => {
+    async (form: PostJobInput, opts?: { x402TransactionId?: string; x402RefId?: string }) => {
       if (!session?.wallet) throw new Error('wallet not ready');
       const res = await fetch('/api/circle/uc/post-job-challenge', {
         method: 'POST',
@@ -630,6 +632,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
           posterAddress: session.wallet.address,
           ...form,
           x402TransactionId: opts?.x402TransactionId,
+          x402RefId: opts?.x402RefId,
         }),
       });
       if (!res.ok) {

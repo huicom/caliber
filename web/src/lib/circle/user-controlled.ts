@@ -165,3 +165,32 @@ export async function getUserTransactionStatus(
     errorReason: tx.errorReason ?? null,
   };
 }
+
+/**
+ * Find a wallet's most recent transaction by refId.
+ *
+ * Circle's CONTRACT_EXECUTION SDK callback doesn't surface the transactionId,
+ * so we tag each challenge with a unique refId at create-time and look it up
+ * here after the user signs. The SDK's listTransactions doesn't accept refId
+ * as a server-side filter, so we list the most recent transactions and
+ * match client-side. Returns null if no match yet (Circle may take a moment
+ * to index a brand-new tx); caller should retry.
+ */
+export async function findTransactionByRefId(
+  userToken: string,
+  refId: string,
+): Promise<{ id: string; state: string; txHash: string | null } | null> {
+  const c = getUserControlledClient();
+  const res = await c.listTransactions({ userToken, pageSize: 20 });
+  const txs = res.data?.transactions ?? [];
+  for (const tx of txs) {
+    if ((tx as { refId?: string }).refId === refId) {
+      return {
+        id: tx.id ?? '',
+        state: tx.state ?? 'UNKNOWN',
+        txHash: tx.txHash ?? null,
+      };
+    }
+  }
+  return null;
+}

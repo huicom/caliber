@@ -710,14 +710,14 @@ export function PostJobForm() {
         upsertStep('x402-run', { status: 'error', result: x402Res.errorMessage });
         throw new Error(`x402: ${x402Res.errorMessage}`);
       }
-      const x402TransactionId = x402Res.transactionId;
-      if (!x402TransactionId) {
-        upsertStep('x402-run', { status: 'error', result: 'Circle returned no transactionId' });
-        throw new Error('x402 challenge returned no transactionId');
-      }
+      // Circle's CONTRACT_EXECUTION SDK callback doesn't expose the
+      // transactionId — the server looks it up by the refId we tagged the
+      // challenge with at create-time.
       upsertStep('x402-run', {
         status: 'ok',
-        result: `circle txId ${x402TransactionId.slice(0, 8)}…`,
+        result: x402Res.transactionId
+          ? `circle txId ${x402Res.transactionId.slice(0, 8)}…`
+          : `refId ${x402.refId.slice(0, 16)}…`,
       });
 
       upsertStep('attest-c', { status: 'running' });
@@ -747,7 +747,8 @@ export function PostJobForm() {
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
       const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form, {
-        x402TransactionId,
+        x402TransactionId: x402Res.transactionId ?? undefined,
+        x402RefId: x402.refId,
       });
       setDraftHash(dh);
       // The server side fetched the attestation as part of this call — the
