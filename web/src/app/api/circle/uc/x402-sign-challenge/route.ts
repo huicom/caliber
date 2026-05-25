@@ -112,7 +112,16 @@ export async function POST(req: Request) {
         chainId,
         verifyingContract: requirement.extra.verifyingContract,
       },
+      // Circle's signTypedData validator requires EIP712Domain to be listed
+      // explicitly in `types`, matching the 4-field domain object above.
+      // viem-style signers add this automatically; Circle's flow does not.
       types: {
+        EIP712Domain: [
+          { name: 'name', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'chainId', type: 'uint256' },
+          { name: 'verifyingContract', type: 'address' },
+        ],
         TransferWithAuthorization: [
           { name: 'from', type: 'address' },
           { name: 'to', type: 'address' },
