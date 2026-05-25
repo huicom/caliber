@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { PostJobForm } from './_components/PostJobForm';
+import { WalletFlowTabs } from './_components/WalletFlowTabs';
 
 // Wallet-gated page — never statically prerender (Next.js would otherwise
 // cache a build-time render failure as a 404).
@@ -51,36 +52,9 @@ export default function PostJobPage() {
           <PostJobForm />
         </Suspense>
 
-        {/* Right rail — three-popup explainer */}
+        {/* Right rail — wallet-flow explainer (MetaMask vs Circle PW) */}
         <aside className="aa-jobs-new__rail">
-          <section>
-            <p className="aa-eyebrow" style={{ marginBottom: 12 }}>{'{three_signatures}'}</p>
-            <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 12 }}>
-              {[
-                ['popup #1', 'Approve USDC to RatingGateway'],
-                ['popup #2', 'Post job — gateway verifies attestation, pulls USDC'],
-                ['popup #3', 'Fund — released after agent confirms budget'],
-              ].map(([label, body]) => (
-                <li key={label} style={{ display: 'flex', gap: 12 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-family-mono)',
-                    fontSize: 10,
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-copper)',
-                    flexShrink: 0,
-                    paddingTop: 2,
-                    width: 64,
-                  }}>
-                    {label}
-                  </span>
-                  <span style={{ color: 'var(--color-mute)', fontSize: 14, lineHeight: 1.5 }}>
-                    {body}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <WalletFlowTabs />
 
           <section style={{ borderTop: '1px solid var(--color-hairline)', paddingTop: 24, marginTop: 24 }}>
             <p className="aa-eyebrow" style={{ marginBottom: 12 }}>{'{why_it_won\'t_fund}'}</p>
