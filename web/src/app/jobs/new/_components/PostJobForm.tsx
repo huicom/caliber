@@ -665,9 +665,11 @@ export function PostJobForm() {
           await new Promise((r) => setTimeout(r, 2000));
         }
       }
-      // Fallthrough: tx succeeded but we couldn't pin down jobId. User can
-      // still navigate to /jobs to find their post.
+      // Fallthrough: tx succeeded but we couldn't pin down jobId in 30s.
+      // Send the user to the jobs list so they don't get stranded on a
+      // success card with no navigation — their post will be near the top.
       setStep('success');
+      router.push('/jobs');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'circle hire failed');
       setStep('error');
@@ -1045,6 +1047,25 @@ export function PostJobForm() {
           >
             {postPending ? 'confirm in wallet…' : 'post gated job'}
           </button>
+        </div>
+      )}
+
+      {/* Circle path: attestation lives server-side, so attestationData is
+          never set on the client. Render a status panel during the polling
+          loop that scans the chain for the JobPostedWithRating event. */}
+      {step === 'posting' && !attestationData && (
+        <div className="border border-[var(--color-copper)] bg-white rounded-[2px] p-6 space-y-3 text-center">
+          <p className="font-mono text-[11px] uppercase tracking-[0.05em] text-[var(--color-copper)]">
+            //posting · scanning chain for receipt
+          </p>
+          <p className="font-mono text-sm text-[var(--color-copper)]">
+            transaction confirmed · waiting for JobPostedWithRating event…
+          </p>
+          <p className="text-xs text-[var(--color-mute)]">
+            Arc Testnet usually confirms in 2–4 seconds. If this stalls past
+            30 seconds you&apos;ll be redirected to the jobs list so you can
+            find your post manually.
+          </p>
         </div>
       )}
 
