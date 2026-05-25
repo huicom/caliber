@@ -18,8 +18,14 @@ const app = express();
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-payment-proof');
-  res.setHeader('Access-Control-Expose-Headers', 'x-payment-accepted');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, X-PAYMENT, x-payment-proof, x-x402-bypass',
+  );
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'X-PAYMENT-RESPONSE, payment-required, x-payment-accepted',
+  );
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;

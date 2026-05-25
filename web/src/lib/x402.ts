@@ -22,7 +22,10 @@
 import type { Abi, WalletClient } from 'viem';
 import { BatchEvmScheme } from '@circle-fin/x402-batching/client';
 import type { BatchEvmSigner } from '@circle-fin/x402-batching';
-import { encodePaymentSignatureHeader } from '@x402/core/http';
+import {
+  encodePaymentSignatureHeader,
+  decodePaymentRequiredHeader,
+} from '@x402/core/http';
 import usdcAbi from './contracts/abis/USDC.json';
 
 void usdcAbi; // referenced by future helpers (deposit flow)
@@ -108,9 +111,20 @@ export async function fetchWithX402(
   const first = await fetch(url, init);
   if (first.status !== 402) return first;
 
-  const body = (await first.clone().json().catch(() => null)) as
-    | PaymentRequiredResponse
-    | null;
+  // Circle Gateway encodes the payment requirements in the
+  // `payment-required` header (base64 JSON), not the body. Fall back to
+  // the body shape too in case a non-Circle facilitator is ever wired in.
+  const headerValueRaw = first.headers.get('payment-required');
+  let body: PaymentRequiredResponse | null = null;
+  if (headerValueRaw) {
+    try {
+      body = decodePaymentRequiredHeader(headerValueRaw) as unknown as PaymentRequiredResponse;
+    } catch {
+      throw new X402Error('failed to decode payment-required header', 'header_decode_failed');
+    }
+  } else {
+    body = (await first.clone().json().catch(() => null)) as PaymentRequiredResponse | null;
+  }
   if (!body?.accepts || body.accepts.length === 0) {
     throw new X402Error('402 response missing accepts[] payment requirements', 'malformed_402');
   }
