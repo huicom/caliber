@@ -114,9 +114,16 @@ export async function POST(req: Request) {
       }),
     });
     if (!draftRes.ok) {
+      // Use 422 instead of 502: Cloudflare intercepts 5xx responses with its
+      // branded error page, hiding the actual error body. 422 passes through.
+      const draftErrBody = await draftRes.text().catch(() => '');
       return NextResponse.json(
-        { error: 'draft_failed', message: `draft endpoint returned ${draftRes.status}` },
-        { status: 502 },
+        {
+          error: 'draft_failed',
+          message: `draft endpoint returned ${draftRes.status}`,
+          detail: draftErrBody.slice(0, 400),
+        },
+        { status: 422 },
       );
     }
     const { draftHash } = (await draftRes.json()) as { draftHash: string };

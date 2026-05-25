@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'budgetUsdc is required' }, { status: 400 });
     }
     const budget = parseFloat(budgetUsdc);
-    if (isNaN(budget) || budget < 1 || budget > 1000) {
-      return NextResponse.json({ error: 'budget must be 1-1000 USDC' }, { status: 400 });
+    if (isNaN(budget) || budget < 0.01 || budget > 1000) {
+      return NextResponse.json({ error: 'budget must be 0.01-1000 USDC' }, { status: 400 });
     }
     if (minTier == null || typeof minTier !== 'number' || minTier < 0 || minTier > 8) {
       return NextResponse.json({ error: 'minTier must be 0-8' }, { status: 400 });
