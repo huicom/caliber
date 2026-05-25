@@ -150,10 +150,35 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
+      // Circle Gateway facilitator's /v1/x402/verify REQUIRES resource +
+      // accepted fields on the paymentPayload even though they're optional
+      // in @x402/core's TypeScript type. Without them: "paymentPayload.
+      // resource: Required, paymentPayload.accepted: Required" → 4xx →
+      // bubbles up as unhelpful 402. We reconstruct from what x402-sign-
+      // challenge already established.
+      const acceptedRequirement = {
+        scheme: body.x402Scheme,
+        network: body.x402Network,
+        asset: '0x3600000000000000000000000000000000000000',
+        amount: body.x402Authorization.value,
+        payTo: body.x402Authorization.to,
+        maxTimeoutSeconds: 604900,
+        extra: {
+          name: 'GatewayWalletBatched',
+          version: '1',
+          verifyingContract: '0x0077777d7eba4688bdef3e311b846f25870a19b9',
+        },
+      };
       const headerValue = encodePaymentSignatureHeader({
         x402Version: body.x402Version ?? 2,
         scheme: body.x402Scheme,
         network: body.x402Network,
+        resource: {
+          url: `/v1/agents/arc/${body.targetAgentId}/attest`,
+          description: 'Caliber signed rating attestation',
+          mimeType: 'application/json',
+        },
+        accepted: acceptedRequirement,
         payload: {
           signature,
           authorization: body.x402Authorization,

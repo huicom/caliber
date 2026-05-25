@@ -90,24 +90,32 @@ export async function POST(req: Request) {
     }
 
     // 2. Build EIP-3009 TransferWithAuthorization typed-data against the
-    //    GatewayWalletBatched domain. Circle Gateway facilitator REQUIRES
-    //    a 7-day validity window (minValiditySeconds=604800 per
-    //    /v1/x402/supported). Anything shorter and the facilitator
-    //    rejects the signature without a clear error — used to send 1h
-    //    here and post-job-challenge bubbled it as a generic 502.
+    //    GatewayWalletBatched domain. Circle Gateway facilitator has two
+    //    constraints we have to satisfy simultaneously:
+    //      - validBefore - validAfter <= maxTimeoutSeconds (604900s here)
+    //      - validBefore - now_at_verify >= minValiditySeconds (604800s)
+    //    Latency budget = 100s. We maximise window length so the user has
+    //    time to walk through x402 sign + approve + post before our
+    //    server submits X-PAYMENT. validAfter is set to NOW (no past
+    //    buffer) so the full 100s budget is available for latency.
     const chainId = Number(requirement.network.split(':')[1]);
     const now = Math.floor(Date.now() / 1000);
-    const validBefore = now + GATEWAY_AUTH_VALIDITY_WINDOW_SECONDS;
+    const maxTimeout = (requirement.extra as { maxTimeoutSeconds?: number })?.maxTimeoutSeconds
+      ?? (requirement as unknown as { maxTimeoutSeconds?: number }).maxTimeoutSeconds
+      ?? 604900;
+    // Subtract 1 second so we're definitively under the cap.
+    const validBefore = now + maxTimeout - 1;
     const nonce = randomNonce();
 
     const authorization = {
       from: walletAddress,
       to: requirement.payTo,
       value: requirement.amount,
-      validAfter: String(now - 60), // -60s skew tolerance
+      validAfter: String(now),
       validBefore: String(validBefore),
       nonce,
     };
+    void GATEWAY_AUTH_VALIDITY_WINDOW_SECONDS; // legacy import retained for reference
 
     const typedData = {
       domain: {
