@@ -657,23 +657,23 @@ export function PostJobForm() {
     }
     setError(null);
 
-    // Activity panel for Circle Programmable Wallet path. Pops three
-    // signature/challenge modals: x402 EIP-3009 → approve → postGatedJob.
-    // The x402 step is a real Circle Gateway flow now: user signs an
-    // EIP-3009 TransferWithAuthorization in their PIN modal, server
-    // forwards the signature to gateway-api-testnet.circle.com for
-    // verification and batched settlement.
-    // Circle Programmable Wallets are SCAs. Per Circle Gateway Technical
-    // Guide (developers.circle.com/gateway/concepts/technical-guide):
-    // "only EOA signatures are accepted. To use Gateway with SCAs, the
-    // SCA must add an EOA as a delegate that may sign transfer requests."
-    // We route x402 via the Caliber Agent Wallet (server-side EOA) — that
-    // EOA is functionally the delegate. The Circle PW user doesn't sign
-    // the EIP-3009 themselves because their SCA signature wouldn't verify
-    // off-chain at the facilitator.
+    // Circle Programmable Wallets are now created as EOA (see
+    // /api/circle/uc/initialize accountType: 'EOA') so they sign EIP-3009
+    // with ECDSA — Circle Gateway facilitator accepts. Flow:
+    //   1. Check Gateway Balance; if insufficient, deposit (2 popups)
+    //   2. Sign x402 EIP-3009 → fetch attestation via Gateway (1 popup)
+    //   3. Approve USDC to RatingGateway (1 popup)
+    //   4. Post gated job (1 popup)
+    // First hire: up to 5 popups (deposit + x402 + approve + post).
+    // Subsequent hires: 3 popups (x402 + approve + post) while Gateway
+    // Balance lasts.
     resetActivity([
-      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'Caliber EOA delegate pays via Circle Gateway · SCAs can\'t sign EIP-3009 directly per Gateway docs' },
-      { id: 'gas-note', label: 'Circle Programmable Wallet (SCA)', detail: 'txs relayed by Circle infra · no user gas (Paymaster not on Arc Testnet)' },
+      { id: 'gw-balance', label: 'check Gateway Balance', detail: 'view availableBalance(USDC, wallet) on GatewayWallet contract' },
+      { id: 'gw-approve', label: 'sign USDC.approve to GatewayWallet (if needed)', detail: 'Circle SDK · sdk.execute · only required when Gateway Balance < attestation price' },
+      { id: 'gw-deposit', label: 'sign GatewayWallet.deposit (if needed)', detail: 'Circle SDK · sdk.execute · funds the user\'s Gateway Balance for x402 payments' },
+      { id: 'x402-prep', label: 'prepare x402 EIP-3009 typed-data', detail: 'server fetches 402 hint from rating API · builds GatewayWalletBatched authorization' },
+      { id: 'x402-sign', label: 'sign EIP-3009 x402 payment', detail: 'Circle SDK · sdk.execute · ECDSA signature on TransferWithAuthorization · zero gas' },
+      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'rating API → Circle Gateway facilitator verifies → settles to Caliber Seller Wallet Gateway Balance' },
       { id: 'approve-challenge', label: 'create USDC.approve challenge', detail: 'Circle API · POST /v1/w3s/user/transactions/contractExecution' },
       { id: 'approve-run', label: 'sign approval in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
       { id: 'post-challenge', label: 'create postGatedJob challenge', detail: 'Circle API · POST /v1/w3s/user/transactions/contractExecution' },
@@ -682,8 +682,74 @@ export function PostJobForm() {
       { id: 'redirect', label: 'redirect to job page', detail: 'next/navigation · router.push' },
     ]);
 
-    upsertStep('gas-note', { status: 'ok', result: 'sponsored · user pays 0 ETH' });
-    upsertStep('attest-c', { status: 'ok', result: 'server-side · Caliber EOA acts as Gateway delegate per Circle docs' });
+    // === Pre-flight: deposit USDC into Gateway Balance if needed ===
+    const PRICE_MICROS = BigInt(1000); // 0.001 USDC; matches X402_PRICE_USDC
+    const DEPOSIT_AMOUNT_USDC = '0.1'; // 100 attestations per deposit
+    try {
+      setStep('paying');
+      upsertStep('gw-balance', { status: 'running' });
+      const gwBalance = await circle.getGatewayBalance();
+      upsertStep('gw-balance', {
+        status: 'ok',
+        result: `${(Number(gwBalance) / 1e6).toFixed(4)} USDC available`,
+      });
+
+      if (gwBalance < PRICE_MICROS) {
+        upsertStep('gw-approve', { status: 'running' });
+        upsertStep('gw-deposit', { status: 'running' });
+        const { approveTxHash, depositTxHash } = await circle.depositToGateway(
+          DEPOSIT_AMOUNT_USDC,
+        );
+        upsertStep('gw-approve', {
+          status: 'ok',
+          result: approveTxHash ? `tx ${approveTxHash.slice(0, 10)}…` : 'confirmed',
+        });
+        upsertStep('gw-deposit', {
+          status: 'ok',
+          result: depositTxHash
+            ? `+${DEPOSIT_AMOUNT_USDC} USDC · tx ${depositTxHash.slice(0, 10)}…`
+            : `+${DEPOSIT_AMOUNT_USDC} USDC`,
+        });
+      } else {
+        upsertStep('gw-approve', { status: 'ok', result: 'skipped — balance sufficient' });
+        upsertStep('gw-deposit', { status: 'ok', result: 'skipped — balance sufficient' });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'gateway deposit failed');
+      setStep('error');
+      return;
+    }
+
+    // === x402: sign EIP-3009 payment, fetch attestation ===
+    let x402Signature: string | null = null;
+    let x402Payload: Awaited<ReturnType<typeof circle.x402SignChallenge>> | null = null;
+    try {
+      upsertStep('x402-prep', { status: 'running' });
+      x402Payload = await circle.x402SignChallenge();
+      upsertStep('x402-prep', {
+        status: 'ok',
+        result: `payTo ${x402Payload.payTo.slice(0, 10)}… · ${x402Payload.amount} micro-USDC`,
+      });
+
+      upsertStep('x402-sign', { status: 'running' });
+      const x402Res = await circle.runChallenge(x402Payload.challengeId);
+      if (x402Res.errorMessage) {
+        upsertStep('x402-sign', { status: 'error', result: x402Res.errorMessage });
+        throw new Error(`x402 sign: ${x402Res.errorMessage}`);
+      }
+      x402Signature = x402Res.signature;
+      upsertStep('x402-sign', {
+        status: 'ok',
+        result: x402Signature
+          ? `sig ${x402Signature.slice(0, 14)}…`
+          : `challenge ${x402Payload.challengeId.slice(0, 8)}… (server poll)`,
+      });
+      upsertStep('attest-c', { status: 'running' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'x402 sign failed');
+      setStep('error');
+      return;
+    }
 
     try {
       setStep('approving');
@@ -707,10 +773,19 @@ export function PostJobForm() {
 
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
-      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
+      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form, {
+        x402SignChallengeId: x402Payload?.challengeId,
+        x402Signature: x402Signature ?? undefined,
+        x402Authorization: x402Payload?.authorization,
+        x402Network: x402Payload?.network,
+        x402Scheme: x402Payload?.scheme,
+        x402Version: x402Payload?.x402Version,
+      });
       setDraftHash(dh);
-      // attest-c was the bypass-token path inside post-job-challenge —
-      // Caliber's server-side EOA fetched the attestation on the user's behalf.
+      // attest-c happens inside post-job-challenge — server takes the x402
+      // signature, encodes X-PAYMENT, hits rating API → Circle Gateway
+      // facilitator verifies → settles to Caliber's Seller Wallet Gateway
+      // Balance.
       // signed envelope.
       upsertStep('attest-c', {
         status: 'ok',

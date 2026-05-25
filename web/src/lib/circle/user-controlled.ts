@@ -236,6 +236,41 @@ export async function pollChallengeSignature(
 }
 
 /**
+ * Circle Gateway constants for Arc Testnet (and other testnets — same address
+ * across all testnet chains per @circle-fin/x402-batching SDK's
+ * CHAIN_CONFIGS).
+ */
+export const TESTNET_GATEWAY_WALLET = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9' as const;
+export const TESTNET_GATEWAY_MINTER = '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B' as const;
+
+/**
+ * GatewayWallet contract ABI (subset). From @circle-fin/x402-batching SDK
+ * source. Used for deposits + balance reads.
+ */
+export const GATEWAY_WALLET_ABI = [
+  {
+    name: 'deposit',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'value', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'availableBalance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'depositor', type: 'address' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
+
+/**
  * Find a wallet's most recent transaction by refId.
  *
  * Circle's CONTRACT_EXECUTION SDK callback doesn't surface the transactionId,

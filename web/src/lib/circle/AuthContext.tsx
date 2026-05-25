@@ -144,6 +144,13 @@ interface CircleAuthState {
    *  to the x402 recipient. Used by the homegrown on-chain-proof x402 variant.
    *  Kept for backward compatibility; new code should use x402SignChallenge. */
   x402TransferChallenge: () => Promise<{ challengeId: string; refId: string; priceUsdc: string; recipient: string }>;
+  /** Read the wallet's current Gateway Balance (USDC custodied by Circle's
+   *  GatewayWallet contract for the user's address). */
+  getGatewayBalance: () => Promise<bigint>;
+  /** Two-step deposit: USDC.approve(GatewayWallet) then GatewayWallet.deposit.
+   *  Both challenges fire Circle sign-message modals in sequence. Returns
+   *  the on-chain tx hashes for both. */
+  depositToGateway: (amountUsdc: string) => Promise<{ approveTxHash: string | null; depositTxHash: string | null }>;
   /** Creates a Circle signTypedData challenge for the EIP-3009
    *  TransferWithAuthorization that Circle Gateway's facilitator expects.
    *  The caller runs the challenge (user signs in PIN modal), then passes
@@ -661,6 +668,78 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
     return (await res.json()) as Awaited<ReturnType<CircleAuthState['x402SignChallenge']>>;
   }, [session]);
 
+  const getGatewayBalance = useCallback(async () => {
+    if (!session?.wallet) throw new Error('wallet not ready');
+    const res = await fetch(
+      `/api/circle/uc/gateway-balance?address=${session.wallet.address.toLowerCase()}`,
+    );
+    if (!res.ok) throw new Error(`gateway-balance ${res.status}`);
+    const data = (await res.json()) as { gatewayBalance: string };
+    return BigInt(data.gatewayBalance);
+  }, [session]);
+
+  const depositToGateway = useCallback(
+    async (amountUsdc: string) => {
+      if (!session?.wallet) throw new Error('wallet not ready');
+      const sdk = sdkRef.current;
+      if (!sdk) throw new Error('SDK not ready');
+
+      // Step 1: USDC.approve(GatewayWallet, amount)
+      const approveRes = await fetch('/api/circle/uc/deposit-approve-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userToken: session.userToken,
+          walletId: session.wallet.id,
+          amountUsdc,
+        }),
+      });
+      if (!approveRes.ok) {
+        const body = await approveRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `deposit-approve-challenge ${approveRes.status}`);
+      }
+      const { challengeId: approveChallengeId } = (await approveRes.json()) as {
+        challengeId: string;
+      };
+      log(`depositToGateway · approve challenge ${approveChallengeId.slice(0, 8)}…`);
+      // User signs in Circle modal
+      const approveResult = await runChallenge(approveChallengeId);
+      if (approveResult.errorMessage) {
+        throw new Error(`approve sign: ${approveResult.errorMessage}`);
+      }
+
+      // Step 2: GatewayWallet.deposit(USDC, amount)
+      const depositRes = await fetch('/api/circle/uc/deposit-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userToken: session.userToken,
+          walletId: session.wallet.id,
+          amountUsdc,
+        }),
+      });
+      if (!depositRes.ok) {
+        const body = await depositRes.json().catch(() => ({}));
+        throw new Error(body.message ?? `deposit-challenge ${depositRes.status}`);
+      }
+      const { challengeId: depositChallengeId } = (await depositRes.json()) as {
+        challengeId: string;
+      };
+      log(`depositToGateway · deposit challenge ${depositChallengeId.slice(0, 8)}…`);
+      const depositResult = await runChallenge(depositChallengeId);
+      if (depositResult.errorMessage) {
+        throw new Error(`deposit sign: ${depositResult.errorMessage}`);
+      }
+
+      return {
+        approveTxHash: approveResult.txHash,
+        depositTxHash: depositResult.txHash,
+      };
+    },
+    [session, log],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  );
+
   const x402TransferChallenge = useCallback(async () => {
     if (!session?.wallet) throw new Error('wallet not ready');
     const res = await fetch('/api/circle/uc/x402-transfer-challenge', {
@@ -781,6 +860,8 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       approveChallenge,
       x402TransferChallenge,
       x402SignChallenge,
+      getGatewayBalance,
+      depositToGateway,
       postJobChallenge,
       runChallenge,
       refresh,
@@ -801,10 +882,11 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       approveChallenge,
       x402TransferChallenge,
       x402SignChallenge,
+      getGatewayBalance,
+      depositToGateway,
       postJobChallenge,
       runChallenge,
       refresh,
-      x402SignChallenge,
     ],
   );
 

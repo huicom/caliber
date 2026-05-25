@@ -48,7 +48,11 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         idempotencyKey: randomUUID(),
-        accountType: 'SCA',
+        // EOA so the wallet's signTypedData produces ECDSA signatures —
+        // required for Circle Gateway facilitator verification. SCA wallets
+        // sign via ERC-1271 which the off-chain facilitator can't verify.
+        // See: developers.circle.com/gateway/concepts/technical-guide
+        accountType: 'EOA',
         blockchains: ['ARC-TESTNET'],
       }),
     });
