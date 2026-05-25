@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useDisconnect } from 'wagmi';
 import { ConnectKitButton } from 'connectkit';
 import { useCaliberWallet } from '@/lib/wallet/useCaliberWallet';
+import { useUsdcBalance } from '@/lib/wallet/useUsdcBalance';
 import { useCircleAuth } from '@/lib/circle/AuthContext';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,12 @@ export function ConnectButton() {
   const [menuOpen, setMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const autoCreateAttempted = useRef(false);
+  // Live USDC balance for the connected wallet — refreshes every 10s so
+  // the chip shows the actual spendable balance, not the historical
+  // "funded" amount which gets stale after every job post / x402 fee.
+  const liveBalance = useUsdcBalance(
+    wallet.isConnected ? (wallet.address as `0x${string}` | undefined) : null,
+  );
 
   // Local UI state for the auto-create-wallet flow.
   const [autoCreateState, setAutoCreateState] = useState<
@@ -155,9 +162,12 @@ export function ConnectButton() {
   // Connected: show address + brand + dropdown menu.
   if (wallet.isConnected && wallet.address) {
     const short = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`;
-    const showFundChip =
-      wallet.type === 'circle' &&
-      (fundState.kind === 'pending' || fundState.kind === 'funded');
+    const showFundingSpinner =
+      wallet.type === 'circle' && fundState.kind === 'pending';
+    // Trim trailing zeros for the chip display: "1.500" → "1.5", "1" stays "1".
+    const balanceShort = liveBalance.balance
+      ? Number(liveBalance.balance).toFixed(Number(liveBalance.balance) >= 1 ? 2 : 3)
+      : null;
     return (
       <div className="relative" ref={dropdownRef}>
         <button
@@ -168,16 +178,20 @@ export function ConnectButton() {
         >
           <span className="font-mono">{short}</span>
           <span className="ml-1.5 text-[10px] opacity-70">· {wallet.label}</span>
-          {showFundChip && (
+          {balanceShort !== null && !showFundingSpinner && (
             <span
-              className={`ml-1.5 text-[10px] px-1 py-0.5 rounded-sm ${
-                fundState.kind === 'funded'
-                  ? 'bg-[var(--color-signal-up)]/15 text-[var(--color-signal-up)]'
-                  : 'bg-[var(--color-copper)]/15 text-[var(--color-copper)] animate-pulse'
-              }`}
-              title={fundState.kind === 'funded' ? 'test USDC funded' : 'funding test wallet…'}
+              className="ml-1.5 text-[10px] px-1 py-0.5 rounded-sm bg-[var(--color-signal-up)]/15 text-[var(--color-signal-up)]"
+              title={`live USDC balance · refreshes every 10s${liveBalance.loading ? ' · checking…' : ''}`}
             >
-              {fundState.kind === 'funded' ? `+$${fundState.amount}` : '$…'}
+              ${balanceShort}
+            </span>
+          )}
+          {showFundingSpinner && (
+            <span
+              className="ml-1.5 text-[10px] px-1 py-0.5 rounded-sm bg-[var(--color-copper)]/15 text-[var(--color-copper)] animate-pulse"
+              title="funding test wallet…"
+            >
+              $…
             </span>
           )}
         </button>
@@ -191,6 +205,29 @@ export function ConnectButton() {
             <div className="px-3 py-2 text-[11px] font-mono text-[var(--color-mute)] break-all border-b border-[var(--color-hairline)]">
               {wallet.address}
             </div>
+            <div className="px-3 py-2 border-b border-[var(--color-hairline)] text-[11px] space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-mono text-[var(--color-mute)]">balance</span>
+                <button
+                  type="button"
+                  onClick={() => liveBalance.refresh()}
+                  className="font-mono text-[var(--color-signal-up)] hover:underline"
+                  title="refresh live balance"
+                >
+                  {liveBalance.balance !== null
+                    ? `${Number(liveBalance.balance).toFixed(4)} USDC`
+                    : liveBalance.loading
+                      ? 'checking…'
+                      : '—'}
+                </button>
+              </div>
+              {liveBalance.error && (
+                <div className="font-mono text-[10px] text-[var(--color-signal-down)] break-all">
+                  {liveBalance.error.slice(0, 80)}
+                </div>
+              )}
+            </div>
+
             {wallet.type === 'circle' && (
               <div className="px-3 py-2 border-b border-[var(--color-hairline)] text-[11px]">
                 {fundState.kind === 'pending' && (
@@ -201,9 +238,9 @@ export function ConnectButton() {
                 )}
                 {fundState.kind === 'funded' && (
                   <div className="space-y-0.5">
-                    <div className="text-[var(--color-signal-up)] font-mono">
-                      ✓ ${fundState.amount} USDC{' '}
-                      {fundState.alreadyFunded ? '(prev funded)' : 'funded'}
+                    <div className="font-mono text-[10px] text-[var(--color-mute)]">
+                      seeded ${fundState.amount} USDC
+                      {fundState.alreadyFunded ? ' (prev drip)' : ' (new drip)'}
                     </div>
                     <a
                       href={`https://testnet.arcscan.app/tx/${fundState.txHash}`}
