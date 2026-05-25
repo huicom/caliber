@@ -14,6 +14,7 @@ import { type Abi, decodeEventLog } from 'viem';
 import { api, type CaliberTier } from '@/lib/api';
 import { fetchWithX402, X402Error, formatX402Price, type X402Hint } from '@/lib/x402';
 import { AgentPicker } from './AgentPicker';
+import { ActivityLog, type ActivityStep } from '@/components/circle/ActivityLog';
 import { useCaliberWallet } from '@/lib/wallet/useCaliberWallet';
 import { useCircleAuth } from '@/lib/circle/AuthContext';
 
@@ -157,6 +158,33 @@ export function PostJobForm() {
     hint: X402Hint;
     txHash: `0x${string}`;
   } | null>(null);
+
+  // Live activity panel — surfaces every Circle SDK call and on-chain action
+  // so the user sees progress between popups and judges see which Circle
+  // primitives the demo is invoking.
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activitySteps, setActivitySteps] = useState<ActivityStep[]>([]);
+  const upsertStep = useCallback(
+    (id: string, patch: Partial<ActivityStep> & { label?: string }) => {
+      setActivitySteps((prev) => {
+        const idx = prev.findIndex((s) => s.id === id);
+        if (idx === -1) {
+          return [
+            ...prev,
+            { id, label: patch.label ?? id, status: 'pending', ...patch } as ActivityStep,
+          ];
+        }
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...patch };
+        return next;
+      });
+    },
+    [],
+  );
+  const resetActivity = useCallback((steps: Omit<ActivityStep, 'status'>[]) => {
+    setActivitySteps(steps.map((s) => ({ ...s, status: 'pending' as const })));
+    setActivityOpen(true);
+  }, []);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -365,8 +393,18 @@ export function PostJobForm() {
     setStep('attesting');
     setError(null);
 
+    resetActivity([
+      { id: 'draft', label: 'save off-chain draft', detail: 'POST /api/jobs/draft → keccak256(draftHash)' },
+      { id: 'x402', label: 'pay x402 attestation fee', detail: 'USDC.transfer · wagmi walletClient' },
+      { id: 'attest', label: 'fetch signed RatingAttestation', detail: 'Caliber API · POST /v1/agents/arc/{id}/attest' },
+      { id: 'approve', label: 'approve USDC to gateway', detail: 'USDC.approve · wagmi writeContract' },
+      { id: 'post', label: 'post gated job on-chain', detail: 'RatingGateway.postGatedJob · wagmi writeContract' },
+      { id: 'redirect-mm', label: 'redirect to job page', detail: 'next/navigation · router.push' },
+    ]);
+
     try {
       // Step 1: persist the draft + get keccak256(draftHash)
+      upsertStep('draft', { status: 'running' });
       const draftRes = await fetch('/api/jobs/draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -389,6 +427,7 @@ export function PostJobForm() {
       }
       const { draftHash: hash } = await draftRes.json();
       setDraftHash(hash);
+      upsertStep('draft', { status: 'ok', result: `${hash.slice(0, 10)}…` });
 
       // Step 2: signed Caliber v2.0 rating attestation, gated by x402.
       // The rating API returns 402 with a USDC payment hint; fetchWithX402
@@ -404,14 +443,21 @@ export function PostJobForm() {
       };
 
       let res: Response;
+      upsertStep('attest', { status: 'running' });
       if (walletClient && address) {
         try {
           res = await fetchWithX402(attestUrl, attestInit, {
             account: address,
             walletClient,
             publicClient: publicClient!,
-            onPayment: () => setStep('paying'),
-            onPaid: () => setStep('attesting'),
+            onPayment: () => {
+              setStep('paying');
+              upsertStep('x402', { status: 'running' });
+            },
+            onPaid: (txHash) => {
+              setStep('attesting');
+              upsertStep('x402', { status: 'ok', result: `tx ${txHash.slice(0, 10)}…` });
+            },
           });
         } catch (e) {
           if (e instanceof X402Error) {
@@ -470,8 +516,10 @@ export function PostJobForm() {
 
       const data: AttestationResponse = await res.json();
       setAttestationData(data);
+      upsertStep('attest', { status: 'ok', result: `${data.tier} · sig ${data.signature.slice(0, 10)}…` });
       setStep('approving');
     } catch (err) {
+      upsertStep('attest', { status: 'error', result: err instanceof Error ? err.message : 'failed' });
       setError(err instanceof Error ? err.message : 'Failed to get attestation');
       setStep('error');
     }
@@ -483,10 +531,15 @@ export function PostJobForm() {
     description,
     budget,
     deadline,
+    walletClient,
+    publicClient,
+    resetActivity,
+    upsertStep,
   ]);
 
   const handleApprove = useCallback(() => {
     if (!attestationData || !address) return;
+    upsertStep('approve', { status: 'running' });
     writeUsdcApprove(
       {
         address: USDC_CONTRACT as `0x${string}`,
@@ -495,14 +548,18 @@ export function PostJobForm() {
         args: [RATING_GATEWAY, BigInt(budgetWei)],
       },
       {
-        onSuccess: () => setStep('posting'),
+        onSuccess: (hash) => {
+          upsertStep('approve', { status: 'ok', result: `tx ${hash.slice(0, 10)}…` });
+          setStep('posting');
+        },
         onError: (err) => {
+          upsertStep('approve', { status: 'error', result: err.message });
           setError(`USDC approval failed: ${err.message}`);
           setStep('error');
         },
       },
     );
-  }, [attestationData, address, budgetWei, writeUsdcApprove]);
+  }, [attestationData, address, budgetWei, writeUsdcApprove, upsertStep]);
 
   const handlePostGatedJob = useCallback(() => {
     if (!attestationData || !address) return;
@@ -514,6 +571,7 @@ export function PostJobForm() {
       ? `${title}\n\narcagents:draft:${draftHash}`
       : title;
 
+    upsertStep('post', { status: 'running' });
     writeGateway(
       {
         address: RATING_GATEWAY as `0x${string}`,
@@ -545,6 +603,7 @@ export function PostJobForm() {
       },
       {
         onSuccess: async (hash) => {
+          upsertStep('post', { status: 'ok', result: `tx ${hash.slice(0, 10)}…` });
           setStep('success');
           try {
             if (!publicClient) return;
@@ -562,7 +621,9 @@ export function PostJobForm() {
                   const args = decoded.args as unknown as { jobId: bigint };
                   const id = args.jobId.toString();
                   setCreatedJobId(id);
+                  upsertStep('redirect-mm', { status: 'running' });
                   router.push(`/jobs/${id}`);
+                  upsertStep('redirect-mm', { status: 'ok', result: `/jobs/${id}` });
                   return;
                 }
               } catch {
@@ -574,6 +635,7 @@ export function PostJobForm() {
           }
         },
         onError: (err) => {
+          upsertStep('post', { status: 'error', result: err.message });
           setError(`Job posting failed: ${err.message}`);
           setStep('error');
         },
@@ -591,6 +653,7 @@ export function PostJobForm() {
     draftHash,
     publicClient,
     router,
+    upsertStep,
   ]);
 
   // Caliber audit-report styling: paper bg, hairline borders, mono inputs.
@@ -609,19 +672,60 @@ export function PostJobForm() {
       return;
     }
     setError(null);
+
+    // Seed the activity panel with every step the user will see, all in
+    // pending state. We mutate each one's status as we go.
+    resetActivity([
+      { id: 'approve-challenge', label: 'create USDC.approve challenge', detail: 'Circle SDK · createContractExecution' },
+      { id: 'approve-run', label: 'sign approval in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
+      { id: 'post-challenge', label: 'create postGatedJob challenge', detail: 'Circle SDK · createContractExecution' },
+      { id: 'post-run', label: 'sign job post in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
+      { id: 'scan', label: 'scan chain for JobPostedWithRating', detail: 'viem · publicClient.getLogs' },
+      { id: 'redirect', label: 'redirect to job page', detail: 'next/navigation · router.push' },
+    ]);
+
     try {
       setStep('approving');
+      upsertStep('approve-challenge', { status: 'running' });
       const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
+      upsertStep('approve-challenge', {
+        status: 'ok',
+        result: `challengeId ${approveChallengeId.slice(0, 8)}…`,
+      });
+
+      upsertStep('approve-run', { status: 'running' });
       const approveRes = await circle.runChallenge(approveChallengeId);
-      if (approveRes.errorMessage) throw new Error(`approve: ${approveRes.errorMessage}`);
+      if (approveRes.errorMessage) {
+        upsertStep('approve-run', { status: 'error', result: approveRes.errorMessage });
+        throw new Error(`approve: ${approveRes.errorMessage}`);
+      }
+      upsertStep('approve-run', {
+        status: 'ok',
+        result: approveRes.txHash ? `tx ${approveRes.txHash.slice(0, 10)}…` : 'confirmed',
+      });
 
       setStep('posting');
+      upsertStep('post-challenge', { status: 'running' });
       const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
       setDraftHash(dh);
+      upsertStep('post-challenge', {
+        status: 'ok',
+        result: `challengeId ${postChallengeId.slice(0, 8)}…`,
+      });
+
       // Capture the block height BEFORE the post tx so we can scan forward.
       const beforeBlock = publicClient ? await publicClient.getBlockNumber() : BigInt(0);
+      upsertStep('post-run', { status: 'running' });
       const postRes = await circle.runChallenge(postChallengeId);
-      if (postRes.errorMessage) throw new Error(`post: ${postRes.errorMessage}`);
+      if (postRes.errorMessage) {
+        upsertStep('post-run', { status: 'error', result: postRes.errorMessage });
+        throw new Error(`post: ${postRes.errorMessage}`);
+      }
+      upsertStep('post-run', {
+        status: 'ok',
+        result: postRes.txHash ? `tx ${postRes.txHash.slice(0, 10)}…` : 'confirmed',
+      });
+      upsertStep('scan', { status: 'running' });
 
       // Circle's challenge result for CREATE_TRANSACTION challenges doesn't
       // expose txHash directly (only SIGN_TRANSACTION does). Instead, scan
@@ -653,8 +757,11 @@ export function PostJobForm() {
                     if (args.poster?.toLowerCase() === posterLower) {
                       const id = args.jobId.toString();
                       setCreatedJobId(id);
+                      upsertStep('scan', { status: 'ok', result: `jobId #${id}` });
+                      upsertStep('redirect', { status: 'running' });
                       setStep('success');
                       router.push(`/jobs/${id}`);
+                      upsertStep('redirect', { status: 'ok', result: `/jobs/${id}` });
                       return;
                     }
                   }
@@ -668,13 +775,16 @@ export function PostJobForm() {
       // Fallthrough: tx succeeded but we couldn't pin down jobId in 30s.
       // Send the user to the jobs list so they don't get stranded on a
       // success card with no navigation — their post will be near the top.
+      upsertStep('scan', { status: 'ok', result: 'timeout — listing all jobs' });
+      upsertStep('redirect', { status: 'running' });
       setStep('success');
       router.push('/jobs');
+      upsertStep('redirect', { status: 'ok', result: '/jobs' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'circle hire failed');
       setStep('error');
     }
-  }, [wallet, circle, getJobFormData, publicClient, router]);
+  }, [wallet, circle, getJobFormData, publicClient, router, resetActivity, upsertStep]);
 
   // Dispatcher: routes the Hire click to the right signing flow.
   const handleHire = useCallback(() => {
@@ -1151,6 +1261,13 @@ export function PostJobForm() {
           </div>
         </div>
       )}
+
+      <ActivityLog
+        open={activityOpen && activitySteps.length > 0}
+        title="caliber · circle sdk · arc"
+        steps={activitySteps}
+        onClose={() => setActivityOpen(false)}
+      />
     </div>
   );
 }
