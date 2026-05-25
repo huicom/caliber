@@ -190,9 +190,15 @@ export async function POST(req: Request) {
           authorization: body.x402Authorization,
         },
       } as unknown as Parameters<typeof encodePaymentSignatureHeader>[0]);
-      attestHeaders['X-PAYMENT'] = headerValue;
+      // CRITICAL: Circle Gateway's createGatewayMiddleware reads ONLY
+      //   req.headers["payment-signature"]
+      // (verified in @circle-fin/x402-batching/dist/server/index.js).
+      // The legacy x402 'X-PAYMENT' header is NOT recognized by Circle's
+      // middleware — using it returns 402 as if no payment was provided.
+      // See: https://developers.circle.com/gateway/nanopayments/concepts/x402
+      attestHeaders['Payment-Signature'] = headerValue;
       console.log(
-        `[post-job-challenge] x402 Circle PW signature accepted · challenge=${body.x402SignChallengeId.slice(0, 8)}… sig=${signature.slice(0, 12)}…`,
+        `[post-job-challenge] x402 Circle PW signature accepted · challenge=${body.x402SignChallengeId.slice(0, 8)}… sig=${signature.slice(0, 12)}… header=Payment-Signature`,
       );
     } else if (body.x402TransactionId || body.x402RefId) {
       // Resolve to a Circle transactionId either directly or via refId
