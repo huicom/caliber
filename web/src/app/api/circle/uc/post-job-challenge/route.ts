@@ -25,8 +25,14 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
+// Server-side rating calls prefer the LOCAL rating endpoint — skips the
+// public-CF + Cloudflare-Tunnel roundtrip which both add latency and a
+// 100s upstream-timeout failure mode. Falls back to the public URL only
+// if the local one isn't configured.
 const RATING_API_BASE =
-  process.env.NEXT_PUBLIC_RATING_API_BASE ?? 'https://caliber-api.poko.blue';
+  process.env.RATING_API_INTERNAL_BASE
+  ?? process.env.NEXT_PUBLIC_RATING_API_BASE
+  ?? 'http://localhost:3100';
 
 const bodySchema = z.object({
   userToken: z.string().min(1),
@@ -264,13 +270,39 @@ export async function POST(req: Request) {
     } else if (process.env.X402_BYPASS_TOKEN) {
       attestHeaders['x-x402-bypass'] = process.env.X402_BYPASS_TOKEN;
     }
-    const attestRes = await fetch(
-      `${RATING_API_BASE}/v1/agents/arc/${body.targetAgentId}/attest`,
-      {
-        method: 'POST',
-        headers: attestHeaders,
-        body: JSON.stringify({ minTier: body.minTier, minConfidence: body.minConfidence }),
-      },
+    const attestStart = Date.now();
+    const attestController = new AbortController();
+    const attestTimeout = setTimeout(() => attestController.abort(), 40_000);
+    let attestRes: Response;
+    try {
+      attestRes = await fetch(
+        `${RATING_API_BASE}/v1/agents/arc/${body.targetAgentId}/attest`,
+        {
+          method: 'POST',
+          headers: attestHeaders,
+          body: JSON.stringify({ minTier: body.minTier, minConfidence: body.minConfidence }),
+          signal: attestController.signal,
+        },
+      );
+    } catch (err) {
+      const elapsed = Date.now() - attestStart;
+      const aborted = (err as { name?: string }).name === 'AbortError';
+      console.error(
+        `[post-job-challenge] attest fetch failed after ${elapsed}ms · aborted=${aborted} · base=${RATING_API_BASE} · err=${(err as Error).message}`,
+      );
+      return NextResponse.json(
+        {
+          error: aborted ? 'attestation_timeout' : 'attestation_unreachable',
+          detail: `${RATING_API_BASE} after ${elapsed}ms: ${(err as Error).message}`,
+        },
+        { status: 504 },
+      );
+    } finally {
+      clearTimeout(attestTimeout);
+    }
+    const attestElapsed = Date.now() - attestStart;
+    console.log(
+      `[post-job-challenge] attest status=${attestRes.status} elapsed=${attestElapsed}ms base=${RATING_API_BASE}`,
     );
     if (!attestRes.ok) {
       const errBody = await attestRes.json().catch(() => ({}));
