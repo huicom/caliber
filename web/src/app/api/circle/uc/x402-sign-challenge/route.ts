@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { decodePaymentRequiredHeader } from '@x402/core/http';
+import { GATEWAY_AUTH_VALIDITY_WINDOW_SECONDS } from '@circle-fin/x402-batching';
 import { createSignTypedDataChallenge } from '@/lib/circle/user-controlled';
 
 export const runtime = 'nodejs';
@@ -89,11 +90,14 @@ export async function POST(req: Request) {
     }
 
     // 2. Build EIP-3009 TransferWithAuthorization typed-data against the
-    //    GatewayWalletBatched domain. Validity window from the SDK
-    //    constant — Circle Gateway expects ~7 days by default.
+    //    GatewayWalletBatched domain. Circle Gateway facilitator REQUIRES
+    //    a 7-day validity window (minValiditySeconds=604800 per
+    //    /v1/x402/supported). Anything shorter and the facilitator
+    //    rejects the signature without a clear error — used to send 1h
+    //    here and post-job-challenge bubbled it as a generic 502.
     const chainId = Number(requirement.network.split(':')[1]);
     const now = Math.floor(Date.now() / 1000);
-    const validBefore = now + 60 * 60; // 1h is plenty for the demo
+    const validBefore = now + GATEWAY_AUTH_VALIDITY_WINDOW_SECONDS;
     const nonce = randomNonce();
 
     const authorization = {
