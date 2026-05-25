@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { LiveTicker } from '@/components/home/LiveTicker';
 import { ConnectButton } from '@/components/wallet/ConnectButton';
@@ -90,6 +91,24 @@ function isItemActive(item: NavItem, pathname: string): boolean {
 
 export function Nav() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close the drawer on navigation. Pathname changes on every <Link> click,
+  // so this fires whenever a menu item is picked.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Lock the page scroll while the drawer is open so the underlying page
+  // doesn't slide around. Restore on close / unmount.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = mobileOpen ? 'hidden' : prev;
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
 
   return (
     <header className="aa-header">
@@ -157,8 +176,76 @@ export function Nav() {
           {/* Unified: MetaMask (via ConnectKit) + Google (via Circle).
               See web/src/components/wallet/ConnectButton.tsx */}
           <ConnectButton />
+          <button
+            type="button"
+            className="aa-nav__burger"
+            aria-label={mobileOpen ? 'close menu' : 'open menu'}
+            aria-controls="aa-mobile-menu"
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+          >
+            {mobileOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 6l12 12M6 18L18 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Mobile drawer — only visible ≤760px (see globals.css .aa-nav__mobile). */}
+      {mobileOpen && (
+        <div
+          id="aa-mobile-menu"
+          className="aa-nav__mobile"
+          role="dialog"
+          aria-modal="true"
+          aria-label="primary navigation"
+        >
+          <nav className="aa-nav__mobile__inner" aria-label="primary mobile">
+            {NAV.map((item) => {
+              if (item.href && !item.children) {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={cn(
+                      'aa-nav__mobile__link',
+                      active && 'aa-nav__mobile__link--active',
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              }
+              return (
+                <div key={item.label} className="aa-nav__mobile__group">
+                  <div className="aa-nav__mobile__group__label">{item.label}</div>
+                  <div className="aa-nav__mobile__group__items">
+                    {item.children?.map((c) => (
+                      <Link
+                        key={c.href}
+                        href={c.href}
+                        className={cn(
+                          'aa-nav__mobile__sub',
+                          pathname === c.href && 'aa-nav__mobile__sub--active',
+                        )}
+                      >
+                        {c.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

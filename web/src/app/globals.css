@@ -332,6 +332,88 @@ body {
 
 .aa-header__right { display: inline-flex; align-items: center; gap: 12px; }
 
+/* Mobile menu — hidden by default, revealed under 760px alongside the
+ * hamburger button. Renders as a full-width overlay sliding down from the
+ * header, with the brand + connect button still visible above. */
+.aa-nav__burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--color-hairline);
+  border-radius: 2px;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.aa-nav__burger:hover { border-color: var(--color-copper); color: var(--color-copper); }
+.aa-nav__burger:focus-visible { outline: 2px solid var(--color-copper); outline-offset: 2px; }
+
+.aa-nav__mobile {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: calc(100vh - var(--header-h, 64px));
+  overflow-y: auto;
+  background: var(--color-paper);
+  border-top: 1px solid var(--color-hairline);
+  border-bottom: 1px solid var(--color-hairline);
+  z-index: 50;
+  animation: aaMobileMenuIn 140ms ease-out;
+}
+.aa-nav__mobile__inner {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 20px 20px;
+  gap: 6px;
+}
+.aa-nav__mobile__link {
+  display: block;
+  padding: 12px 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 14px;
+  color: var(--color-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.aa-nav__mobile__link--active { color: var(--color-copper); }
+.aa-nav__mobile__group {
+  padding: 8px 0 4px;
+  border-bottom: 1px solid var(--color-hairline);
+}
+.aa-nav__mobile__group__label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-mute);
+  padding: 6px 0 8px;
+}
+.aa-nav__mobile__group__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 12px;
+}
+.aa-nav__mobile__sub {
+  display: block;
+  padding: 10px 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--color-ink);
+  text-decoration: none;
+}
+.aa-nav__mobile__sub--active { color: var(--color-copper); }
+@keyframes aaMobileMenuIn {
+  from { transform: translateY(-6px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
 .aa-chip {
   font-family: var(--font-family-mono);
   font-size: 11px;
@@ -804,6 +886,9 @@ body {
 @media (max-width: 760px) {
   .aa-header__row { grid-template-columns: auto 1fr auto; gap: 16px; }
   .aa-ticker, .aa-nav { display: none; }
+  .aa-header { position: relative; }
+  .aa-nav__burger { display: inline-flex; }
+  .aa-nav__mobile { display: block; }
   .aa-stats { grid-template-columns: 1fr; }
   .aa-stat { border-right: 0 !important; border-bottom: 1px solid var(--color-hairline); padding: 16px 0 !important; }
   .aa-stat:last-child { border-bottom: 0; }
