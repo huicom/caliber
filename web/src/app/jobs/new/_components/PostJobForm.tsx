@@ -674,12 +674,14 @@ export function PostJobForm() {
     setError(null);
 
     // Seed the activity panel with every step the user will see, all in
-    // pending state. We mutate each one's status as we go. Includes a
-    // visible "x402 bypassed" line + a "Circle infrastructure" gas note
-    // so judges see the full primitive stack, not just the on-chain part.
+    // pending state. We mutate each one's status as we go. The Circle path
+    // now exercises the real x402 paywall (Option C) — user signs a USDC
+    // transfer to the signer before the server fetches the attestation,
+    // and the server uses that tx hash as x-payment-proof.
     resetActivity([
-      { id: 'draft-c', label: 'save off-chain draft', detail: 'POST /api/jobs/draft → keccak256(draftHash)' },
-      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'x402 paywall · bypassed via demo treasury (X402_BYPASS_TOKEN)' },
+      { id: 'x402-challenge', label: 'create x402 attestation-fee challenge', detail: 'Circle API · contractExecution USDC.transfer → signer · paywall hint from rating API' },
+      { id: 'x402-run', label: 'sign 0.001 USDC payment in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
+      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'rating API verifies x-payment-proof tx on Arc, then signs' },
       { id: 'gas-note', label: 'Circle Programmable Wallet (SCA)', detail: 'txs relayed by Circle infra · no user gas (Paymaster not on Arc Testnet)' },
       { id: 'approve-challenge', label: 'create USDC.approve challenge', detail: 'Circle API · POST /v1/w3s/user/transactions/contractExecution' },
       { id: 'approve-run', label: 'sign approval in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
@@ -689,15 +691,40 @@ export function PostJobForm() {
       { id: 'redirect', label: 'redirect to job page', detail: 'next/navigation · router.push' },
     ]);
 
-    // Mark the leading "informational" rows as ok up-front — they've already
-    // happened by the time the user clicks Hire (draft was saved server-side,
-    // attestation is fetched server-side with bypass, Circle infra is in
-    // place). They render as completed so the eye lands on the running step.
-    upsertStep('draft-c', { status: 'ok', result: 'server-side via /api/circle/uc/post-job-challenge' });
-    upsertStep('attest-c', { status: 'ok', result: 'bypassed (judge demo) · production: 0.001 USDC per attestation' });
+    // The gas-note row is informational — mark ok up front. Everything else
+    // ticks live below.
     upsertStep('gas-note', { status: 'ok', result: 'sponsored · user pays 0 ETH' });
 
     try {
+      setStep('paying');
+      upsertStep('x402-challenge', { status: 'running' });
+      const x402 = await circle.x402TransferChallenge();
+      upsertStep('x402-challenge', {
+        status: 'ok',
+        result: `paying ${x402.priceUsdc} USDC → ${x402.recipient.slice(0, 8)}…`,
+      });
+
+      upsertStep('x402-run', { status: 'running' });
+      const x402Res = await circle.runChallenge(x402.challengeId);
+      if (x402Res.errorMessage) {
+        upsertStep('x402-run', { status: 'error', result: x402Res.errorMessage });
+        throw new Error(`x402: ${x402Res.errorMessage}`);
+      }
+      const x402TransactionId = x402Res.transactionId;
+      if (!x402TransactionId) {
+        upsertStep('x402-run', { status: 'error', result: 'Circle returned no transactionId' });
+        throw new Error('x402 challenge returned no transactionId');
+      }
+      upsertStep('x402-run', {
+        status: 'ok',
+        result: `circle txId ${x402TransactionId.slice(0, 8)}…`,
+      });
+
+      upsertStep('attest-c', { status: 'running' });
+      // (Attest happens server-side inside postJobChallenge; we mark it ok
+      // once that call returns. The server polls Circle for the on-chain
+      // tx hash and submits it to the rating API as x-payment-proof.)
+
       setStep('approving');
       upsertStep('approve-challenge', { status: 'running' });
       const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
@@ -719,8 +746,16 @@ export function PostJobForm() {
 
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
-      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
+      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form, {
+        x402TransactionId,
+      });
       setDraftHash(dh);
+      // The server side fetched the attestation as part of this call — the
+      // rating API verified our x-payment-proof tx on Arc before signing.
+      upsertStep('attest-c', {
+        status: 'ok',
+        result: 'rating API verified payment + returned signature',
+      });
       upsertStep('post-challenge', {
         status: 'ok',
         result: `challengeId ${postChallengeId.slice(0, 8)}…`,

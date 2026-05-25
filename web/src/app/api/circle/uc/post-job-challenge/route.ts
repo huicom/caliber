@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { encodeFunctionData, type Abi } from 'viem';
 import { RATING_GATEWAY } from '@/lib/contracts/addresses';
 import RatingGateway_ABI from '@/lib/contracts/abis/RatingGateway.json';
-import { createContractExecutionChallenge } from '@/lib/circle/user-controlled';
+import { createContractExecutionChallenge, getUserTransactionStatus } from '@/lib/circle/user-controlled';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +35,11 @@ const bodySchema = z.object({
   evaluatorAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
   deadline: z.string().optional(),
   bondRequired: z.boolean().optional(),
+  // When set, the server polls Circle for the on-chain tx hash of this
+  // transactionId and uses it as x-payment-proof against the rating API's
+  // x402 paywall, instead of the bypass token. Lets the Circle path
+  // exercise the real x402 verification path end-to-end.
+  x402TransactionId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -80,10 +85,45 @@ export async function POST(req: Request) {
     }
     const { draftHash } = (await draftRes.json()) as { draftHash: string };
 
-    // 2. Fetch signed attestation. Server-to-server bypass token skips
-    // x402 — Circle UC flow already has its own per-tx server signing.
+    // 2. Fetch signed attestation. Two modes:
+    //    (a) x402TransactionId present → poll Circle for the on-chain tx
+    //        hash of the user's USDC.transfer to the signer, then submit
+    //        that hash to the rating API as x-payment-proof. Real x402.
+    //    (b) No x402TransactionId → fall back to the bypass token
+    //        (server-to-server trusted-caller path).
     const attestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (process.env.X402_BYPASS_TOKEN) {
+    if (body.x402TransactionId) {
+      // Poll Circle for the on-chain txHash. Circle submits the tx async;
+      // the hash appears once it lands. Try ~10s with 1s intervals.
+      let paymentTxHash: string | null = null;
+      for (let i = 0; i < 10; i++) {
+        const status = await getUserTransactionStatus(
+          body.userToken,
+          body.x402TransactionId,
+        ).catch(() => null);
+        if (status?.txHash) {
+          paymentTxHash = status.txHash;
+          break;
+        }
+        if (status?.state === 'FAILED' || status?.errorReason) {
+          return NextResponse.json(
+            {
+              error: 'x402_payment_failed',
+              detail: status?.errorReason ?? 'circle reported FAILED',
+            },
+            { status: 422 },
+          );
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (!paymentTxHash) {
+        return NextResponse.json(
+          { error: 'x402_payment_timeout', detail: 'Circle tx hash not available after 10s' },
+          { status: 504 },
+        );
+      }
+      attestHeaders['x-payment-proof'] = paymentTxHash;
+    } else if (process.env.X402_BYPASS_TOKEN) {
       attestHeaders['x-x402-bypass'] = process.env.X402_BYPASS_TOKEN;
     }
     const attestRes = await fetch(
