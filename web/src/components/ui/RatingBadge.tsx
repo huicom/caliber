@@ -86,7 +86,7 @@ export function RatingBadge({
   if (chain && agentId) {
     return (
       <Link
-        href={`/rating/${chain}/${agentId}`}
+        href={`/passport/${chain}/${agentId}`}
         className="hover:opacity-80 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >

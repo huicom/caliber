@@ -286,11 +286,11 @@ escrow.postBond(jobId, att, signature);`}</code>
         <p className="text-fg-mute text-xs mt-4 max-w-3xl leading-relaxed">
           <strong className="text-fg">How were these rates calibrated?</strong>{' '}
           They are an editorial launch schedule, not derived from observed
-          failure rates. The dataset on a young testnet does not contain
-          enough resolved performance defaults per tier to derive a
-          calibrated table. As defaults accumulate, the table can be
-          re-derived from observed failure rate × loss severity. Until
-          then we publish the schedule with a clear refinement path.
+          failure rates. The dataset on a young testnet does not yet
+          contain enough resolved jobs per tier to back the bond schedule
+          out of empirical loss data. As resolved volume grows, the
+          schedule can be re-derived from observed dispute rate per tier.
+          Until then we publish the schedule with a clear refinement path.
         </p>
       </section>
 
@@ -478,9 +478,10 @@ const match = await caliber.route({
               <Link href="/methodology" className="text-accent hover:underline">
                 /methodology
               </Link>{' '}
-              — published v1.0, open for community review. Defines what
-              constitutes a performance default and how PPD / LGD / EAD compose
-              into a tier.
+              — published v2.0.1, open for community review. Defines the
+              tier scale, the score composition (50% smoothed completion + 25%
+              forward success + 15% network endorsement + 10% latency
+              consistency), and the five rule-based risk flags.
             </span>
           </li>
           <li className="flex gap-4">
