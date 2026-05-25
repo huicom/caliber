@@ -150,7 +150,13 @@ interface CircleAuthState {
   /** Two-step deposit: USDC.approve(GatewayWallet) then GatewayWallet.deposit.
    *  Both challenges fire Circle sign-message modals in sequence. Returns
    *  the on-chain tx hashes for both. */
-  depositToGateway: (amountUsdc: string) => Promise<{ approveTxHash: string | null; depositTxHash: string | null }>;
+  depositToGateway: (
+    amountUsdc: string,
+    opts?: {
+      approveLocalizations?: ChallengeLocalizations;
+      depositLocalizations?: ChallengeLocalizations;
+    },
+  ) => Promise<{ approveTxHash: string | null; depositTxHash: string | null }>;
   /** Creates a Circle signTypedData challenge for the EIP-3009
    *  TransferWithAuthorization that Circle Gateway's facilitator expects.
    *  The caller runs the challenge (user signs in PIN modal), then passes
@@ -196,8 +202,14 @@ interface CircleAuthState {
   ) => Promise<{ challengeId: string; draftHash: string }>;
   /** Wraps sdk.execute as a Promise — resolves with txHash on success.
    *  signature surfaces for signTypedData challenges (EIP-3009 x402).
-   *  transactionId is Circle's internal id; needed for follow-up polls. */
-  runChallenge: (challengeId: string) => Promise<{
+   *  transactionId is Circle's internal id; needed for follow-up polls.
+   *  Optional `localizations` override the modal copy (title/subtitle/
+   *  description) for this single execution — used to label each step
+   *  as "Step N of 3 · …" during the demo. */
+  runChallenge: (
+    challengeId: string,
+    localizations?: ChallengeLocalizations,
+  ) => Promise<{
     ok: boolean;
     txHash: string | null;
     transactionId: string | null;
@@ -235,7 +247,28 @@ type W3SSdkType = {
   verifyOtp: () => void;
   setOnResendOtpEmail: (handler: () => void | Promise<void>) => void;
   getDeviceId: () => Promise<string>;
+  // Per Circle Web SDK docs (developers.circle.com/wallets/user-controlled/
+  // web-sdk-ui-customizations): override modal copy for the next execute().
+  // Same shape applied to both contractInteraction (modals #1+#3) and
+  // signatureRequest (modal #2) so the same call works for either path.
+  setLocalizations: (localizations: {
+    contractInteraction?: { title?: string; subtitle?: string };
+    signatureRequest?: { title?: string; subtitle?: string; description?: string };
+    transactionRequest?: { title?: string; subtitle?: string };
+  }) => void;
 };
+
+/**
+ * Per-step copy for the Circle PW modal. Applied via sdk.setLocalizations()
+ * right before sdk.execute(). Use for the demo to label modals as
+ * "Step N of 3" with plain-English explainers.
+ */
+export interface ChallengeLocalizations {
+  title?: string;
+  subtitle?: string;
+  /** Only honored for signatureRequest modals (modal #2 — x402 sign). */
+  description?: string;
+}
 
 interface SocialLoginResult {
   userToken: string;
@@ -679,7 +712,13 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const depositToGateway = useCallback(
-    async (amountUsdc: string) => {
+    async (
+      amountUsdc: string,
+      opts?: {
+        approveLocalizations?: ChallengeLocalizations;
+        depositLocalizations?: ChallengeLocalizations;
+      },
+    ) => {
       if (!session?.wallet) throw new Error('wallet not ready');
       const sdk = sdkRef.current;
       if (!sdk) throw new Error('SDK not ready');
@@ -703,7 +742,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       };
       log(`depositToGateway · approve challenge ${approveChallengeId.slice(0, 8)}…`);
       // User signs in Circle modal
-      const approveResult = await runChallenge(approveChallengeId);
+      const approveResult = await runChallenge(approveChallengeId, opts?.approveLocalizations);
       if (approveResult.errorMessage) {
         throw new Error(`approve sign: ${approveResult.errorMessage}`);
       }
@@ -726,7 +765,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
         challengeId: string;
       };
       log(`depositToGateway · deposit challenge ${depositChallengeId.slice(0, 8)}…`);
-      const depositResult = await runChallenge(depositChallengeId);
+      const depositResult = await runChallenge(depositChallengeId, opts?.depositLocalizations);
       if (depositResult.errorMessage) {
         throw new Error(`deposit sign: ${depositResult.errorMessage}`);
       }
@@ -818,6 +857,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   const runChallenge = useCallback(
     (
       challengeId: string,
+      localizations?: ChallengeLocalizations,
     ): Promise<{
       ok: boolean;
       txHash: string | null;
@@ -835,6 +875,27 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
             errorMessage: 'SDK not initialised',
           });
           return;
+        }
+        // Apply per-step modal copy. setLocalizations is stateful on the SDK
+        // instance, so we set both signatureRequest and contractInteraction
+        // with the same {title, subtitle} — whichever modal opens picks up
+        // the right one. The description field is signatureRequest-only.
+        if (localizations && sdkRef.current.setLocalizations) {
+          try {
+            sdkRef.current.setLocalizations({
+              contractInteraction: {
+                title: localizations.title,
+                subtitle: localizations.subtitle,
+              },
+              signatureRequest: {
+                title: localizations.title,
+                subtitle: localizations.subtitle,
+                description: localizations.description,
+              },
+            });
+          } catch {
+            // Localization is best-effort — never block the actual execute.
+          }
         }
         sdkRef.current.execute(challengeId, (err, result) => {
           if (err) {

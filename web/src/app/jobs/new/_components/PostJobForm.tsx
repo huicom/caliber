@@ -685,6 +685,12 @@ export function PostJobForm() {
     // === Pre-flight: deposit USDC into Gateway Balance if needed ===
     const PRICE_MICROS = BigInt(1000); // 0.001 USDC; matches X402_PRICE_USDC
     const DEPOSIT_AMOUNT_USDC = '0.1'; // 100 attestations per deposit
+    // Determine modal count BEFORE any modal opens. First-time = 5
+    // (deposit-approve + deposit + approve + x402 + post). Ongoing = 3
+    // (approve + x402 + post). We pass "Step N of M · …" into each modal
+    // via Circle's setLocalizations API so judges can follow the flow.
+    let totalSteps = 3;
+    let stepOffset = 0;
     try {
       setStep('paying');
       upsertStep('gw-balance', { status: 'running' });
@@ -695,10 +701,22 @@ export function PostJobForm() {
       });
 
       if (gwBalance < PRICE_MICROS) {
+        totalSteps = 5;
+        stepOffset = 2;
         upsertStep('gw-approve', { status: 'running' });
         upsertStep('gw-deposit', { status: 'running' });
         const { approveTxHash, depositTxHash } = await circle.depositToGateway(
           DEPOSIT_AMOUNT_USDC,
+          {
+            approveLocalizations: {
+              title: `Step 1 of ${totalSteps} · Approve USDC to Gateway Wallet`,
+              subtitle: `One-time approval so Gateway Wallet can pull ${DEPOSIT_AMOUNT_USDC} USDC into your Gateway Balance.`,
+            },
+            depositLocalizations: {
+              title: `Step 2 of ${totalSteps} · Deposit to Gateway Balance`,
+              subtitle: `Pulls ${DEPOSIT_AMOUNT_USDC} USDC into your Gateway Balance — funds future gasless x402 payments.`,
+            },
+          },
         );
         upsertStep('gw-approve', {
           status: 'ok',
@@ -738,7 +756,10 @@ export function PostJobForm() {
       });
 
       upsertStep('approve-run', { status: 'running' });
-      const approveRes = await circle.runChallenge(approveChallengeId);
+      const approveRes = await circle.runChallenge(approveChallengeId, {
+        title: `Step ${stepOffset + 1} of ${totalSteps} · Approve USDC to RatingGateway`,
+        subtitle: `RatingGateway will pull ${form.budgetUsdc} USDC into ERC-8183 escrow on success.`,
+      });
       if (approveRes.errorMessage) {
         upsertStep('approve-run', { status: 'error', result: approveRes.errorMessage });
         throw new Error(`approve: ${approveRes.errorMessage}`);
@@ -760,7 +781,11 @@ export function PostJobForm() {
       });
 
       upsertStep('x402-sign', { status: 'running' });
-      const x402Res = await circle.runChallenge(x402Payload.challengeId);
+      const x402Res = await circle.runChallenge(x402Payload.challengeId, {
+        title: `Step ${stepOffset + 2} of ${totalSteps} · Gasless x402 signature`,
+        subtitle: 'Authorise Circle Gateway to debit 0.001 USDC from your Gateway Balance for the Caliber attestation. No gas. Settles in a batch.',
+        description: 'EIP-3009 TransferWithAuthorization signed off-chain — this becomes the Payment-Signature header that Circle Gateway facilitator verifies.',
+      });
       if (x402Res.errorMessage) {
         upsertStep('x402-sign', { status: 'error', result: x402Res.errorMessage });
         throw new Error(`x402 sign: ${x402Res.errorMessage}`);
@@ -802,7 +827,10 @@ export function PostJobForm() {
       // Capture the block height BEFORE the post tx so we can scan forward.
       const beforeBlock = publicClient ? await publicClient.getBlockNumber() : BigInt(0);
       upsertStep('post-run', { status: 'running' });
-      const postRes = await circle.runChallenge(postChallengeId);
+      const postRes = await circle.runChallenge(postChallengeId, {
+        title: `Step ${stepOffset + 3} of ${totalSteps} · Post job to Arc Testnet`,
+        subtitle: 'RatingGateway will verify the signed Caliber attestation, then escrow your USDC into AgenticCommerce.',
+      });
       if (postRes.errorMessage) {
         upsertStep('post-run', { status: 'error', result: postRes.errorMessage });
         throw new Error(`post: ${postRes.errorMessage}`);
