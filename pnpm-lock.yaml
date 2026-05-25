@@ -116,6 +116,9 @@ importers:
       '@arc-agents/db':
         specifier: workspace:*
         version: link:../packages/db
+      '@circle-fin/x402-batching':
+        specifier: ^3.0.4
+        version: 3.0.4(@x402/core@2.13.0)(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       dotenv:
         specifier: ^16.5.0
         version: 16.6.1
@@ -162,6 +165,9 @@ importers:
       '@circle-fin/w3s-pw-web-sdk':
         specifier: ^1.1.11
         version: 1.1.11
+      '@circle-fin/x402-batching':
+        specifier: ^3.0.4
+        version: 3.0.4(@x402/core@2.13.0)(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@radix-ui/react-avatar':
         specifier: ^1.1.4
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -189,6 +195,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.100.11
         version: 5.100.11(react@19.2.6)
+      '@x402/core':
+        specifier: ^2.13.0
+        version: 2.13.0
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
@@ -395,6 +404,17 @@ packages:
   '@circle-fin/w3s-pw-web-sdk@1.1.11':
     resolution: {integrity: sha512-EPiIE+Os+atMHUUIodPQz6CSunSAQsClvqxBpxXNPW1CsvdNE5rnyhWDkiik8z53zgiXLtksYo0sek241edO2A==}
     engines: {node: '>=10.0.0'}
+
+  '@circle-fin/x402-batching@3.0.4':
+    resolution: {integrity: sha512-631ZdmNQiCdNRLCY3uNTiD8G+cK4wiIElk/iQESwcpziQfirBXPCR9At14Kqgeq6tyFF67wHrIZzSRhPWk7C6Q==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@x402/core': ^2.3.0
+      '@x402/evm': ^2.3.0
+      viem: ^2.0.0
+    peerDependenciesMeta:
+      '@x402/evm':
+        optional: true
 
   '@coinbase/cdp-sdk@1.49.2':
     resolution: {integrity: sha512-QojjrkLG2mgo5Lq2ybu+k8Rk1NtklKQrroPG/1VCvMM62kGnF59B5re4B3XySY4etrzu60oqCnPuLSRcwuhI1g==}
@@ -3039,6 +3059,9 @@ packages:
   '@walletconnect/window-metadata@1.0.1':
     resolution: {integrity: sha512-9koTqyGrM2cqFRW517BPY/iEtUDx2r1+Pwwu5m7sJ7ka79wi3EyqhqcICk/yDmv6jAS1rjKgTKXlEhanYjijcA==}
 
+  '@x402/core@2.13.0':
+    resolution: {integrity: sha512-wZjjYZ9UxXZh8O2uP/x0u4M4Dvuw5hHdN7uzEseoS4V9fkMewi+VAx9Wd98PdU9VegvG24+ES88fgFB4C5QVUw==}
+
   '@xenova/transformers@2.17.2':
     resolution: {integrity: sha512-lZmHqzrVIkSvZdKZEx7IYY51TK0WDrC8eR0c5IMnBsO8di8are1zzw8BlLhyO2TklZKLN5UffNGs1IJwT6oOqQ==}
 
@@ -4946,6 +4969,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -5943,6 +5967,11 @@ snapshots:
       uuid: 9.0.1
     transitivePeerDependencies:
       - '@react-native-async-storage/async-storage'
+
+  '@circle-fin/x402-batching@3.0.4(@x402/core@2.13.0)(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      '@x402/core': 2.13.0
+      viem: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
 
   '@coinbase/cdp-sdk@1.49.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:
@@ -9214,6 +9243,10 @@ snapshots:
     dependencies:
       '@walletconnect/window-getters': 1.0.1
       tslib: 1.14.1
+
+  '@x402/core@2.13.0':
+    dependencies:
+      zod: 3.25.76
 
   '@xenova/transformers@2.17.2':
     dependencies:

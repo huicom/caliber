@@ -1,23 +1,37 @@
-// Client-side x402 helper. Intercepts 402 responses from the rating API,
-// pays the demanded USDC amount via the active wallet client, waits for
-// confirmation, and replays the original request with x-payment-proof.
+// Client-side x402 helper for Circle Gateway batched-settlement payments.
 //
-// Usage:
-//   import { fetchWithX402 } from '@/lib/x402';
-//   const res = await fetchWithX402(url, init, {
-//     account, walletClient, publicClient,
-//     onPayment: (hint) => setStep('paying'),
-//     onPaid: (hash) => setStep('attesting'),
-//   });
+// Migrated from the homegrown on-chain-USDC-transfer variant to Circle's
+// official @circle-fin/x402-batching/client SDK. The flow:
+//
+//   1. Caller hits the protected endpoint (no payment headers).
+//   2. Server (createGatewayMiddleware) returns 402 with payment requirements
+//      encoded as JSON — networks, asset, amount, payTo, scheme, etc.
+//   3. We pick the Arc Testnet requirement, hand it to BatchEvmScheme which
+//      signs an EIP-3009 TransferWithAuthorization (off-chain, NO gas, NO
+//      on-chain tx) against the GatewayWallet contract.
+//   4. We retry with X-PAYMENT: <base64 of signed payload>.
+//   5. Server forwards the payload to Circle's facilitator for verification
+//      and queues the payment for batched settlement to the Seller Wallet's
+//      Gateway Balance. Resource flows back to the caller.
+//
+// Funding note: callers must have a Gateway Balance — fund via either the
+// Circle CLI (`circle gateway deposit`) or programmatically via
+// GatewayClient.deposit. The Caliber funder wallet's drip currently funds
+// the user's USDC balance, not Gateway balance — a v2 follow-up.
 
-import type { Abi, PublicClient, WalletClient } from 'viem';
+import type { Abi, WalletClient } from 'viem';
+import { BatchEvmScheme } from '@circle-fin/x402-batching/client';
+import type { BatchEvmSigner } from '@circle-fin/x402-batching';
+import { encodePaymentSignatureHeader } from '@x402/core/http';
 import usdcAbi from './contracts/abis/USDC.json';
+
+void usdcAbi; // referenced by future helpers (deposit flow)
 
 export interface X402Hint {
   scheme: string;
   chainId: number;
   asset: `0x${string}`;
-  amount: string; // microUSDC, as string
+  amount: string;
   decimals: number;
   recipient: `0x${string}`;
   resource: string;
@@ -28,43 +42,63 @@ export interface X402Hint {
 export interface X402Context {
   account: `0x${string}`;
   walletClient: WalletClient;
-  publicClient: PublicClient;
+  publicClient: unknown;
   onPayment?: (hint: X402Hint) => void;
   onPaid?: (txHash: `0x${string}`) => void;
 }
 
 export class X402Error extends Error {
-  constructor(message: string, public readonly reason?: string) {
+  constructor(
+    message: string,
+    public readonly reason?: string,
+  ) {
     super(message);
     this.name = 'X402Error';
   }
 }
 
-async function payHint(hint: X402Hint, ctx: X402Context): Promise<`0x${string}`> {
-  ctx.onPayment?.(hint);
+interface PaymentRequirement {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  extra?: Record<string, unknown>;
+}
 
-  const hash = await ctx.walletClient.writeContract({
-    chain: ctx.walletClient.chain,
-    account: ctx.account,
-    address: hint.asset,
-    abi: usdcAbi as Abi,
-    functionName: 'transfer',
-    args: [hint.recipient, BigInt(hint.amount)],
-  });
-
-  await ctx.publicClient.waitForTransactionReceipt({ hash, confirmations: 1 });
-  ctx.onPaid?.(hash);
-  return hash;
+interface PaymentRequiredResponse {
+  x402Version: number;
+  accepts: PaymentRequirement[];
+  error?: string;
 }
 
 /**
- * Drop-in replacement for fetch() that handles HTTP 402 by paying the demanded
- * USDC amount and retrying with proof. Falls through to the underlying fetch
- * behavior for non-402 responses.
- *
- * Throws X402Error if:
- *   - The 402 response is malformed (no x402 hint)
- *   - The retry itself returns 402 (payment was rejected by the server)
+ * Wraps wagmi's walletClient as a BatchEvmSigner so the Circle SDK can sign
+ * EIP-3009 TransferWithAuthorization on the user's behalf without us
+ * touching their private key.
+ */
+function makeBatchSigner(account: `0x${string}`, walletClient: WalletClient): BatchEvmSigner {
+  return {
+    address: account,
+    async signTypedData(params) {
+      // viem's signTypedData expects { account, ... }; the SDK's signature is
+      // missing it, so we inject the connected account.
+      return walletClient.signTypedData({
+        account,
+        domain: params.domain,
+        types: params.types,
+        primaryType: params.primaryType,
+        message: params.message,
+      });
+    },
+  };
+}
+
+/**
+ * Drop-in fetch replacement that handles HTTP 402 by signing an EIP-3009
+ * TransferWithAuthorization (Circle Gateway batched payment) and retrying
+ * with the X-PAYMENT header. Falls through for non-402 responses.
  */
 export async function fetchWithX402(
   url: string,
@@ -74,22 +108,58 @@ export async function fetchWithX402(
   const first = await fetch(url, init);
   if (first.status !== 402) return first;
 
-  const body = await first.clone().json().catch(() => null);
-  const hint = body?.x402 as X402Hint | undefined;
-  if (!hint || !hint.asset || !hint.recipient || !hint.amount) {
-    throw new X402Error('402 response missing x402 payment hint', 'malformed_hint');
+  const body = (await first.clone().json().catch(() => null)) as
+    | PaymentRequiredResponse
+    | null;
+  if (!body?.accepts || body.accepts.length === 0) {
+    throw new X402Error('402 response missing accepts[] payment requirements', 'malformed_402');
   }
+  // Pick the cheapest accept (Circle Gateway typically returns one).
+  const requirement = body.accepts[0]!;
 
-  const txHash = await payHint(hint, ctx);
+  // Build a hint object for the UI (mirrors our old X402Hint shape).
+  const decimals = 6; // Circle Gateway USDC = 6 decimals on every supported chain
+  const hint: X402Hint = {
+    scheme: requirement.scheme,
+    chainId: Number(requirement.network.split(':')[1] ?? '0'),
+    asset: requirement.asset as `0x${string}`,
+    amount: requirement.amount,
+    decimals,
+    recipient: requirement.payTo as `0x${string}`,
+    resource: url,
+    description: 'Caliber signed rating attestation (Circle Gateway)',
+  };
+  ctx.onPayment?.(hint);
+
+  // Sign the EIP-3009 authorization via Circle's BatchEvmScheme.
+  const signer = makeBatchSigner(ctx.account, ctx.walletClient);
+  const scheme = new BatchEvmScheme(signer);
+  const payload = await scheme.createPaymentPayload(body.x402Version, requirement);
+
+  // Encode for the X-PAYMENT header (base64 JSON). The PaymentPayload shape
+  // expected by encodePaymentSignatureHeader is the @x402/core full type;
+  // BatchEvmScheme returns the subset { x402Version, payload } and the
+  // header encoder fills in the rest from the requirement.
+  const headerValue = encodePaymentSignatureHeader({
+    x402Version: body.x402Version,
+    scheme: requirement.scheme,
+    network: requirement.network,
+    payload: payload.payload,
+  } as unknown as Parameters<typeof encodePaymentSignatureHeader>[0]);
+
+  // The signed authorization itself isn't an on-chain tx — Circle settles
+  // in batches — so there's no txHash to report at this stage. Fire onPaid
+  // with a sentinel "signed" pseudo-hash so the UI moves forward.
+  ctx.onPaid?.('0xsigned' as `0x${string}`);
 
   const headers = new Headers(init.headers);
-  headers.set('x-payment-proof', txHash);
+  headers.set('X-PAYMENT', headerValue);
   const second = await fetch(url, { ...init, headers });
   if (second.status === 402) {
     const retryBody = await second.json().catch(() => ({}));
     throw new X402Error(
-      `payment rejected by server: ${retryBody.reason ?? 'unknown'}`,
-      retryBody.reason,
+      `Circle Gateway rejected signed payment: ${retryBody.error ?? 'unknown'}`,
+      retryBody.error,
     );
   }
   return second;

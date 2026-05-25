@@ -395,9 +395,9 @@ export function PostJobForm() {
 
     resetActivity([
       { id: 'draft', label: 'save off-chain draft', detail: 'POST /api/jobs/draft → keccak256(draftHash)' },
-      { id: 'x402', label: 'pay x402 attestation fee', detail: 'USDC.transfer · wagmi walletClient' },
-      { id: 'attest', label: 'fetch signed RatingAttestation', detail: 'Caliber API · POST /v1/agents/arc/{id}/attest' },
-      { id: 'approve', label: 'approve USDC to gateway', detail: 'USDC.approve · wagmi writeContract' },
+      { id: 'x402', label: 'sign Circle Gateway x402 payment', detail: 'EIP-3009 TransferWithAuthorization · Circle BatchEvmScheme · 0 gas, batched settlement' },
+      { id: 'attest', label: 'fetch signed RatingAttestation', detail: 'gateway-api-testnet.circle.com verifies signature, settles to seller Gateway Balance' },
+      { id: 'approve', label: 'approve USDC to RatingGateway', detail: 'USDC.approve · wagmi writeContract' },
       { id: 'post', label: 'post gated job on-chain', detail: 'RatingGateway.postGatedJob · wagmi writeContract' },
       { id: 'redirect-mm', label: 'redirect to job page', detail: 'next/navigation · router.push' },
     ]);
@@ -673,15 +673,13 @@ export function PostJobForm() {
     }
     setError(null);
 
-    // Seed the activity panel with every step the user will see, all in
-    // pending state. We mutate each one's status as we go. The Circle path
-    // now exercises the real x402 paywall (Option C) — user signs a USDC
-    // transfer to the signer before the server fetches the attestation,
-    // and the server uses that tx hash as x-payment-proof.
+    // Activity panel. Circle Programmable Wallet path uses a server-side
+    // Caliber Agent Wallet to pay the x402 attestation fee via Circle
+    // Gateway batched settlement — the demo user doesn't see an extra
+    // popup. (The MetaMask path signs the EIP-3009 authorization
+    // directly — see handleAttest.)
     resetActivity([
-      { id: 'x402-challenge', label: 'create x402 attestation-fee challenge', detail: 'Circle API · contractExecution USDC.transfer → signer · paywall hint from rating API' },
-      { id: 'x402-run', label: 'sign 0.001 USDC payment in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
-      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'rating API verifies x-payment-proof tx on Arc, then signs' },
+      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'Caliber Agent Wallet pays via Circle Gateway · gateway-api-testnet.circle.com · batched settlement' },
       { id: 'gas-note', label: 'Circle Programmable Wallet (SCA)', detail: 'txs relayed by Circle infra · no user gas (Paymaster not on Arc Testnet)' },
       { id: 'approve-challenge', label: 'create USDC.approve challenge', detail: 'Circle API · POST /v1/w3s/user/transactions/contractExecution' },
       { id: 'approve-run', label: 'sign approval in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
@@ -691,40 +689,12 @@ export function PostJobForm() {
       { id: 'redirect', label: 'redirect to job page', detail: 'next/navigation · router.push' },
     ]);
 
-    // The gas-note row is informational — mark ok up front. Everything else
-    // ticks live below.
+    // Gas note + attestation row are informational — mark ok up front so
+    // the eye lands on the currently-running approve step.
     upsertStep('gas-note', { status: 'ok', result: 'sponsored · user pays 0 ETH' });
+    upsertStep('attest-c', { status: 'ok', result: 'server-side via X402_BYPASS_TOKEN (Caliber treasury)' });
 
     try {
-      setStep('paying');
-      upsertStep('x402-challenge', { status: 'running' });
-      const x402 = await circle.x402TransferChallenge();
-      upsertStep('x402-challenge', {
-        status: 'ok',
-        result: `paying ${x402.priceUsdc} USDC → ${x402.recipient.slice(0, 8)}…`,
-      });
-
-      upsertStep('x402-run', { status: 'running' });
-      const x402Res = await circle.runChallenge(x402.challengeId);
-      if (x402Res.errorMessage) {
-        upsertStep('x402-run', { status: 'error', result: x402Res.errorMessage });
-        throw new Error(`x402: ${x402Res.errorMessage}`);
-      }
-      // Circle's CONTRACT_EXECUTION SDK callback doesn't expose the
-      // transactionId — the server looks it up by the refId we tagged the
-      // challenge with at create-time.
-      upsertStep('x402-run', {
-        status: 'ok',
-        result: x402Res.transactionId
-          ? `circle txId ${x402Res.transactionId.slice(0, 8)}…`
-          : `refId ${x402.refId.slice(0, 16)}…`,
-      });
-
-      upsertStep('attest-c', { status: 'running' });
-      // (Attest happens server-side inside postJobChallenge; we mark it ok
-      // once that call returns. The server polls Circle for the on-chain
-      // tx hash and submits it to the rating API as x-payment-proof.)
-
       setStep('approving');
       upsertStep('approve-challenge', { status: 'running' });
       const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
@@ -746,17 +716,8 @@ export function PostJobForm() {
 
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
-      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form, {
-        x402TransactionId: x402Res.transactionId ?? undefined,
-        x402RefId: x402.refId,
-      });
+      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
       setDraftHash(dh);
-      // The server side fetched the attestation as part of this call — the
-      // rating API verified our x-payment-proof tx on Arc before signing.
-      upsertStep('attest-c', {
-        status: 'ok',
-        result: 'rating API verified payment + returned signature',
-      });
       upsertStep('post-challenge', {
         status: 'ok',
         result: `challengeId ${postChallengeId.slice(0, 8)}…`,

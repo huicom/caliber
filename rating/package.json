@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@arc-agents/db": "workspace:*",
+    "@circle-fin/x402-batching": "^3.0.4",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.42.0",
     "express": "^5.1.0",
