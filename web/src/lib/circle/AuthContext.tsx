@@ -17,11 +17,16 @@ import {
  * the SDK reconstructs post-redirect without the deviceToken /
  * deviceEncryptionKey it needs to verify the OAuth response → verify-token
  * iframe hangs. Plain document.cookie is enough; no dependency needed.
+ *
+ * Beyond the OAuth round-trip, we also persist the post-sign-in session
+ * (userToken / encryptionKey / email) so a returning visitor doesn't have
+ * to re-authenticate every page reload. userToken from Circle has a ~1h
+ * server-side validity; we mirror that as the cookie max-age and gracefully
+ * fall back to "signed out" if the rehydrate fails.
  * ────────────────────────────────────────────────────────────────────────── */
-const COOKIE_DAYS = 1; // tokens are short-lived; only need to survive the round-trip
-function setCookie(name: string, value: string) {
+function setCookie(name: string, value: string, maxAgeSeconds = 60 * 60 * 24) {
   if (typeof document === 'undefined') return;
-  const exp = new Date(Date.now() + COOKIE_DAYS * 24 * 60 * 60 * 1000).toUTCString();
+  const exp = new Date(Date.now() + maxAgeSeconds * 1000).toUTCString();
   document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Lax`;
 }
 function getCookie(name: string): string {
@@ -33,6 +38,14 @@ function deleteCookie(name: string) {
   if (typeof document === 'undefined') return;
   document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 }
+
+// Session cookies — outlive a single page reload, matched to Circle's
+// userToken ~1h validity. If a cookie is older than its server-side counterpart
+// expiry, the hydrate call below will 401/422 and we'll clear silently.
+const SESSION_COOKIE_USER_TOKEN = 'caliber_circle_userToken';
+const SESSION_COOKIE_ENCRYPTION_KEY = 'caliber_circle_encryptionKey';
+const SESSION_COOKIE_EMAIL = 'caliber_circle_email';
+const SESSION_TTL_SECONDS = 60 * 60; // 1 hour
 
 /* ──────────────────────────────────────────────────────────────────────────
  * CircleAuthContext — global state for the Circle Programmable Wallets path.
@@ -196,15 +209,18 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       }
       log(`callback got userToken (${r.userToken.length} chars) · hydrating…`);
       try {
-        await hydrateFromUserToken(
-          r.userToken,
-          r.encryptionKey,
-          r.oAuthInfo?.socialUserInfo?.email ?? null,
-        );
+        const email = r.oAuthInfo?.socialUserInfo?.email ?? null;
+        await hydrateFromUserToken(r.userToken, r.encryptionKey, email);
         log(`hydrate ok · session set`);
         if (typeof window !== 'undefined' && window.location.hash) {
           history.replaceState(null, '', window.location.pathname + window.location.search);
         }
+        // Persist the session so subsequent page loads skip the sign-in modal.
+        // userToken validity from Circle is ~1h; match that with cookie TTL so
+        // we never present a stale token. Hydrate-on-mount handles expiry.
+        setCookie(SESSION_COOKIE_USER_TOKEN, r.userToken, SESSION_TTL_SECONDS);
+        setCookie(SESSION_COOKIE_ENCRYPTION_KEY, r.encryptionKey, SESSION_TTL_SECONDS);
+        if (email) setCookie(SESSION_COOKIE_EMAIL, email, SESSION_TTL_SECONDS);
         // Clean up cookies that were only needed for the round-trip
         deleteCookie('caliber_circle_deviceToken');
         deleteCookie('caliber_circle_deviceEncryptionKey');
@@ -295,6 +311,26 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
         if (hasOAuthHash && provider === 'Google') {
           setPending(true);
           log(`detected post-Google-redirect state · awaiting SDK callback`);
+        } else {
+          // Not a post-redirect mount — try to restore a persisted session so
+          // the user doesn't see "Sign in" again on every visit. If the
+          // userToken expired Circle-side, hydrate will throw and we wipe
+          // the cookies; user lands on the sign-in state as before.
+          const savedUserToken = getCookie(SESSION_COOKIE_USER_TOKEN);
+          const savedEncryptionKey = getCookie(SESSION_COOKIE_ENCRYPTION_KEY);
+          const savedEmail = getCookie(SESSION_COOKIE_EMAIL) || null;
+          if (savedUserToken && savedEncryptionKey) {
+            log(`restoring persisted session · userToken=${savedUserToken.slice(0, 8)}…`);
+            try {
+              await hydrateFromUserToken(savedUserToken, savedEncryptionKey, savedEmail);
+              log(`session restored from cookie`);
+            } catch (e) {
+              log(`restore failed (${e instanceof Error ? e.message : 'unknown'}) · clearing cookies`);
+              deleteCookie(SESSION_COOKIE_USER_TOKEN);
+              deleteCookie(SESSION_COOKIE_ENCRYPTION_KEY);
+              deleteCookie(SESSION_COOKIE_EMAIL);
+            }
+          }
         }
 
         setIsReady(true);
@@ -415,6 +451,9 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     setSession(null);
     setError(null);
+    deleteCookie(SESSION_COOKIE_USER_TOKEN);
+    deleteCookie(SESSION_COOKIE_ENCRYPTION_KEY);
+    deleteCookie(SESSION_COOKIE_EMAIL);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('socialLoginProvider');
     }
