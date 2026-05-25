@@ -174,22 +174,61 @@ export async function getUserTransactionStatus(
  * here after the user signs. The SDK's listTransactions doesn't accept refId
  * as a server-side filter, so we list the most recent transactions and
  * match client-side. Returns null if no match yet (Circle may take a moment
- * to index a brand-new tx); caller should retry.
+ * to index a brand-new tx); caller should retry. The walletId fallback
+ * grabs the most recent outbound CONTRACT_EXECUTION when refId isn't in
+ * the response payload at all.
  */
 export async function findTransactionByRefId(
   userToken: string,
   refId: string,
-): Promise<{ id: string; state: string; txHash: string | null } | null> {
+  walletId?: string,
+): Promise<{
+  id: string;
+  state: string;
+  txHash: string | null;
+  matchedBy: 'refId' | 'walletId-fallback';
+  candidates?: number;
+} | null> {
   const c = getUserControlledClient();
   const res = await c.listTransactions({ userToken, pageSize: 20 });
   const txs = res.data?.transactions ?? [];
+  // Primary: match by refId.
   for (const tx of txs) {
-    if ((tx as { refId?: string }).refId === refId) {
+    const txRefId = (tx as { refId?: string }).refId;
+    if (txRefId === refId) {
       return {
         id: tx.id ?? '',
         state: tx.state ?? 'UNKNOWN',
         txHash: tx.txHash ?? null,
+        matchedBy: 'refId',
+        candidates: txs.length,
       };
+    }
+  }
+  // Fallback: if walletId is supplied and refId never matched (e.g. Circle
+  // doesn't return refId on the list call), grab the most recent outbound
+  // CONTRACT_EXECUTION for that wallet. Best-effort — assumes the user
+  // hasn't kicked off other contract executions in the same window.
+  if (walletId) {
+    for (const tx of txs) {
+      const txAny = tx as {
+        walletId?: string;
+        operation?: string;
+        transactionType?: string;
+      };
+      if (
+        txAny.walletId === walletId &&
+        txAny.operation === 'CONTRACT_EXECUTION' &&
+        (txAny.transactionType === 'OUTBOUND' || !txAny.transactionType)
+      ) {
+        return {
+          id: tx.id ?? '',
+          state: tx.state ?? 'UNKNOWN',
+          txHash: tx.txHash ?? null,
+          matchedBy: 'walletId-fallback',
+          candidates: txs.length,
+        };
+      }
     }
   }
   return null;

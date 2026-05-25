@@ -107,13 +107,19 @@ export async function POST(req: Request) {
       // common one — we tagged the challenge at create-time and look it
       // up here.
       let txId = body.x402TransactionId ?? null;
+      let lastFound: Awaited<ReturnType<typeof findTransactionByRefId>> = null;
       if (!txId && body.x402RefId) {
-        for (let i = 0; i < 10 && !txId; i++) {
-          const found = await findTransactionByRefId(body.userToken, body.x402RefId).catch(
-            () => null,
-          );
+        // Extended to ~30s — Circle's listTransactions can lag by ~15-20s
+        // before a freshly-submitted CONTRACT_EXECUTION shows up.
+        for (let i = 0; i < 30 && !txId; i++) {
+          const found = await findTransactionByRefId(
+            body.userToken,
+            body.x402RefId,
+            body.walletId,
+          ).catch(() => null);
           if (found?.id) {
             txId = found.id;
+            lastFound = found;
             break;
           }
           await new Promise((r) => setTimeout(r, 1000));
@@ -123,16 +129,22 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             error: 'x402_transaction_not_found',
-            detail: `no Circle tx for refId ${body.x402RefId} after 10s`,
+            detail: `no Circle tx for refId ${body.x402RefId} after 30s`,
           },
           { status: 504 },
         );
       }
+      // Log the match path for diagnostics; visible in arc-web logs.
+      console.log(
+        `[post-job-challenge] x402 tx resolved via ${lastFound?.matchedBy ?? 'direct id'} · ` +
+          `id=${txId} · refId=${body.x402RefId ?? '(none)'} · candidates=${lastFound?.candidates ?? 'n/a'}`,
+      );
 
       // Poll Circle for the on-chain txHash. Circle submits the tx async;
-      // the hash appears once it lands. Try ~15s with 1s intervals.
+      // the hash appears once it lands. Try ~30s with 1s intervals — Arc
+      // is sub-second but Circle's relayer adds round-trip latency.
       let paymentTxHash: string | null = null;
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 30; i++) {
         const status = await getUserTransactionStatus(body.userToken, txId).catch(
           () => null,
         );
@@ -153,10 +165,13 @@ export async function POST(req: Request) {
       }
       if (!paymentTxHash) {
         return NextResponse.json(
-          { error: 'x402_payment_timeout', detail: 'Circle tx hash not available after 15s' },
+          { error: 'x402_payment_timeout', detail: 'Circle tx hash not available after 30s' },
           { status: 504 },
         );
       }
+      console.log(
+        `[post-job-challenge] x402 payment confirmed · txHash=${paymentTxHash.slice(0, 12)}…`,
+      );
       attestHeaders['x-payment-proof'] = paymentTxHash;
     } else if (process.env.X402_BYPASS_TOKEN) {
       attestHeaders['x-x402-bypass'] = process.env.X402_BYPASS_TOKEN;
