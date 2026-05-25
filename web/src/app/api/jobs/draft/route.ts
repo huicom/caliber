@@ -51,13 +51,15 @@ export async function POST(req: NextRequest) {
     if (minTier == null || typeof minTier !== 'number' || minTier < 0 || minTier > 8) {
       return NextResponse.json({ error: 'minTier must be 0-8' }, { status: 400 });
     }
+    // 0=high, 1=moderate, 2=low, 3=insufficient (testnet calibration accepts
+    // 'insufficient' as the floor — see rating/src/attest.ts comment).
     if (
       minConfidence == null ||
       typeof minConfidence !== 'number' ||
       minConfidence < 0 ||
-      minConfidence > 2
+      minConfidence > 3
     ) {
-      return NextResponse.json({ error: 'minConfidence must be 0-2' }, { status: 400 });
+      return NextResponse.json({ error: 'minConfidence must be 0-3' }, { status: 400 });
     }
     if (!poster || typeof poster !== 'string' || !poster.startsWith('0x')) {
       return NextResponse.json({ error: 'poster must be a valid address' }, { status: 400 });
