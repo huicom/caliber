@@ -720,10 +720,38 @@ export function PostJobForm() {
       return;
     }
 
-    // === x402: sign EIP-3009 payment, fetch attestation ===
+    // x402 sign is moved BELOW approve — Circle Gateway facilitator requires
+    // validBefore - NOW_at_verify >= 604800s and the max window is 604900s,
+    // giving us ~100s of latency budget. If we signed x402 first and made
+    // the user wait through approve + post, verify would fail. Sign x402
+    // right before X-PAYMENT submission so the auth is fresh.
     let x402Signature: string | null = null;
     let x402Payload: Awaited<ReturnType<typeof circle.x402SignChallenge>> | null = null;
+
     try {
+      setStep('approving');
+      upsertStep('approve-challenge', { status: 'running' });
+      const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
+      upsertStep('approve-challenge', {
+        status: 'ok',
+        result: `challengeId ${approveChallengeId.slice(0, 8)}…`,
+      });
+
+      upsertStep('approve-run', { status: 'running' });
+      const approveRes = await circle.runChallenge(approveChallengeId);
+      if (approveRes.errorMessage) {
+        upsertStep('approve-run', { status: 'error', result: approveRes.errorMessage });
+        throw new Error(`approve: ${approveRes.errorMessage}`);
+      }
+      upsertStep('approve-run', {
+        status: 'ok',
+        result: approveRes.txHash ? `tx ${approveRes.txHash.slice(0, 10)}…` : 'confirmed',
+      });
+
+      // === x402 sign happens HERE — right before X-PAYMENT submission ===
+      // Latency budget for Circle facilitator validity is ~100s. Signing
+      // x402 last means the auth is fresh when verify runs.
+      setStep('paying');
       upsertStep('x402-prep', { status: 'running' });
       x402Payload = await circle.x402SignChallenge();
       upsertStep('x402-prep', {
@@ -745,31 +773,6 @@ export function PostJobForm() {
           : `challenge ${x402Payload.challengeId.slice(0, 8)}… (server poll)`,
       });
       upsertStep('attest-c', { status: 'running' });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'x402 sign failed');
-      setStep('error');
-      return;
-    }
-
-    try {
-      setStep('approving');
-      upsertStep('approve-challenge', { status: 'running' });
-      const approveChallengeId = await circle.approveChallenge(form.budgetUsdc);
-      upsertStep('approve-challenge', {
-        status: 'ok',
-        result: `challengeId ${approveChallengeId.slice(0, 8)}…`,
-      });
-
-      upsertStep('approve-run', { status: 'running' });
-      const approveRes = await circle.runChallenge(approveChallengeId);
-      if (approveRes.errorMessage) {
-        upsertStep('approve-run', { status: 'error', result: approveRes.errorMessage });
-        throw new Error(`approve: ${approveRes.errorMessage}`);
-      }
-      upsertStep('approve-run', {
-        status: 'ok',
-        result: approveRes.txHash ? `tx ${approveRes.txHash.slice(0, 10)}…` : 'confirmed',
-      });
 
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
