@@ -4,14 +4,9 @@ import { useState } from 'react';
 
 type Flow = 'metamask' | 'circle';
 
+// Circle PW listed first so it renders as the leftmost (default) tab.
+// JS object key order is preserved by Object.keys / for-in for string keys.
 const FLOWS: Record<Flow, { label: string; steps: [string, string][] }> = {
-  metamask: {
-    label: 'metamask',
-    steps: [
-      ['popup #1', 'Approve USDC to RatingGateway'],
-      ['popup #2', 'Post job — gateway verifies Caliber attestation, escrows USDC into AgenticCommerce'],
-    ],
-  },
   circle: {
     label: 'circle pw',
     steps: [
@@ -21,10 +16,20 @@ const FLOWS: Record<Flow, { label: string; steps: [string, string][] }> = {
       ['pin #4', 'Post job — gateway verifies + escrows USDC'],
     ],
   },
+  metamask: {
+    label: 'metamask',
+    steps: [
+      ['popup #1', 'Approve USDC to RatingGateway'],
+      ['popup #2', 'Post job — gateway verifies Caliber attestation, escrows USDC into AgenticCommerce'],
+    ],
+  },
 };
 
 export function WalletFlowTabs() {
-  const [active, setActive] = useState<Flow>('metamask');
+  // Default to Circle PW — it's the hero flow for the demo (Circle Gateway
+  // x402 settlement is the Circle-tool-usage story for judges). MetaMask
+  // is one click away for visitors who prefer their own wallet.
+  const [active, setActive] = useState<Flow>('circle');
   const flow = FLOWS[active];
 
   return (
