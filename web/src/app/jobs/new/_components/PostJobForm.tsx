@@ -673,13 +673,16 @@ export function PostJobForm() {
     }
     setError(null);
 
-    // Activity panel. Circle Programmable Wallet path uses a server-side
-    // Caliber Agent Wallet to pay the x402 attestation fee via Circle
-    // Gateway batched settlement — the demo user doesn't see an extra
-    // popup. (The MetaMask path signs the EIP-3009 authorization
-    // directly — see handleAttest.)
+    // Activity panel for Circle Programmable Wallet path. Pops three
+    // signature/challenge modals: x402 EIP-3009 → approve → postGatedJob.
+    // The x402 step is a real Circle Gateway flow now: user signs an
+    // EIP-3009 TransferWithAuthorization in their PIN modal, server
+    // forwards the signature to gateway-api-testnet.circle.com for
+    // verification and batched settlement.
     resetActivity([
-      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'Caliber Agent Wallet pays via Circle Gateway · gateway-api-testnet.circle.com · batched settlement' },
+      { id: 'x402-prepare', label: 'prepare Circle Gateway x402 challenge', detail: 'server probes rating API for 402 hint, builds EIP-3009 typed-data, creates signTypedData challenge' },
+      { id: 'x402-sign', label: 'sign EIP-3009 authorization in PIN modal', detail: 'Circle SDK · sdk.execute(challengeId) · TransferWithAuthorization for GatewayWalletBatched' },
+      { id: 'attest-c', label: 'fetch signed RatingAttestation', detail: 'gateway-api-testnet.circle.com verifies signature, settles to Seller Wallet Gateway Balance' },
       { id: 'gas-note', label: 'Circle Programmable Wallet (SCA)', detail: 'txs relayed by Circle infra · no user gas (Paymaster not on Arc Testnet)' },
       { id: 'approve-challenge', label: 'create USDC.approve challenge', detail: 'Circle API · POST /v1/w3s/user/transactions/contractExecution' },
       { id: 'approve-run', label: 'sign approval in wallet', detail: 'Circle SDK · sdk.execute(challengeId)' },
@@ -689,10 +692,40 @@ export function PostJobForm() {
       { id: 'redirect', label: 'redirect to job page', detail: 'next/navigation · router.push' },
     ]);
 
-    // Gas note + attestation row are informational — mark ok up front so
-    // the eye lands on the currently-running approve step.
     upsertStep('gas-note', { status: 'ok', result: 'sponsored · user pays 0 ETH' });
-    upsertStep('attest-c', { status: 'ok', result: 'server-side via X402_BYPASS_TOKEN (Caliber treasury)' });
+
+    // x402: server probes rating API + builds EIP-3009 typed-data, returns
+    // challenge for the user to sign.
+    let x402Signature: string | null = null;
+    let x402Payload: Awaited<ReturnType<typeof circle.x402SignChallenge>> | null = null;
+    try {
+      setStep('paying');
+      upsertStep('x402-prepare', { status: 'running' });
+      x402Payload = await circle.x402SignChallenge();
+      upsertStep('x402-prepare', {
+        status: 'ok',
+        result: `payTo ${x402Payload.payTo.slice(0, 10)}… · ${x402Payload.amount} micro-USDC`,
+      });
+
+      upsertStep('x402-sign', { status: 'running' });
+      const x402Res = await circle.runChallenge(x402Payload.challengeId);
+      if (x402Res.errorMessage) {
+        upsertStep('x402-sign', { status: 'error', result: x402Res.errorMessage });
+        throw new Error(`x402 sign: ${x402Res.errorMessage}`);
+      }
+      x402Signature = x402Res.signature;
+      upsertStep('x402-sign', {
+        status: 'ok',
+        result: x402Signature
+          ? `sig ${x402Signature.slice(0, 14)}…`
+          : `challenge ${x402Payload.challengeId.slice(0, 8)}… (signature via server poll)`,
+      });
+      upsertStep('attest-c', { status: 'running' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'x402 sign failed');
+      setStep('error');
+      return;
+    }
 
     try {
       setStep('approving');
@@ -716,8 +749,22 @@ export function PostJobForm() {
 
       setStep('posting');
       upsertStep('post-challenge', { status: 'running' });
-      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form);
+      const { challengeId: postChallengeId, draftHash: dh } = await circle.postJobChallenge(form, {
+        x402SignChallengeId: x402Payload?.challengeId,
+        x402Signature: x402Signature ?? undefined,
+        x402Authorization: x402Payload?.authorization,
+        x402Network: x402Payload?.network,
+        x402Scheme: x402Payload?.scheme,
+        x402Version: x402Payload?.x402Version,
+      });
       setDraftHash(dh);
+      // attest-c completed inside this call — Circle Gateway facilitator
+      // verified the EIP-3009 signature and the rating API returned the
+      // signed envelope.
+      upsertStep('attest-c', {
+        status: 'ok',
+        result: 'Circle Gateway facilitator verified · attestation signed',
+      });
       upsertStep('post-challenge', {
         status: 'ok',
         result: `challengeId ${postChallengeId.slice(0, 8)}…`,

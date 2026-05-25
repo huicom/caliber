@@ -167,6 +167,75 @@ export async function getUserTransactionStatus(
 }
 
 /**
+ * Create a Circle signTypedData challenge for an EIP-712 payload. Used for
+ * the x402 EIP-3009 TransferWithAuthorization signing on the Circle
+ * Programmable Wallet path. Returns the challengeId — the browser runs
+ * `sdk.execute(challengeId, callback)` to prompt the user's PIN modal.
+ */
+export async function createSignTypedDataChallenge(opts: {
+  userToken: string;
+  walletId: string;
+  typedData: string; // JSON-stringified EIP-712 message
+  memo?: string;
+}): Promise<{ challengeId: string }> {
+  const c = getUserControlledClient();
+  const res = await c.signTypedData({
+    userToken: opts.userToken,
+    walletId: opts.walletId,
+    data: opts.typedData,
+    memo: opts.memo ?? 'Caliber x402 attestation fee',
+  });
+  // The SDK returns the challenge under data.challengeId, even though
+  // the wrapping type is named "Signature".
+  const challengeId = (res.data as unknown as { challengeId?: string })?.challengeId;
+  if (!challengeId) throw new Error('signTypedData returned no challengeId');
+  return { challengeId };
+}
+
+/**
+ * Fetch the signature result for a completed Circle challenge. Polls until
+ * the challenge reaches COMPLETE state (or FAILED / EXPIRED). The signature
+ * itself is delivered to the browser via the SDK execute() callback, but
+ * we also fetch server-side here as a defensive double-check / fallback
+ * in case the browser callback doesn't surface it.
+ */
+export async function pollChallengeSignature(
+  userToken: string,
+  challengeId: string,
+  maxWaitMs = 15_000,
+): Promise<{ status: string; signature: string | null; errorMessage: string | null }> {
+  const c = getUserControlledClient();
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    const res = await c.getUserChallenge({ userToken, challengeId }).catch(() => null);
+    const ch = res?.data?.challenge as
+      | {
+          status?: string;
+          errorMessage?: string;
+          // The signature may surface as different field names depending on
+          // the SDK version; we'll try a few.
+          signature?: string;
+          result?: { signature?: string };
+        }
+      | undefined;
+    const status = ch?.status ?? 'UNKNOWN';
+    if (status === 'COMPLETE') {
+      const sig = ch?.signature ?? ch?.result?.signature ?? null;
+      return { status, signature: sig, errorMessage: null };
+    }
+    if (status === 'FAILED' || status === 'EXPIRED') {
+      return {
+        status,
+        signature: null,
+        errorMessage: ch?.errorMessage ?? `challenge ${status.toLowerCase()}`,
+      };
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return { status: 'TIMEOUT', signature: null, errorMessage: 'challenge poll timeout' };
+}
+
+/**
  * Find a wallet's most recent transaction by refId.
  *
  * Circle's CONTRACT_EXECUTION SDK callback doesn't surface the transactionId,

@@ -140,18 +140,63 @@ interface CircleAuthState {
   createWalletChallenge: () => Promise<string | null>;
   /** Returns the contract-execution challenge id for a USDC.approve(gateway,budget). */
   approveChallenge: (budgetUsdc: string) => Promise<string>;
-  /** Creates a Circle CONTRACT_EXECUTION challenge for USDC.transfer to the
-   *  x402 recipient. Returns the challengeId + refId + price details for UI
-   *  display. The caller runs the challenge (no result inspection needed),
-   *  then passes refId to postJobChallenge so the server can look up the
-   *  underlying Circle transaction. */
+  /** [Legacy] Creates a Circle CONTRACT_EXECUTION challenge for USDC.transfer
+   *  to the x402 recipient. Used by the homegrown on-chain-proof x402 variant.
+   *  Kept for backward compatibility; new code should use x402SignChallenge. */
   x402TransferChallenge: () => Promise<{ challengeId: string; refId: string; priceUsdc: string; recipient: string }>;
+  /** Creates a Circle signTypedData challenge for the EIP-3009
+   *  TransferWithAuthorization that Circle Gateway's facilitator expects.
+   *  The caller runs the challenge (user signs in PIN modal), then passes
+   *  the signature + authorization payload to postJobChallenge so the server
+   *  can submit it as X-PAYMENT to the rating API. */
+  x402SignChallenge: () => Promise<{
+    challengeId: string;
+    authorization: {
+      from: string;
+      to: string;
+      value: string;
+      validAfter: string;
+      validBefore: string;
+      nonce: string;
+    };
+    network: string;
+    scheme: string;
+    x402Version: number;
+    asset: string;
+    payTo: string;
+    amount: string;
+  }>;
   /** Returns the contract-execution challenge id for a postGatedJob call. */
-  postJobChallenge: (form: PostJobInput, opts?: { x402TransactionId?: string; x402RefId?: string }) => Promise<{ challengeId: string; draftHash: string }>;
+  postJobChallenge: (
+    form: PostJobInput,
+    opts?: {
+      x402TransactionId?: string;
+      x402RefId?: string;
+      x402SignChallengeId?: string;
+      x402Signature?: string;
+      x402Authorization?: {
+        from: string;
+        to: string;
+        value: string;
+        validAfter: string;
+        validBefore: string;
+        nonce: string;
+      };
+      x402Network?: string;
+      x402Scheme?: string;
+      x402Version?: number;
+    },
+  ) => Promise<{ challengeId: string; draftHash: string }>;
   /** Wraps sdk.execute as a Promise — resolves with txHash on success.
-   *  transactionId is Circle's internal id; needed for follow-up polls
-   *  (e.g., the x402 flow polls Circle until the on-chain txHash lands). */
-  runChallenge: (challengeId: string) => Promise<{ ok: boolean; txHash: string | null; transactionId: string | null; errorMessage: string | null }>;
+   *  signature surfaces for signTypedData challenges (EIP-3009 x402).
+   *  transactionId is Circle's internal id; needed for follow-up polls. */
+  runChallenge: (challengeId: string) => Promise<{
+    ok: boolean;
+    txHash: string | null;
+    transactionId: string | null;
+    signature: string | null;
+    errorMessage: string | null;
+  }>;
   /** Re-fetches wallet info from server. */
   refresh: () => Promise<void>;
 }
@@ -598,6 +643,24 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
+  const x402SignChallenge = useCallback(async () => {
+    if (!session?.wallet) throw new Error('wallet not ready');
+    const res = await fetch('/api/circle/uc/x402-sign-challenge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userToken: session.userToken,
+        walletId: session.wallet.id,
+        walletAddress: session.wallet.address,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message ?? `x402-sign-challenge ${res.status}`);
+    }
+    return (await res.json()) as Awaited<ReturnType<CircleAuthState['x402SignChallenge']>>;
+  }, [session]);
+
   const x402TransferChallenge = useCallback(async () => {
     if (!session?.wallet) throw new Error('wallet not ready');
     const res = await fetch('/api/circle/uc/x402-transfer-challenge', {
@@ -649,28 +712,52 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   );
 
   const runChallenge = useCallback(
-    (challengeId: string): Promise<{ ok: boolean; txHash: string | null; transactionId: string | null; errorMessage: string | null }> => {
+    (
+      challengeId: string,
+    ): Promise<{
+      ok: boolean;
+      txHash: string | null;
+      transactionId: string | null;
+      signature: string | null;
+      errorMessage: string | null;
+    }> => {
       return new Promise((resolve) => {
         if (!sdkRef.current) {
-          resolve({ ok: false, txHash: null, transactionId: null, errorMessage: 'SDK not initialised' });
+          resolve({
+            ok: false,
+            txHash: null,
+            transactionId: null,
+            signature: null,
+            errorMessage: 'SDK not initialised',
+          });
           return;
         }
         sdkRef.current.execute(challengeId, (err, result) => {
           if (err) {
-            resolve({ ok: false, txHash: null, transactionId: null, errorMessage: err.message ?? 'challenge failed' });
+            resolve({
+              ok: false,
+              txHash: null,
+              transactionId: null,
+              signature: null,
+              errorMessage: err.message ?? 'challenge failed',
+            });
             return;
           }
-          const r = result as {
-            txHash?: string | null;
-            transactionHash?: string | null;
-            id?: string | null;
-            transactionId?: string | null;
-            data?: { id?: string | null; transactionId?: string | null };
-          } | undefined;
+          const r = result as
+            | {
+                txHash?: string | null;
+                transactionHash?: string | null;
+                id?: string | null;
+                transactionId?: string | null;
+                signature?: string | null;
+                data?: { id?: string | null; transactionId?: string | null; signature?: string | null };
+              }
+            | undefined;
           const txHash = r?.txHash ?? r?.transactionHash ?? null;
           const transactionId =
             r?.transactionId ?? r?.id ?? r?.data?.transactionId ?? r?.data?.id ?? null;
-          resolve({ ok: true, txHash, transactionId, errorMessage: null });
+          const signature = r?.signature ?? r?.data?.signature ?? null;
+          resolve({ ok: true, txHash, transactionId, signature, errorMessage: null });
         });
       });
     },
@@ -693,6 +780,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       createWalletChallenge,
       approveChallenge,
       x402TransferChallenge,
+      x402SignChallenge,
       postJobChallenge,
       runChallenge,
       refresh,
@@ -712,9 +800,11 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       createWalletChallenge,
       approveChallenge,
       x402TransferChallenge,
+      x402SignChallenge,
       postJobChallenge,
       runChallenge,
       refresh,
+      x402SignChallenge,
     ],
   );
 

@@ -17,7 +17,9 @@ import {
   createContractExecutionChallenge,
   getUserTransactionStatus,
   findTransactionByRefId,
+  pollChallengeSignature,
 } from '@/lib/circle/user-controlled';
+import { encodePaymentSignatureHeader } from '@x402/core/http';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -48,6 +50,26 @@ const bodySchema = z.object({
   // surface the transactionId, so the browser sends the refId we tagged
   // the challenge with, and the server looks up the transaction itself.
   x402RefId: z.string().optional(),
+  // Circle Programmable Wallet x402: browser ran a signTypedData challenge
+  // to sign an EIP-3009 TransferWithAuthorization. The server polls Circle
+  // for the resulting signature (or accepts it inline from the browser's
+  // SDK callback), then builds the X-PAYMENT header and uses Circle
+  // Gateway's facilitator to verify + settle.
+  x402SignChallengeId: z.string().optional(),
+  x402Signature: z.string().optional(),
+  x402Authorization: z
+    .object({
+      from: z.string(),
+      to: z.string(),
+      value: z.string(),
+      validAfter: z.string(),
+      validBefore: z.string(),
+      nonce: z.string(),
+    })
+    .optional(),
+  x402Network: z.string().optional(),
+  x402Scheme: z.string().optional(),
+  x402Version: z.number().optional(),
 });
 
 export async function POST(req: Request) {
@@ -93,14 +115,55 @@ export async function POST(req: Request) {
     }
     const { draftHash } = (await draftRes.json()) as { draftHash: string };
 
-    // 2. Fetch signed attestation. Two modes:
-    //    (a) x402TransactionId present → poll Circle for the on-chain tx
-    //        hash of the user's USDC.transfer to the signer, then submit
-    //        that hash to the rating API as x-payment-proof. Real x402.
-    //    (b) No x402TransactionId → fall back to the bypass token
-    //        (server-to-server trusted-caller path).
+    // 2. Fetch signed attestation. Three modes:
+    //    (a) x402SignChallengeId + (optional inline) x402Signature → real
+    //        Circle Gateway flow. Build X-PAYMENT from the EIP-3009
+    //        TransferWithAuthorization signature. Circle Gateway's
+    //        facilitator verifies the signature and queues for batched
+    //        settlement to the Seller Wallet's Gateway Balance.
+    //    (b) x402TransactionId / x402RefId → legacy on-chain proof path
+    //        (USDC.transfer tx hash). Kept for backward compat with the
+    //        homegrown x402 variant.
+    //    (c) None of the above → bypass token (server-to-server trusted
+    //        caller).
     const attestHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (body.x402TransactionId || body.x402RefId) {
+    if (body.x402SignChallengeId) {
+      // Resolve the signature. Prefer the inline value (browser pulled it
+      // from the SDK execute callback); fall back to polling Circle.
+      let signature = body.x402Signature ?? null;
+      if (!signature) {
+        const poll = await pollChallengeSignature(body.userToken, body.x402SignChallengeId);
+        if (poll.status !== 'COMPLETE' || !poll.signature) {
+          return NextResponse.json(
+            {
+              error: 'x402_signature_unavailable',
+              detail: poll.errorMessage ?? `challenge ${poll.status}`,
+            },
+            { status: 504 },
+          );
+        }
+        signature = poll.signature;
+      }
+      if (!body.x402Authorization || !body.x402Network || !body.x402Scheme) {
+        return NextResponse.json(
+          { error: 'x402_payload_incomplete', detail: 'missing authorization / network / scheme' },
+          { status: 400 },
+        );
+      }
+      const headerValue = encodePaymentSignatureHeader({
+        x402Version: body.x402Version ?? 2,
+        scheme: body.x402Scheme,
+        network: body.x402Network,
+        payload: {
+          signature,
+          authorization: body.x402Authorization,
+        },
+      } as unknown as Parameters<typeof encodePaymentSignatureHeader>[0]);
+      attestHeaders['X-PAYMENT'] = headerValue;
+      console.log(
+        `[post-job-challenge] x402 Circle PW signature accepted · challenge=${body.x402SignChallengeId.slice(0, 8)}… sig=${signature.slice(0, 12)}…`,
+      );
+    } else if (body.x402TransactionId || body.x402RefId) {
       // Resolve to a Circle transactionId either directly or via refId
       // lookup. CONTRACT_EXECUTION challenges don't expose the
       // transactionId in the SDK callback, so the refId path is the
