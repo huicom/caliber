@@ -224,6 +224,19 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
         // Clean up cookies that were only needed for the round-trip
         deleteCookie('caliber_circle_deviceToken');
         deleteCookie('caliber_circle_deviceEncryptionKey');
+        // Restore the page the user signed in from. Google forces redirect
+        // back to origin-only (a single whitelisted URI), so we stashed the
+        // path in localStorage before performLogin. Navigation is safe
+        // because the session is already persisted to cookies — the new
+        // page will rehydrate without another Google round-trip.
+        if (typeof window !== 'undefined') {
+          const returnPath = window.localStorage.getItem('caliber_post_login_return');
+          window.localStorage.removeItem('caliber_post_login_return');
+          if (returnPath && returnPath !== window.location.pathname + window.location.search) {
+            window.location.replace(returnPath);
+            return;
+          }
+        }
         // Note: signal that the wallet-create flow should follow. The Connect
         // button handles execution because it needs the SDK ref + UI feedback.
         // We just mark pending=false here so the UI updates and the listener
@@ -284,9 +297,7 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
             google: {
               clientId: data.googleClientId ?? '',
               redirectUri:
-                typeof window !== 'undefined'
-                  ? `${window.location.origin}${window.location.pathname}`
-                  : '',
+                typeof window !== 'undefined' ? window.location.origin : '',
               selectAccountPrompt: true,
             },
           },
@@ -375,7 +386,17 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
       setCookie('caliber_circle_deviceEncryptionKey', deviceEncryptionKey);
       log(`signInWithGoogle · stored deviceToken in cookies`);
 
-      const redirectUri = `${window.location.origin}${window.location.pathname}`;
+      // Use origin-only so only ONE redirect URI needs whitelisting in the
+      // Google Cloud Console (origin + pathname requires a separate entry per
+      // page the user can sign in from). Save the originating path so we can
+      // restore it after Google redirects back.
+      const redirectUri = window.location.origin;
+      const returnPath = window.location.pathname + window.location.search;
+      if (returnPath && returnPath !== '/') {
+        window.localStorage.setItem('caliber_post_login_return', returnPath);
+      } else {
+        window.localStorage.removeItem('caliber_post_login_return');
+      }
       sdkRef.current.updateConfigs({
         loginConfigs: {
           deviceToken,
