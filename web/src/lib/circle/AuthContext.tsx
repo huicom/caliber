@@ -763,7 +763,26 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const postJobChallenge = useCallback(
-    async (form: PostJobInput, opts?: { x402TransactionId?: string; x402RefId?: string }) => {
+    async (
+      form: PostJobInput,
+      opts?: {
+        x402TransactionId?: string;
+        x402RefId?: string;
+        x402SignChallengeId?: string;
+        x402Signature?: string;
+        x402Authorization?: {
+          from: string;
+          to: string;
+          value: string;
+          validAfter: string;
+          validBefore: string;
+          nonce: string;
+        };
+        x402Network?: string;
+        x402Scheme?: string;
+        x402Version?: number;
+      },
+    ) => {
       if (!session?.wallet) throw new Error('wallet not ready');
       const res = await fetch('/api/circle/uc/post-job-challenge', {
         method: 'POST',
@@ -775,6 +794,12 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
           ...form,
           x402TransactionId: opts?.x402TransactionId,
           x402RefId: opts?.x402RefId,
+          x402SignChallengeId: opts?.x402SignChallengeId,
+          x402Signature: opts?.x402Signature,
+          x402Authorization: opts?.x402Authorization,
+          x402Network: opts?.x402Network,
+          x402Scheme: opts?.x402Scheme,
+          x402Version: opts?.x402Version,
         }),
       });
       if (!res.ok) {
