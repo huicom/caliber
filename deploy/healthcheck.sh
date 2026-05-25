@@ -136,7 +136,7 @@ run_check "x402" "attest endpoint returns 402 (no payment)" \
   'curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "{}" https://caliber-api.poko.blue/v1/agents/arc/1253/attest' \
   '402'
 run_check "x402" "Circle Gateway payment-required header present" \
-  'curl -sI -X POST -H "Content-Type: application/json" -d "{}" https://caliber-api.poko.blue/v1/agents/arc/1253/attest' \
+  'curl -s -D - -o /dev/null -X POST -H "Content-Type: application/json" -d "{}" https://caliber-api.poko.blue/v1/agents/arc/1253/attest' \
   'payment-required:'
 run_check "x402" "bypass token accepted (server-to-server)" \
   "curl -s -o /dev/null -w \"%{http_code}\" -X POST -H \"Content-Type: application/json\" -H \"x-x402-bypass: \${X402_BYPASS_TOKEN:-MISSING}\" -d '{}' https://caliber-api.poko.blue/v1/agents/arc/1253/attest" \
