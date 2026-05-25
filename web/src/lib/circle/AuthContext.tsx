@@ -39,13 +39,52 @@ function deleteCookie(name: string) {
   document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 }
 
-// Session cookies — outlive a single page reload, matched to Circle's
-// userToken ~1h validity. If a cookie is older than its server-side counterpart
-// expiry, the hydrate call below will 401/422 and we'll clear silently.
-const SESSION_COOKIE_USER_TOKEN = 'caliber_circle_userToken';
-const SESSION_COOKIE_ENCRYPTION_KEY = 'caliber_circle_encryptionKey';
-const SESSION_COOKIE_EMAIL = 'caliber_circle_email';
+// Session storage — outlives a single page reload, matched to Circle's
+// userToken ~1h validity. We mirror to BOTH cookies and localStorage so a
+// browser quirk on either backend doesn't kill the demo. Restore tries
+// cookies first, then localStorage. If hydrate fails (token expired
+// Circle-side), the stale storage stays around — restore logs the error
+// and falls back to the sign-in state, but a manual signOut wipes it
+// cleanly.
+const SESSION_KEY_USER_TOKEN = 'caliber_circle_userToken';
+const SESSION_KEY_ENCRYPTION_KEY = 'caliber_circle_encryptionKey';
+const SESSION_KEY_EMAIL = 'caliber_circle_email';
 const SESSION_TTL_SECONDS = 60 * 60; // 1 hour
+
+function saveSessionItem(key: string, value: string) {
+  setCookie(key, value, SESSION_TTL_SECONDS);
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    /* private mode / quota — fine, cookie covers us */
+  }
+}
+
+function loadSessionItem(key: string): string {
+  const cookieVal = getCookie(key);
+  if (cookieVal) return cookieVal;
+  try {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem(key) ?? '';
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
+function clearSessionItem(key: string) {
+  deleteCookie(key);
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 /* ──────────────────────────────────────────────────────────────────────────
  * CircleAuthContext — global state for the Circle Programmable Wallets path.
@@ -215,12 +254,16 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined' && window.location.hash) {
           history.replaceState(null, '', window.location.pathname + window.location.search);
         }
-        // Persist the session so subsequent page loads skip the sign-in modal.
-        // userToken validity from Circle is ~1h; match that with cookie TTL so
-        // we never present a stale token. Hydrate-on-mount handles expiry.
-        setCookie(SESSION_COOKIE_USER_TOKEN, r.userToken, SESSION_TTL_SECONDS);
-        setCookie(SESSION_COOKIE_ENCRYPTION_KEY, r.encryptionKey, SESSION_TTL_SECONDS);
-        if (email) setCookie(SESSION_COOKIE_EMAIL, email, SESSION_TTL_SECONDS);
+        // Persist the session (cookie + localStorage) so subsequent page
+        // loads skip the sign-in modal. userToken validity from Circle is
+        // ~1h; match that with cookie TTL so we never present a stale
+        // token. Hydrate-on-mount handles expiry.
+        saveSessionItem(SESSION_KEY_USER_TOKEN, r.userToken);
+        saveSessionItem(SESSION_KEY_ENCRYPTION_KEY, r.encryptionKey);
+        if (email) saveSessionItem(SESSION_KEY_EMAIL, email);
+        log(
+          `session persisted · cookies+localStorage · userToken=${r.userToken.slice(0, 8)}…`,
+        );
         // Clean up cookies that were only needed for the round-trip
         deleteCookie('caliber_circle_deviceToken');
         deleteCookie('caliber_circle_deviceEncryptionKey');
@@ -327,19 +370,23 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
           // the user doesn't see "Sign in" again on every visit. If the
           // userToken expired Circle-side, hydrate will throw and we wipe
           // the cookies; user lands on the sign-in state as before.
-          const savedUserToken = getCookie(SESSION_COOKIE_USER_TOKEN);
-          const savedEncryptionKey = getCookie(SESSION_COOKIE_ENCRYPTION_KEY);
-          const savedEmail = getCookie(SESSION_COOKIE_EMAIL) || null;
+          const savedUserToken = loadSessionItem(SESSION_KEY_USER_TOKEN);
+          const savedEncryptionKey = loadSessionItem(SESSION_KEY_ENCRYPTION_KEY);
+          const savedEmail = loadSessionItem(SESSION_KEY_EMAIL) || null;
+          log(
+            `restore probe · userToken=${
+              savedUserToken ? savedUserToken.slice(0, 8) + '…' : 'missing'
+            } · encryptionKey=${savedEncryptionKey ? 'present' : 'missing'}`,
+          );
           if (savedUserToken && savedEncryptionKey) {
-            log(`restoring persisted session · userToken=${savedUserToken.slice(0, 8)}…`);
             try {
               await hydrateFromUserToken(savedUserToken, savedEncryptionKey, savedEmail);
-              log(`session restored from cookie`);
+              log(`session restored from persisted storage`);
             } catch (e) {
-              log(`restore failed (${e instanceof Error ? e.message : 'unknown'}) · clearing cookies`);
-              deleteCookie(SESSION_COOKIE_USER_TOKEN);
-              deleteCookie(SESSION_COOKIE_ENCRYPTION_KEY);
-              deleteCookie(SESSION_COOKIE_EMAIL);
+              // Don't clear automatically — could be a transient server
+              // hiccup. User can signOut to clear, or storage will lapse
+              // on its own at TTL. Loud log so we can debug.
+              log(`restore failed (${e instanceof Error ? e.message : 'unknown'}) · keeping storage`);
             }
           }
         }
@@ -472,9 +519,9 @@ export function CircleAuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     setSession(null);
     setError(null);
-    deleteCookie(SESSION_COOKIE_USER_TOKEN);
-    deleteCookie(SESSION_COOKIE_ENCRYPTION_KEY);
-    deleteCookie(SESSION_COOKIE_EMAIL);
+    clearSessionItem(SESSION_KEY_USER_TOKEN);
+    clearSessionItem(SESSION_KEY_ENCRYPTION_KEY);
+    clearSessionItem(SESSION_KEY_EMAIL);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('socialLoginProvider');
     }
