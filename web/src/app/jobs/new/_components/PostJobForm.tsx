@@ -829,14 +829,42 @@ export function PostJobForm() {
           await new Promise((r) => setTimeout(r, 2000));
         }
       }
-      // Fallthrough: tx succeeded but we couldn't pin down jobId in 30s.
-      // Send the user to the jobs list so they don't get stranded on a
-      // success card with no navigation — their post will be near the top.
-      upsertStep('scan', { status: 'ok', result: 'timeout — listing all jobs' });
+      // Fallthrough: the chain scan didn't find the event in 30s. Before
+      // dumping the user to /jobs, ask our own indexer for the user's most
+      // recent post — the indexer's WebSocket subscription usually beats
+      // browser-side getLogs latency by a wide margin, so the job is
+      // typically already in the DB.
+      upsertStep('scan', { status: 'ok', result: 'browser timeout — falling back to indexer' });
       upsertStep('redirect', { status: 'running' });
+      let resolvedJobId: string | null = null;
+      if (wallet.address) {
+        for (let i = 0; i < 10 && !resolvedJobId; i++) {
+          try {
+            const res = await fetch(
+              `/api/audit/posts?poster=${wallet.address.toLowerCase()}&limit=1`,
+              { cache: 'no-store' },
+            );
+            if (res.ok) {
+              const data = (await res.json()) as { jobs?: Array<{ jobId?: string }> };
+              const recent = data.jobs?.[0]?.jobId;
+              if (recent) resolvedJobId = recent;
+            }
+          } catch { /* retry */ }
+          if (!resolvedJobId) await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
       setStep('success');
-      router.push('/jobs');
-      upsertStep('redirect', { status: 'ok', result: '/jobs' });
+      if (resolvedJobId) {
+        setCreatedJobId(resolvedJobId);
+        upsertStep('redirect', { status: 'ok', result: `/jobs/${resolvedJobId} (via indexer)` });
+        router.push(`/jobs/${resolvedJobId}`);
+      } else {
+        upsertStep('redirect', {
+          status: 'ok',
+          result: '/jobs (indexer also missed it — should appear in seconds)',
+        });
+        router.push('/jobs');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'circle hire failed');
       setStep('error');
