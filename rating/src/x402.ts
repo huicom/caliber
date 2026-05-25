@@ -24,8 +24,15 @@ const ARC_CHAIN_ID = 5042002;
 const USDC_CONTRACT = (process.env.USDC_CONTRACT ||
   '0x3600000000000000000000000000000000000000') as `0x${string}`;
 
-const PRICE_MICROS = BigInt(process.env.X402_PRICE_USDC_MICROS || '1000');
-const MAX_TX_AGE_SECONDS = Number(process.env.X402_MAX_TX_AGE_SECONDS || '300');
+// systemd's EnvironmentFile= doesn't strip inline `# comment` like dotenv
+// does, so we defensively parse the leading integer out of each env var.
+// Prevents a crash-loop when a `.env` line is "X402_FOO=1000  # comment".
+function intFromEnv(raw: string | undefined, fallback: string): string {
+  const candidate = (raw ?? '').trim().match(/^\d+/)?.[0];
+  return candidate && candidate.length > 0 ? candidate : fallback;
+}
+const PRICE_MICROS = BigInt(intFromEnv(process.env.X402_PRICE_USDC_MICROS, '1000'));
+const MAX_TX_AGE_SECONDS = Number(intFromEnv(process.env.X402_MAX_TX_AGE_SECONDS, '300'));
 
 function getRecipient(): `0x${string}` {
   const fromEnv = process.env.X402_RECIPIENT;
