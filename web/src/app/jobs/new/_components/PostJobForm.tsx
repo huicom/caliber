@@ -395,8 +395,8 @@ export function PostJobForm() {
 
     resetActivity([
       { id: 'draft', label: 'save off-chain draft', detail: 'POST /api/jobs/draft → keccak256(draftHash)' },
-      { id: 'x402', label: 'sign Circle Gateway x402 payment', detail: 'EIP-3009 TransferWithAuthorization · Circle BatchEvmScheme · 0 gas, batched settlement' },
-      { id: 'attest', label: 'fetch signed RatingAttestation', detail: 'gateway-api-testnet.circle.com verifies signature, settles to seller Gateway Balance' },
+      { id: 'x402', label: 'x402 paywall (first-party bypass)', detail: 'Circle Gateway middleware mounted on rating API · external integrators pay 0.001 USDC per attestation · first-party demo uses bypass token' },
+      { id: 'attest', label: 'fetch signed RatingAttestation', detail: 'rating API signs envelope under methodology v2.0.1' },
       { id: 'approve', label: 'approve USDC to RatingGateway', detail: 'USDC.approve · wagmi writeContract' },
       { id: 'post', label: 'post gated job on-chain', detail: 'RatingGateway.postGatedJob · wagmi writeContract' },
       { id: 'redirect-mm', label: 'redirect to job page', detail: 'next/navigation · router.push' },
@@ -429,47 +429,31 @@ export function PostJobForm() {
       setDraftHash(hash);
       upsertStep('draft', { status: 'ok', result: `${hash.slice(0, 10)}…` });
 
-      // Step 2: signed Caliber v2.0 rating attestation, gated by x402.
-      // The rating API returns 402 with a USDC payment hint; fetchWithX402
-      // pays via the connected wallet, waits one confirmation, then retries
-      // with x-payment-proof. The Circle (Google sign-in) path skips this —
-      // it calls a server-side route that pays from the demo treasury.
+      // Step 2: signed Caliber v2.0 rating attestation.
+      //
+      // MetaMask first-party demo path: route through our /api/proxy/attest
+      // which adds the X-X402-BYPASS header server-side (Caliber-internal
+      // call). User-pays-direct via wagmi-signed EIP-3009 is wired (see
+      // web/src/lib/x402.ts) but requires the user to first deposit USDC
+      // into their Circle Gateway Balance — that deposit flow isn't in
+      // the current build. For the demo we use the standard SaaS pattern:
+      // Caliber's first-party frontend uses the bypass; external
+      // integrators with Gateway-Balance-funded wallets would call the
+      // rating endpoint directly and pay via x402.
       const tierName = TIER_NAME_MAP[minTier] ?? 'Pending';
-      const attestUrl = `${RATING_API_BASE}/v1/agents/arc/${targetAgentId}/attest`;
-      const attestInit: RequestInit = {
+      upsertStep('attest', { status: 'running' });
+      const res = await fetch(`/api/proxy/attest?chain=arc&id=${targetAgentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ minTier: tierName, minConfidence: FIXED_MIN_CONFIDENCE }),
-      };
-
-      let res: Response;
-      upsertStep('attest', { status: 'running' });
-      if (walletClient && address) {
-        try {
-          res = await fetchWithX402(attestUrl, attestInit, {
-            account: address,
-            walletClient,
-            publicClient: publicClient!,
-            onPayment: () => {
-              setStep('paying');
-              upsertStep('x402', { status: 'running' });
-            },
-            onPaid: (txHash) => {
-              setStep('attesting');
-              upsertStep('x402', { status: 'ok', result: `tx ${txHash.slice(0, 10)}…` });
-            },
-          });
-        } catch (e) {
-          if (e instanceof X402Error) {
-            setError(`x402 payment failed: ${e.message}`);
-            setStep('error');
-            return;
-          }
-          throw e;
-        }
-      } else {
-        res = await fetch(attestUrl, attestInit);
-      }
+      });
+      // Skip the x402 step in the activity log — it's not happening on
+      // this path. (Earlier we marked it 'running'; keep that visible
+      // but downgrade detail.)
+      upsertStep('x402', {
+        status: 'ok',
+        result: 'first-party bypass (production: external integrators pay via Gateway Balance)',
+      });
 
       // Capture the x402 receipt for the success card (if the server echoed it).
       const acceptedHash = res.headers.get('x-payment-accepted') as `0x${string}` | null;
