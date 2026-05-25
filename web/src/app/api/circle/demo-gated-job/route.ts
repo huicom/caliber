@@ -50,7 +50,7 @@ const bodySchema = z.object({
   description: z.string().min(1).max(2000),
   budgetUsdc: z.string().regex(/^\d+(\.\d+)?$/),
   minTier: z.enum(['Gold', 'Silver', 'Bronze', 'Pending']).default('Pending'),
-  minConfidence: z.enum(['high', 'moderate', 'low']).default('moderate'),
+  minConfidence: z.enum(['high', 'moderate', 'low', 'insufficient']).default('insufficient'),
   targetAgentId: z.string().regex(/^\d+$/),
   // Optional. Server defaults to the Circle wallet itself (self-eval) when
   // empty so judges can click "run demo" without having to know an address.
@@ -133,7 +133,7 @@ export async function POST(req: Request) {
         description: body.description,
         budgetUsdc: body.budgetUsdc,
         minTier: ['Gold', 'Silver', 'Bronze', 'Pending'].indexOf(body.minTier),
-        minConfidence: ['high', 'moderate', 'low'].indexOf(body.minConfidence),
+        minConfidence: ['high', 'moderate', 'low', 'insufficient'].indexOf(body.minConfidence),
         chainId: 'arc',
         poster: wallet.address,
         targetAgentId: body.targetAgentId,

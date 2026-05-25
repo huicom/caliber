@@ -206,7 +206,7 @@ export interface PostJobInput {
   description: string;
   budgetUsdc: string;
   minTier: 'Gold' | 'Silver' | 'Bronze' | 'Pending';
-  minConfidence: 'high' | 'moderate' | 'low';
+  minConfidence: 'high' | 'moderate' | 'low' | 'insufficient';
   targetAgentId: string;
   evaluatorAddress?: string;
   deadline?: string;

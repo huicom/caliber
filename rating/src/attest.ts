@@ -39,7 +39,11 @@ const TIER_NAMES = [
 
 const bodySchema = z.object({
   minTier: z.enum(TIER_NAMES).optional().default('Pending'),
-  minConfidence: z.enum(['high', 'moderate', 'low']).optional().default('moderate'),
+  // 'insufficient' is the lowest acceptable floor — matches the testnet
+  // calibration that lowered tier-gate min-jobs to 2. Without it, agents
+  // the picker correctly surfaces as Gold/Silver get rejected here when
+  // they have <5 total interactions.
+  minConfidence: z.enum(['high', 'moderate', 'low', 'insufficient']).optional().default('moderate'),
   validForSeconds: z.number().int().min(60).max(3600).optional().default(600),
 });
 

@@ -101,10 +101,10 @@ const TIER_TO_ORDINAL: Record<CaliberTier, number> = {
   Dormant: 5,
 };
 
-// Confidence floor is fixed at "low" — any agent with a tier already has ≥5
-// interactions (the engine refuses to issue a tier below that). Tier alone is
-// the user-facing trust axis.
-const FIXED_MIN_CONFIDENCE = 'low' as const;
+// Confidence floor is fixed at "insufficient" — matches the testnet
+// calibration that lowered tier-gate min-jobs to 2. Tier alone is the
+// user-facing trust axis; the picker already filters to rated agents.
+const FIXED_MIN_CONFIDENCE = 'insufficient' as const;
 
 type TargetCheck =
   | { status: 'idle' }
@@ -413,7 +413,7 @@ export function PostJobForm() {
           description,
           budgetUsdc: budget,
           minTier,
-          minConfidence: 2, // fixed "low" floor (ordinal 2)
+          minConfidence: 3, // fixed "insufficient" floor (ordinal 3, accepts everything)
           chainId: 'arc',
           poster: address,
           targetAgentId,
