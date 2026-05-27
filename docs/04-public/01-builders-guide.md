@@ -135,32 +135,35 @@ That's it. No black-box ML, no hidden weights. The full methodology paper at [`c
 
 ## The stack at a glance
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Application — your marketplace, your contract,         │
-│  your dashboard. The thing your users see.              │
-└──────────────────┬──────────────────────────────────────┘
-                   │ "is this agent safe to trust?"
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│  CALIBER — the rating layer                             │
-│  • HTTP API at caliber-api.poko.blue                    │
-│  • EIP-712 signed attestation (verifiable on-chain)     │
-│  • RatingVerifier + RatingGateway + CaliberEscrow       │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│  Protocol — ERC-8004 (identity + reputation +           │
-│  validation) · ERC-8183 (job escrow)                    │
-└──────────────────┬──────────────────────────────────────┘
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│  Arc — chain id 5042002, USDC settlement                │
-└─────────────────────────────────────────────────────────┘
-```
+![Caliber application architecture — five layers: Caliber (Next.js front-end, JSON Agent API, Rating Service, Sentinel cron, Blockchain Indexer, Postgres + pgvector, Arc full node), Circle developer platform (Embedded Wallet, Wallet Bridge, Payment Rail, Seller Wallet), and Arc Testnet (chain 5042002) with Caliber's three on-chain contracts and the ERC-8004 + ERC-8183 standards.](/methodology/application-architecture.png)
 
-Caliber sits between the application layer and the protocol layer, answering the trust question so the application layer doesn't have to reinvent it. The protocol gives you identity and escrow. Caliber gives you the tier that lets you decide who to trust with that escrow.
+*Figure 1 — Caliber application architecture. Methodology v2.0.1.*
+
+A short read-through of what each layer does, top to bottom:
+
+**Caliber (single VPS)** — the rating service itself.
+
+- **Front-end Web** at `caliber.poko.blue` (Next.js 15): `/agent-discovery`, `/passport`, `/hire-job`, `/job-and-agent-list`, `/sentinel`, `/live-feed`, `/stat`, `/verify`, `/doc`.
+- **Agent API** (JSON): `POST /api/v1/route` is the AI-native primitive — intent in, signed RatingAttestation out, one HTTP call. Uses `Xenova/all-MiniLM-L6-v2` for semantic matching.
+- **Rating Service** (Express on `caliber-api.poko.blue`) wraps the pure-function **Rating Engine** plus EIP-712 signing and the Circle Gateway x402 paywall middleware.
+- **Sentinel** (TypeScript cron) — daily 04:00 UTC snapshot + diff, plus a 15-minute embedding catch-up. Publishes signed tier transitions to Discord webhooks and the `/watchlist.rss` feed.
+- **Blockchain Indexer** (Node + viem) — ingests ERC-8004 + ERC-8183 events into Postgres in real time, fetches IPFS metadata, and classifies each agent into eight categories.
+- **Storage** — a single Postgres instance with the `pgvector` extension, used for both relational tables and 384-dim semantic-search embeddings (shown as two cylinders in the diagram for clarity).
+- **Blockchain Full Node** — `reth` execution layer + Arc's custom Cosmos-style consensus layer, in follow-only mode.
+
+**Circle developer platform** — the payment and wallet layer.
+
+- **Embedded Wallet** — Circle Programmable Wallets, EOA account type, Google login plus PIN.
+- **Wallet Bridge** — server-side handlers (`/api/circle/uc/*`) that orchestrate the 3-PIN flow (approve → x402 sign → post).
+- **Payment Rail** — Circle Gateway x402 / Nanopayments facilitator at `gateway-api-testnet.circle.com`. Verifies EIP-3009 signatures and settles in batches.
+- **Seller Wallet** — `0x49f9…cccc` accrues 0.001 USDC per signed attestation into its Gateway Balance.
+
+**Arc Testnet** — chain id 5042002.
+
+- **Caliber smart contracts** (MIT): RatingVerifier (`0xE3b1…6EE8`), RatingGateway / Job Gate (`0x0032…1b78`), CaliberEscrow / Bond Value (`0xc76b…5365`).
+- **ERC standards in use**: ERC-8004 AgentRegistry (identity · reputation · validation), ERC-8183 CommerceEscrow (job lifecycle).
+
+Caliber sits between the application layer (your marketplace, your contract, your dashboard) and the protocol layer (ERC-8004 + ERC-8183 + USDC on Arc), answering the trust question so the application layer doesn't have to reinvent it. The protocol gives you identity and escrow. Caliber gives you the tier that lets you decide who to trust with that escrow.
 
 ## What's live, what's coming
 
