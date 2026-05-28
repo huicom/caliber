@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# Daily Postgres backup for Caliber's arc_agents database.
+# Runs every day via /etc/cron.daily (placed there by `deploy/install-backup-cron.sh`).
+#
+# What it does:
+#   - pg_dump the arc_agents DB in custom format (compressed, restore-friendly)
+#   - Write to /home/huicom/caliber-backups/arc_agents-YYYYMMDD.dump
+#   - Rotate: keep the last 14 days, delete older
+#
+# Restore (if ever needed):
+#   docker exec -i arc-pg pg_restore -U postgres -d arc_agents --clean --if-exists \
+#     < /home/huicom/caliber-backups/arc_agents-YYYYMMDD.dump
+#
+# Disk math: DB is ~159 MB live, dump is ~30-50 MB compressed.
+# 14 days × 50 MB = ~700 MB max footprint. Negligible against 117 GB free.
+
+set -euo pipefail
+
+BACKUP_DIR=/home/huicom/caliber-backups
+TIMESTAMP=$(date +%Y%m%d)
+OUT="$BACKUP_DIR/arc_agents-$TIMESTAMP.dump"
+
+mkdir -p "$BACKUP_DIR"
+
+# Use the running arc-pg container; -Fc = custom format (smaller, faster restore)
+docker exec arc-pg pg_dump -U postgres -d arc_agents -Fc > "$OUT"
+
+# Atomic-rename pattern guarded against partial writes:
+# If pg_dump failed mid-write, the resulting file would be incomplete.
+# set -e (above) makes the script exit non-zero — cron will log via mail/syslog.
+
+# Sanity check: dump must be non-empty
+if [ ! -s "$OUT" ]; then
+  echo "[caliber-pg-backup] FAIL — dump is empty: $OUT" >&2
+  rm -f "$OUT"
+  exit 1
+fi
+
+# Rotate — keep last 14 days
+find "$BACKUP_DIR" -maxdepth 1 -name "arc_agents-*.dump" -mtime +14 -delete
+
+# Log to syslog so journalctl picks it up
+SIZE=$(du -h "$OUT" | cut -f1)
+logger -t caliber-pg-backup "ok · wrote $OUT ($SIZE)"

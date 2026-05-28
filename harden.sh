@@ -235,7 +235,11 @@ Unattended-Upgrade::Allowed-Origins {
     "${distro_id}ESMApps:${distro_codename}-apps-security";
 };
 Unattended-Upgrade::AutoFixInterruptedDpkg "true";
-Unattended-Upgrade::Remove-Unused-Dependencies "true";
+// IMPORTANT: keep this "false". With "true", apt has been observed
+// auto-removing nodejs (and ~300 node-* packages) during security upgrades,
+// which kills the Caliber stack until nodejs is reinstalled. Verified
+// 2026-05-27 on production. Leave services intact, accept some apt cruft.
+Unattended-Upgrade::Remove-Unused-Dependencies "false";
 Unattended-Upgrade::Automatic-Reboot "false";
 UPGEOF
 
