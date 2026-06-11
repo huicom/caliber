@@ -17,8 +17,8 @@ interface TryItResult {
 }
 
 const TIER_COLOR: Record<string, string> = {
-  Gold: '#B8862B', Silver: '#7E8690', Bronze: '#8C5A2C',
-  Pending: '#98948C', Watch: '#B45309', Dormant: '#A8A39A',
+  Gold: 'var(--tier-gold)', Silver: 'var(--tier-silver)', Bronze: 'var(--tier-bronze)',
+  Pending: 'var(--tier-pending)', Watch: 'var(--tier-watch)', Dormant: 'var(--tier-dormant)',
 };
 
 export function TryItButton() {
@@ -43,17 +43,14 @@ export function TryItButton() {
       <button
         onClick={fire}
         disabled={loading}
-        className="aa-btn"
-        style={{
-          background: '#1D4ED8', color: '#fff', border: 'none', padding: '12px 22px',
-          borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1,
-        }}
+        className="cl-btn cl-btn--primary cl-btn--lg"
+        style={{ cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.7 : 1 }}
       >
-        {loading ? 'paying…' : 'Fire a real nanopayment →'}
+        {loading ? 'paying…' : <>fire a real nanopayment <span aria-hidden="true">→</span></>}
       </button>
 
       {res ? (
-        <div className="aa-card" style={{ marginTop: 16, padding: 16 }}>
+        <div style={{ marginTop: 16, padding: 16, border: '1px solid var(--hairline)', background: 'var(--paper)' }}>
           {res.ok ? (
             <>
               <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -72,7 +69,7 @@ export function TryItButton() {
               </p>
             </>
           ) : (
-            <p style={{ margin: 0, color: res.error === 'rate_limited' || res.error === 'daily_cap' ? '#B45309' : '#B91C1C' }}>
+            <p style={{ margin: 0, color: res.error === 'rate_limited' || res.error === 'daily_cap' ? 'var(--signal-watch)' : 'var(--signal-down)' }}>
               {res.message ?? res.error ?? 'Something went wrong.'}
             </p>
           )}

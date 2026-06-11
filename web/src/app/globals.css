@@ -3293,3 +3293,144 @@ body {
   gap: 8px;
 }
 .fig__foot b { color: var(--ink); font-weight: 500; }
+
+/* ========================================================================
+   LEPTON — agent-native commerce surfaces (/lepton, /metered, /labs/*)
+   Reuses the cl-* marketing language; adds the payment-chain diagram,
+   product cards, and a few data primitives. Warm paper + copper, mono data.
+   ======================================================================== */
+
+/* — payment chain: the signature editorial diagram — */
+.lp-chain {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: wrap;
+  border: 1px solid var(--hairline);
+  background: var(--color-bg-elev);
+}
+.lp-chain__node {
+  flex: 1 1 0;
+  min-width: 116px;
+  padding: 20px 16px;
+  border-left: 1px solid var(--hairline);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lp-chain__node:first-child { border-left: 0; }
+.lp-chain__node--off { opacity: 0.42; }
+.lp-chain__idx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--copper);
+  letter-spacing: 0.04em;
+}
+.lp-chain__label { font-weight: 600; font-size: 14px; color: var(--ink); }
+.lp-chain__amt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mute);
+}
+.lp-chain__arrow {
+  position: absolute;
+  right: -7px; top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  color: var(--copper);
+  font-size: 13px;
+  background: var(--color-bg-elev);
+  line-height: 1;
+}
+.lp-chain__node:last-child .lp-chain__arrow { display: none; }
+.lp-chain__node--off .lp-chain__arrow { color: var(--hairline); }
+
+/* — product cards (3-up) — */
+.lp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+.lp-card {
+  background: var(--paper);
+  padding: 28px 26px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.18s ease;
+}
+.lp-card:hover { background: var(--color-bg-elev); }
+.lp-card__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--mute);
+  letter-spacing: 0.02em;
+}
+.lp-card__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 2px 0 0;
+}
+.lp-card__what { font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0; }
+.lp-card__stat {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.lp-card__stat b {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--copper);
+}
+.lp-card__stat span { font-size: 12px; color: var(--mute); font-family: var(--font-mono); }
+.lp-card__go {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lp-card:hover .lp-card__go { color: var(--copper); }
+
+@media (max-width: 760px) {
+  .lp-cards { grid-template-columns: 1fr; }
+  .lp-chain__node { border-left: 0; border-top: 1px solid var(--hairline); }
+  .lp-chain__arrow { display: none !important; }
+}
+
+/* — "what is this" framing strip reused on the sub-pages — */
+.lp-what {
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--copper);
+  background: var(--color-bg-elev);
+  padding: 16px 20px;
+  display: grid;
+  gap: 6px;
+}
+.lp-what__k { font-family: var(--font-mono); font-size: 11px; color: var(--copper); letter-spacing: 0.04em; }
+.lp-what p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--ink); }
+.lp-what p b { font-weight: 600; }
+
+/* — honest-traction pill — */
+.lp-honest {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--mute);
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+.lp-honest b { color: var(--signal-up); }
