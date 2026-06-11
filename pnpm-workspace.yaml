@@ -3,6 +3,7 @@ packages:
   - 'rating'
   - 'web'
   - 'packages/*'
+  - 'services/*'
   - 'contracts'
 allowBuilds:
   bufferutil: true

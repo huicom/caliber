@@ -111,6 +111,25 @@ importers:
         specifier: ^2.27.3
         version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
 
+  packages/x402-client:
+    dependencies:
+      '@circle-fin/x402-batching':
+        specifier: ^3.0.4
+        version: 3.0.4(@x402/core@2.13.0)(@x402/evm@2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.2
+        version: 22.19.19
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   rating:
     dependencies:
       '@arc-agents/db':
@@ -154,11 +173,64 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.0)
 
+  services/broker:
+    dependencies:
+      '@arc-agents/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@caliber/x402-client':
+        specifier: workspace:*
+        version: link:../../packages/x402-client
+      '@circle-fin/x402-batching':
+        specifier: ^3.0.4
+        version: 3.0.4(@x402/core@2.13.0)(@x402/evm@2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3))
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.0
+        version: 5.0.6
+      '@types/node':
+        specifier: ^22.15.2
+        version: 22.19.19
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  services/hirebot:
+    dependencies:
+      '@arc-agents/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@caliber/x402-client':
+        specifier: workspace:*
+        version: link:../../packages/x402-client
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.2
+        version: 22.19.19
+      tsx:
+        specifier: ^4.19.4
+        version: 4.22.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   web:
     dependencies:
       '@arc-agents/db':
         specifier: workspace:*
         version: link:../packages/db
+      '@caliber/x402-client':
+        specifier: workspace:*
+        version: link:../packages/x402-client
       '@circle-fin/developer-controlled-wallets':
         specifier: 9.2.0
         version: 9.2.0
@@ -5981,6 +6053,13 @@ snapshots:
     dependencies:
       '@x402/core': 2.13.0
       viem: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+    optionalDependencies:
+      '@x402/evm': 2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+
+  '@circle-fin/x402-batching@3.0.4(@x402/core@2.13.0)(@x402/evm@2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10))(viem@2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3))':
+    dependencies:
+      '@x402/core': 2.13.0
+      viem: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     optionalDependencies:
       '@x402/evm': 2.13.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
 

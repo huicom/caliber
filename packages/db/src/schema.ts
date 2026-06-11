@@ -364,3 +364,128 @@ export const fundedWallets = pgTable('funded_wallets', {
 });
 
 export type FundedWallet = typeof fundedWallets.$inferSelect;
+
+// Lepton Phase 1 (A2): payments ledger for the metered x402 attestation API.
+// One row per request that passes through x402Middleware — paid OR bypassed.
+//
+// Honest traction (Guardrail 4): every row carries a `payer_class`, resolved at
+// insert time from packages/db/src/known-wallets.ts. Public metrics are always
+// reportable split by class; we never present self-generated volume as external
+// users. Bypass-token requests are recorded `internal`, amount 0 — they are not
+// payments and never count as revenue.
+//
+// `payment_ref` (the Gateway settle/batch reference) is UNIQUE so a replayed
+// payment is rejected at our layer even if the facilitator would also catch it.
+// Bypass/internal rows have no real reference; they use a synthetic
+// `internal:<uuid>` value so the UNIQUE constraint still holds.
+export const meteredPayments = pgTable(
+  'metered_payments',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    payerAddress: text('payer_address').notNull(),
+    // 'external' | 'demo' | 'internal' — see PAYER_CLASSES in known-wallets.ts.
+    payerClass: text('payer_class').notNull(),
+    endpoint: text('endpoint').notNull(),
+    agentId: bigint('agent_id', { mode: 'bigint' }),
+    amountUsdc: numeric('amount_usdc', { precision: 18, scale: 6 }).notNull(),
+    // Gateway settle/batch reference — unique key for replay protection.
+    paymentRef: text('payment_ref').notNull().unique(),
+    latencyMs: integer('latency_ms'),
+    // 'settled' (default) | 'bypass' | 'refund_pending' | 'failed'
+    status: text('status').notNull().default('settled'),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_metered_payments_created_at').on(table.createdAt),
+    payerIdx: index('idx_metered_payments_payer').on(table.payerAddress),
+    classIdx: index('idx_metered_payments_class').on(table.payerClass),
+  }),
+);
+
+export type MeteredPayment = typeof meteredPayments.$inferSelect;
+export type NewMeteredPayment = typeof meteredPayments.$inferInsert;
+
+// Lepton Phase 1 (A1.4): refund queue. If the facilitator settles a payment but
+// the downstream attestation signing then fails, we must NOT silently keep the
+// funds. The middleware enqueues a row here for manual handling instead.
+export const meteredRefundQueue = pgTable('metered_refund_queue', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  payerAddress: text('payer_address').notNull(),
+  amountUsdc: numeric('amount_usdc', { precision: 18, scale: 6 }).notNull(),
+  paymentRef: text('payment_ref').notNull(),
+  reason: text('reason').notNull(),
+  resolved: boolean('resolved').notNull().default(false),
+});
+
+export type MeteredRefund = typeof meteredRefundQueue.$inferSelect;
+
+// Lepton Phase 1 (A4): HireBot decision log. HireBot is a budget-aware agent
+// that decides, per funded job, whether paying the metered price for a trust
+// check is worth it — then applies a hire rule. Every decision is persisted so
+// the dashboard can render the agent's reasoning verbatim (the human-readable
+// `rationale` is the agentic-sophistication evidence). The table is also the
+// agent's state: daily spend = sum(cost_usdc) for today; the cache is "is there
+// a recent `purchased` row for this provider".
+//
+// `tier`/`score` extend the plan's shape sketch so a cache_hit can reuse the
+// last attestation result without re-paying, and the dashboard can show it.
+export const hirebotDecisions = pgTable(
+  'hirebot_decisions',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    jobId: bigint('job_id', { mode: 'bigint' }),
+    providerId: bigint('provider_id', { mode: 'bigint' }),
+    // purchased | cache_hit | not_worth_it | budget_blocked | would_hire | would_skip
+    action: text('action').notNull(),
+    rationale: text('rationale').notNull(),
+    costUsdc: numeric('cost_usdc', { precision: 18, scale: 6 }).notNull().default('0'),
+    budgetLeft: numeric('budget_left', { precision: 18, scale: 6 }).notNull(),
+    // Attestation result captured when known (null for skips/unrated providers).
+    tier: text('tier'),
+    score: smallint('score'),
+    // Settle reference of the nanopayment, when this decision paid.
+    paymentRef: text('payment_ref'),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_hirebot_created_at').on(table.createdAt),
+    providerIdx: index('idx_hirebot_provider').on(table.providerId),
+    actionIdx: index('idx_hirebot_action').on(table.action),
+  }),
+);
+
+export type HirebotDecision = typeof hirebotDecisions.$inferSelect;
+export type NewHirebotDecision = typeof hirebotDecisions.$inferInsert;
+
+// Lepton Phase 2 (B2): Bonded Broker match log. The Broker is a reference
+// *consumer* of Caliber (neutrality — it does not issue ratings). Each match
+// request records the full reasoning: candidates queried, attestations bought
+// (multi-hop x402), the decline/accept verdict, the fee charged, and the bond
+// posted. `decision_log` is the ordered rationale stream the console renders.
+export const brokerMatches = pgTable(
+  'broker_matches',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    requesterAddr: text('requester_addr').notNull(),
+    jobId: bigint('job_id', { mode: 'bigint' }),
+    providerId: bigint('provider_id', { mode: 'bigint' }),
+    // evaluating | declined | matched | bonded | released | slashed
+    status: text('status').notNull(),
+    feeUsdc: numeric('fee_usdc', { precision: 18, scale: 6 }),
+    bondUsdc: numeric('bond_usdc', { precision: 18, scale: 6 }),
+    bondId: bigint('bond_id', { mode: 'bigint' }),
+    attestationsBought: integer('attestations_bought').notNull().default(0),
+    declineReason: text('decline_reason'),
+    // Ordered rationale steps: [{ step, detail, ref? }]
+    decisionLog: jsonb('decision_log').$type<unknown[]>().notNull().default([]),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_broker_matches_created_at').on(table.createdAt),
+    statusIdx: index('idx_broker_matches_status').on(table.status),
+  }),
+);
+
+export type BrokerMatch = typeof brokerMatches.$inferSelect;
+export type NewBrokerMatch = typeof brokerMatches.$inferInsert;

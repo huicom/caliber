@@ -1,0 +1,27 @@
+{
+  "name": "@caliber/x402-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable Node buyer client for the Caliber Metered x402 attestation API (Circle Gateway Nanopayments). Shared by HireBot, the Broker, and the /metered try-it button.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx --env-file=../../.env src/cli.ts smoke",
+    "deposit": "tsx --env-file=../../.env src/cli.ts deposit",
+    "balances": "tsx --env-file=../../.env src/cli.ts balances"
+  },
+  "dependencies": {
+    "@circle-fin/x402-batching": "^3.0.4",
+    "viem": "^2.27.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
