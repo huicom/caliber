@@ -19,6 +19,42 @@ const CONTRACT_ADDRESSES = [
   config.AGENTIC_COMMERCE as `0x${string}`,
 ];
 
+// --- Stall watchdog -------------------------------------------------------
+// The live tail subscribes to the local node's WS (ARC_RPC_WS) for new block
+// heads. When that node FREEZES (a recurring Arc node bug — froze 2026-05-27
+// at the Osaka fork, again 2026-05-31 at block 44,874,679), the WS goes silent
+// with NO error and NO disconnect, so viem's watchBlockNumber simply stops
+// firing — no reconnect, no gap-detection, no crash, no systemd restart. The
+// indexer sat dead for 11 days unnoticed.
+//
+// All log-fetching (getLogs) already runs over `publicClient` (ARC_RPC_URL,
+// the public RPC), so we can fully recover over HTTP without the local node:
+// if no block arrives for STALL_MS, poll head over HTTP and catch up. The
+// indexer keeps advancing off the public RPC until the WS resumes.
+const STALL_MS = Number(process.env.INDEXER_STALL_MS ?? 60_000);
+const WATCHDOG_INTERVAL_MS = Number(process.env.INDEXER_WATCHDOG_MS ?? 20_000);
+const ALERT_WEBHOOK = process.env.INDEXER_ALERT_WEBHOOK;
+let lastAlertAt = 0;
+
+async function alertStall(idleMs: number, from: bigint, head: bigint): Promise<void> {
+  if (!ALERT_WEBHOOK) return;
+  if (Date.now() - lastAlertAt < 30 * 60_000) return; // throttle: 1 per 30 min
+  lastAlertAt = Date.now();
+  try {
+    await fetch(ALERT_WEBHOOK, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        content:
+          `⚠️ **Caliber indexer stall** — no new block in ${Math.round(idleMs / 1000)}s ` +
+          `(WS likely silent; check the Arc node). Recovering via HTTP: behind ${(head - from).toString()} blocks → ${head.toString()}.`,
+      }),
+    });
+  } catch {
+    /* best effort */
+  }
+}
+
 async function catchUpToHead(lastIndexed: bigint, head: bigint): Promise<bigint> {
   if (lastIndexed >= head) return lastIndexed;
 
@@ -147,9 +183,40 @@ async function runLive(): Promise<never> {
       attempt = 0;
 
       let lastProcessedBlock = await getLastIndexedBlock(0n);
+      let lastActivityAt = Date.now();
+      let recovering = false;
+      const markAlive = () => {
+        lastActivityAt = Date.now();
+      };
+
+      // Watchdog: if the WS produces no block for STALL_MS, recover over HTTP.
+      const watchdog = setInterval(async () => {
+        if (recovering) return;
+        const idleMs = Date.now() - lastActivityAt;
+        if (idleMs < STALL_MS) return;
+        recovering = true;
+        try {
+          const head = await publicClient.getBlockNumber();
+          if (head > lastProcessedBlock) {
+            logger.warn(
+              `⚠️ no new block in ${Math.round(idleMs / 1000)}s — WS likely silent; recovering via HTTP to ${head}`,
+            );
+            await alertStall(idleMs, lastProcessedBlock, head);
+            await catchUpToHead(lastProcessedBlock, head);
+            lastProcessedBlock = await getLastIndexedBlock(lastProcessedBlock);
+          }
+          markAlive(); // reset; re-check after the next STALL_MS window
+        } catch (err) {
+          logger.error('Watchdog HTTP recovery failed', err);
+        } finally {
+          recovering = false;
+        }
+      }, WATCHDOG_INTERVAL_MS);
 
       const unwatch = wsClient.watchBlockNumber({
         onBlockNumber: async (blockNumber) => {
+          markAlive(); // a head arrived → WS is alive
+          if (recovering) return; // let the HTTP recovery finish first
           try {
             if (blockNumber > lastProcessedBlock + 2n) {
               logger.warn(
@@ -170,6 +237,7 @@ async function runLive(): Promise<never> {
 
       await new Promise<never>((_, reject) => {
         const cleanup = () => {
+          clearInterval(watchdog);
           unwatch();
           reject(new Error('signal'));
         };
