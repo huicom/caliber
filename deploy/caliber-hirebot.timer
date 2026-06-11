@@ -1,0 +1,15 @@
+[Unit]
+Description=Caliber — run HireBot every 10 min to assess funded jobs and pay for trust checks
+Documentation=man:systemd.timer(5)
+
+[Timer]
+# First run 6 min after boot, then every 10 min. The daily budget
+# (HIREBOT_DAILY_BUDGET_USDC) caps spend regardless of cadence; the
+# per-provider cache (CACHE_TTL_HOURS) keeps repeat passes cheap.
+OnBootSec=6min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

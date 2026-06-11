@@ -20,6 +20,9 @@ sudo cp deploy/caliber-snapshot.service /etc/systemd/system/
 sudo cp deploy/caliber-snapshot.timer /etc/systemd/system/
 sudo cp deploy/caliber-embed-pending.service /etc/systemd/system/
 sudo cp deploy/caliber-embed-pending.timer /etc/systemd/system/
+sudo cp deploy/caliber-hirebot.service /etc/systemd/system/
+sudo cp deploy/caliber-hirebot.timer /etc/systemd/system/
+sudo cp deploy/caliber-broker.service /etc/systemd/system/
 
 echo "📋 Installing nginx config (for arcagents.poko.blue only — rating uses Cloudflare Tunnel)..."
 sudo cp deploy/nginx-arcagents.conf /etc/nginx/sites-available/arcagents
@@ -32,7 +35,9 @@ sudo touch /var/log/arc-web.log     /var/log/arc-web-err.log
 sudo touch /var/log/arc-rating.log  /var/log/arc-rating-err.log
 sudo touch /var/log/caliber-snapshot.log /var/log/caliber-snapshot-err.log
 sudo touch /var/log/caliber-embed-pending.log /var/log/caliber-embed-pending-err.log
-sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log /var/log/caliber-embed-pending*.log
+sudo touch /var/log/caliber-hirebot.log /var/log/caliber-hirebot-err.log
+sudo touch /var/log/caliber-broker.log /var/log/caliber-broker-err.log
+sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log /var/log/caliber-embed-pending*.log /var/log/caliber-hirebot*.log /var/log/caliber-broker*.log
 
 echo "🔧 Reloading systemd..."
 sudo systemctl daemon-reload
@@ -52,6 +57,13 @@ sudo systemctl enable --now caliber-snapshot.timer
 
 echo "▶️  Enabling Caliber embed-pending timer (Phase 2 / Track 4) — fires every 15 min..."
 sudo systemctl enable --now caliber-embed-pending.timer
+
+echo "▶️  Enabling HireBot timer (Lepton Phase 1 / A4) — fires every 10 min..."
+sudo systemctl enable --now caliber-hirebot.timer
+
+echo "▶️  Starting Bonded Broker service (Lepton Phase 2 / B2-B3) on :3200..."
+sudo systemctl enable caliber-broker
+sudo systemctl restart caliber-broker
 
 echo ""
 echo "✅  Deploy complete. Check status:"

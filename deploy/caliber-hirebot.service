@@ -1,0 +1,21 @@
+[Unit]
+Description=Caliber — HireBot: budget-aware agent that pays Caliber Metered per trust check
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer/services/hirebot
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+# One pass per invocation (the timer drives the cadence). HireBot scans funded
+# ERC-8183 jobs over the PUBLIC Caliber API, decides per provider whether a
+# paid trust check is worth it, pays sub-cent USDC via x402 when it is, and
+# records every decision to hirebot_decisions. State (today's spend + the
+# per-provider cache) lives entirely in that table, so the worker is stateless.
+ExecStart=/home/huicom/.npm-global/bin/pnpm exec tsx --env-file=../../.env src/index.ts
+StandardOutput=append:/var/log/caliber-hirebot.log
+StandardError=append:/var/log/caliber-hirebot-err.log
+
+[Install]
+WantedBy=multi-user.target

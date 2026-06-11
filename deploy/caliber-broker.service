@@ -1,0 +1,23 @@
+[Unit]
+Description=Caliber Labs — Bonded Broker service (Lepton Phase 2)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer/services/broker
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+# Long-running HTTP API on :3200 (proxied by the web app's /api/broker/*).
+# Also runs the keeper loop that auto-settles bonded matches (release on
+# completion, slash on rejection/expiry) — gated on BROKERBOND_ADDRESS.
+ExecStart=/home/huicom/.npm-global/bin/pnpm --filter @caliber/broker start
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/caliber-broker.log
+StandardError=append:/var/log/caliber-broker-err.log
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

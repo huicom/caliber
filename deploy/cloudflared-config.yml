@@ -9,6 +9,13 @@ ingress:
   - hostname: caliber.poko.blue
     service: http://localhost:3000
 
+  # Bonded Broker console (Lepton). Same Next.js app + port as caliber.poko.blue;
+  # web/src/middleware.ts rewrites the broker.* host root → /labs/broker so the
+  # console is this subdomain's home page. cloudflared preserves the Host header,
+  # so the middleware sees "broker.poko.blue".
+  - hostname: broker.poko.blue
+    service: http://localhost:3000
+
   # public rating API (Express). Single-level subdomain per Cloudflare Tunnel
   # constraint — hyphen instead of "api.caliber.poko.blue".
   - hostname: caliber-api.poko.blue
