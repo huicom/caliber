@@ -56,6 +56,22 @@ function shortAddr(addr: string | null): string {
   return `${addr.slice(0, 8)}…${addr.slice(-3)}`;
 }
 
+/* Feedback `extra` carries the on-chain feedback value, normalized by the
+ * indexer's normalizeScore() to value/10^valueDecimals. When valueDecimals=0
+ * the raw magnitude passes straight through, so values like 4080 or 5912 show
+ * up — these are NOT 0–100 Caliber scores and must not be rendered as such.
+ * Detect out-of-range values and relabel them as raw/unscaled feedback so the
+ * homepage never displays an impossible "score 4080.00" to a judge. */
+function renderFeedbackValue(extra: string): React.ReactNode {
+  const v = Number(extra);
+  if (Number.isFinite(v) && v >= 0 && v <= 100) {
+    return <> · score <span className="aa-mono">{extra}</span></>;
+  }
+  // Out of the 0–100 band (or non-numeric): show the raw on-chain value,
+  // explicitly flagged as unscaled, and excluded from any score framing.
+  return <> · raw feedback <span className="aa-mono">{extra} (unscaled)</span></>;
+}
+
 const KIND_MAP: Record<string, string> = {
   agent_registered: 'AgentRegistered',
   feedback_given: 'FeedbackGiven',
@@ -122,7 +138,7 @@ function rowMessage(row: FeedRow): React.ReactNode {
       return (
         <>
           feedback recorded for <Link href={`/agents/${ref}`} className="aa-mono">agent #{ref}</Link>
-          {row.extra ? <> · score <span className="aa-mono">{row.extra}</span></> : null}
+          {row.extra ? renderFeedbackValue(row.extra) : null}
           <div className="aa-feed__sub">factored into next Caliber attestation</div>
         </>
       );

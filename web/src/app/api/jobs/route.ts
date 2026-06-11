@@ -58,8 +58,13 @@ export async function GET(req: Request) {
     const whereClause =
       whereParts.length > 0 ? and(...whereParts) : undefined;
 
+    // "biggest" = largest escrow first. Postgres DESC defaults to NULLS FIRST,
+    // which wrongly ranks budget-less jobs above real-value ones — force
+    // NULLS LAST so the biggest funded jobs actually lead.
     const orderBy =
-      q.sort === 'biggest' ? desc(jobs.budgetUsdc) : desc(jobs.createdAtBlock);
+      q.sort === 'biggest'
+        ? sql`${jobs.budgetUsdc} DESC NULLS LAST`
+        : desc(jobs.createdAtBlock);
 
     const [rows, totalRow] = await Promise.all([
       db

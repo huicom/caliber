@@ -42,6 +42,15 @@ If the agent's tier is below `Silver` (or any risk flag fires), the transaction 
 
 **As of May 24, 2026:** ~16,000 ERC-8004 agents indexed on Arc · 637 currently rated · 8 Gold · 131 Silver · 7 Bronze · 147 Pending · 344 Watch · 0 Dormant. Sentinel runs nightly at 04:00 UTC.
 
+## Lepton: agents that pay for trust
+
+Two products stacked on the rating layer (full spec: [`docs/lepton/`](docs/lepton/README.md)):
+
+- **Caliber Metered** — the attestation API behind an x402 paywall: sub-cent USDC per signed rating via **Circle Gateway Nanopayments** (gasless, batch-settled below the gas floor). Live ticker at [`/metered`](https://caliber.poko.blue/metered) with an honest external-vs-demo split. **HireBot** ([`/labs/hirebot`](https://caliber.poko.blue/labs/hirebot)) is a budget-constrained agent that pays for a trust check only when the math says it's worth it.
+- **The Bonded Broker** ([`/labs/broker`](https://caliber.poko.blue/labs/broker)) — an autonomous matchmaker that pays Caliber Metered per attestation, prices a USDC bond by the provider's tier, and **declines the match when the expected slash loss exceeds its fee**. `BrokerBond.sol` holds the bond; it slashes to the requester if the ERC-8183 job is rejected/expired (permissionless settlement). Neutrality: the broker *consumes* ratings, it does not issue them.
+
+Traction (honest, class-split): [`GET /api/lepton/metrics`](https://caliber.poko.blue/api/lepton/metrics). Circle tools used: Gateway Nanopayments, x402, Wallets, USDC, deployed contracts.
+
 ## The six tiers (v2.0.1 metallurgical)
 
 | Tier | Hex | What it means | Score | Min jobs (testnet / production) |
