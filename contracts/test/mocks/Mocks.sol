@@ -35,6 +35,62 @@ contract MockERC20 {
     }
 }
 
+/// @dev Struct-returning getJob — matches the REAL Arc AgenticCommerce, which
+///      returns a single Job tuple (not 9 flat values). Used by BrokerBond
+///      tests so they exercise the same ABI shape the deployed contract uses.
+contract MockAgenticCommerceStruct {
+    uint8 public constant STATUS_OPEN = 0;
+    uint8 public constant STATUS_FUNDED = 1;
+    uint8 public constant STATUS_SUBMITTED = 2;
+    uint8 public constant STATUS_COMPLETED = 3;
+    uint8 public constant STATUS_REJECTED = 4;
+    uint8 public constant STATUS_EXPIRED = 5;
+
+    struct Job {
+        uint256 id;
+        address client;
+        address provider;
+        address evaluator;
+        string description;
+        uint256 budget;
+        uint256 expiredAt;
+        uint8 status;
+        address hook;
+    }
+
+    uint256 public jobCounter;
+    mapping(uint256 => Job) public jobs;
+
+    function createJob(address provider, address evaluator, uint256 expiredAt, string calldata description, address hook)
+        external
+        returns (uint256 jobId)
+    {
+        jobId = ++jobCounter;
+        jobs[jobId] = Job(jobId, msg.sender, provider, evaluator, description, 0, expiredAt, STATUS_OPEN, hook);
+    }
+
+    function setBudget(uint256 jobId, uint256 amount, bytes calldata) external {
+        require(jobs[jobId].id != 0, "Job not found");
+        require(msg.sender == jobs[jobId].provider, "Unauthorized");
+        jobs[jobId].budget = amount;
+    }
+
+    function fund(uint256 jobId, bytes calldata) external {
+        require(jobs[jobId].id != 0, "Job not found");
+        require(msg.sender == jobs[jobId].client, "Unauthorized");
+        jobs[jobId].status = STATUS_FUNDED;
+    }
+
+    function setStatus(uint256 jobId, uint8 newStatus) external {
+        require(jobs[jobId].id != 0, "Job not found");
+        jobs[jobId].status = newStatus;
+    }
+
+    function getJob(uint256 jobId) external view returns (Job memory) {
+        return jobs[jobId];
+    }
+}
+
 contract MockERC8183 {
     // Status codes mirror the ERC-8183 reference deployment used on Arc.
     uint8 public constant STATUS_OPEN = 0;

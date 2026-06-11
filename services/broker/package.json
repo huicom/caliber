@@ -1,0 +1,25 @@
+{
+  "name": "@caliber/broker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Bonded Broker — a Caliber Labs reference consumer that pays Caliber Metered per attestation, matches a provider, and posts a tier-sized USDC bond (Lepton Phase 2).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "tsx --env-file=../../.env src/index.ts",
+    "keeper": "tsx --env-file=../../.env src/keeper.ts",
+    "demo:slash": "tsx --env-file=../../.env scripts/demo-slash.ts"
+  },
+  "dependencies": {
+    "@arc-agents/db": "workspace:*",
+    "@caliber/x402-client": "workspace:*",
+    "@circle-fin/x402-batching": "^3.0.4",
+    "express": "^5.1.0",
+    "viem": "^2.27.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
