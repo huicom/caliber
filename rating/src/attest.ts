@@ -205,6 +205,18 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       message: attestation,
     });
 
+    // x402 settlement details, forwarded by the metered gate (rating/src/x402.ts)
+    // via req.payment. Absent on bypass (internal) calls. Lets the buyer link
+    // the attestation to the exact nanopayment that bought it.
+    const pay = (req as Request & { payment?: { amount?: string; transaction?: string; network?: string } }).payment;
+    const payment = pay
+      ? {
+          amountUsdc: pay.amount ? (Number(pay.amount) / 1_000_000).toFixed(6) : undefined,
+          txRef: pay.transaction,
+          network: pay.network,
+        }
+      : undefined;
+
     res.json({
       attestation: {
         ...attestation,
@@ -220,6 +232,7 @@ export async function attestRoute(req: Request, res: Response): Promise<void> {
       score: result.score,
       confidence: result.confidence,
       flags: result.flags,
+      ...(payment ? { payment } : {}),
     });
   } catch (err) {
     console.error('Attestation error:', err);
