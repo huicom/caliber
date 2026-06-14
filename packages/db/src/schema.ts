@@ -767,6 +767,12 @@ export const stewardEvidence = pgTable(
     signature: text('signature'),
     onchainTx: text('onchain_tx'),
     feedbackEventId: bigint('feedback_event_id', { mode: 'bigint' }),
+    // Steward Phase 2 (WS-4): the Tier-1 LLM judge's structured verdict
+    // ({ conforms, violations:[{field,reason}], confidence }). Persisted on the
+    // evidence row so a Tier-1 breach attestation carries its adjudication, and a
+    // Tier-1 result that CORROBORATES an existing Tier-0 breach is recorded here
+    // (no double attestation). NULL on a pure Tier-0 evidence row.
+    judgeVerdict: jsonb('judge_verdict'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({

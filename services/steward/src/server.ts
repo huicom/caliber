@@ -4,17 +4,20 @@
 //   POST /v1/pay     → run the authorization pipeline (auth: x-steward-key)
 
 import express, { type Request, type Response, type NextFunction } from 'express';
-import { db, stewardMandates } from '@arc-agents/db';
+import { db, sql, stewardMandates } from '@arc-agents/db';
 import { eq } from 'drizzle-orm';
-import { LlmError, type DeliverySpec } from '@caliber/steward-core';
-import type { Hex } from 'viem';
+import { LlmError, VERDICT, type DeliverySpec } from '@caliber/steward-core';
+import type { Hex, Address } from 'viem';
 import { loadConfig } from './config.js';
 import { StewardPipeline, type PayIntent, type SignedSpec } from './pipeline.js';
 import { readFrozen } from './state.js';
 import { getActiveMandate, invalidatePolicyCache } from './policy-store.js';
 import { listApprovals, decideApproval } from './approvals.js';
-import { treasurerEnabled, getLlmRuntime } from './llm-config.js';
+import { treasurerEnabled, getLlmRuntime, getJudgeRuntime, judgeMinConfidence } from './llm-config.js';
 import { compileMandate } from './mandate.js';
+import { judgeConformance } from './judge.js';
+import { issueEvidence, findBreachEvidence, recordJudgeCorroboration } from './evidence.js';
+import { resolveAgentId } from './agent-resolver.js';
 
 /**
  * WS-1 — parse a signed DeliverySpec from the JSON request body. Over the wire,
@@ -204,6 +207,141 @@ export function createApp() {
     } catch (err) {
       console.error('[steward] pipeline error:', err);
       res.status(500).json({ error: 'pipeline_error', message: err instanceof Error ? err.message : 'unknown' });
+    }
+  });
+
+  // ---- WS-4: on-demand Tier-1 judge -----------------------------------------
+  // POST /v1/payments/:id/judge { responseBody, contentType?, latencyMs? }
+  //   → re-run the Tier-1 LLM judge for a signed-spec payment.
+  //
+  // The pipeline does NOT persist response bodies, so on-demand judging REQUIRES
+  // the caller to supply the delivered `responseBody` (best-effort by design — the
+  // inline sampled path is the primary judge entry point; this endpoint lets a
+  // human re-adjudicate after the fact when they still hold the body). The judge
+  // adjudicates CONFORMANCE-TO-SPEC only and is fail-safe (an LLM outage returns
+  // conforms:true confidence:0 — never a manufactured breach). When the verdict is
+  // a confident conforms:false and no Tier-0 breach was attested, it issues a
+  // Tier-1 (verifyingTier=1) attestation; when a breach is already attested it
+  // records corroboration (no double attestation).
+  app.post('/v1/payments/:id/judge', requireKey, async (req: Request, res: Response) => {
+    const idRaw = String(req.params.id);
+    let paymentId: bigint;
+    try {
+      paymentId = BigInt(idRaw);
+    } catch {
+      res.status(400).json({ error: 'invalid_id', message: `not a numeric payment id: ${idRaw}` });
+      return;
+    }
+
+    const judgeRt = getJudgeRuntime();
+    if (!judgeRt) {
+      res.status(503).json({
+        error: 'judge_disabled',
+        detail: 'Tier-1 judge is disabled; set STEWARD_JUDGE_ENABLED=1 (and the OpenCode gateway env)',
+      });
+      return;
+    }
+
+    const body = req.body as { responseBody?: unknown; contentType?: unknown; latencyMs?: unknown } | undefined;
+    if (typeof body?.responseBody !== 'string') {
+      res.status(400).json({
+        error: 'body_required',
+        detail:
+          'on-demand judging requires the delivered `responseBody` (string) — Steward does not persist response bodies, so pass the body you wish to re-adjudicate',
+      });
+      return;
+    }
+    const responseBody = body.responseBody;
+    const contentType = typeof body.contentType === 'string' ? body.contentType : null;
+    const latencyMs = typeof body.latencyMs === 'number' ? body.latencyMs : 0;
+
+    try {
+      // Load the payment + its signed spec (raw_spec holds the verbatim DeliverySpec,
+      // bigint fields as strings). Only signed-spec payments are judgeable.
+      const rows = await sql<
+        { pay_to: string | null; spec_id: string | null; raw_spec: unknown; buyer_sig: string; seller_sig: string | null }[]
+      >`
+        select p.pay_to, p.spec_id::text, s.raw_spec, s.buyer_sig, s.seller_sig
+          from steward_payments p
+          left join steward_specs s on s.id = p.spec_id
+         where p.id = ${paymentId.toString()} limit 1`;
+      if (!rows.length) {
+        res.status(404).json({ error: 'not_found', message: `no payment #${paymentId}` });
+        return;
+      }
+      const row = rows[0];
+      if (!row.spec_id || !row.raw_spec) {
+        res.status(409).json({
+          error: 'not_signed_spec',
+          detail: 'this payment was not governed by a signed DeliverySpec — Tier-1 judging only applies to signed-spec payments',
+        });
+        return;
+      }
+      const rs = row.raw_spec as Record<string, unknown>;
+      const spec: DeliverySpec = {
+        chain: rs.chain as Hex,
+        buyer: rs.buyer as Address,
+        seller: rs.seller as Address,
+        sellerUrlHash: rs.sellerUrlHash as Hex,
+        schemaHash: rs.schemaHash as Hex,
+        maxBytes: Number(rs.maxBytes ?? 0),
+        deadlineMs: Number(rs.deadlineMs ?? 0),
+        requireJson: Boolean(rs.requireJson),
+        requireOkField: Boolean(rs.requireOkField),
+        validUntil: BigInt((rs.validUntil as string | number) ?? 0),
+        nonce: BigInt((rs.nonce as string | number) ?? 0),
+      };
+
+      const verdict = await judgeConformance(judgeRt, {
+        spec,
+        responseBody,
+        contentType,
+        latencyMs,
+        // On-demand re-adjudication has no fresh Tier-0 pass to corroborate.
+        tier0Violations: [],
+      });
+
+      // Act on the verdict with the same Tier-1 rules as the inline path.
+      let action: 'corroborated_existing' | 'attested_tier1' | 'no_action' = 'no_action';
+      let evidenceId: bigint | null = null;
+      const existingBreach = await findBreachEvidence(paymentId);
+      if (existingBreach) {
+        await recordJudgeCorroboration(existingBreach.id, verdict);
+        evidenceId = existingBreach.id;
+        action = 'corroborated_existing';
+      } else if (!verdict.conforms && verdict.confidence >= judgeMinConfidence() && row.pay_to) {
+        const agentId = await resolveAgentId(row.pay_to);
+        if (agentId !== null) {
+          const signed: SignedSpec = {
+            spec,
+            buyerSig: row.buyer_sig as Hex,
+            sellerSig: (row.seller_sig as Hex | null) ?? undefined,
+          };
+          // sha256 of the supplied body — the responseHash the attestation commits to.
+          const { createHash } = await import('node:crypto');
+          const responseHash = createHash('sha256').update(responseBody).digest('hex');
+          evidenceId = await issueEvidence({
+            paymentId,
+            spec: signed,
+            verdict: VERDICT.BREACH,
+            verifyingTier: 1,
+            responseHash,
+            agentId,
+            judgeVerdict: verdict,
+          });
+          action = 'attested_tier1';
+        }
+      }
+
+      res.json({
+        paymentId: paymentId.toString(),
+        verdict,
+        action,
+        evidenceId: evidenceId ? evidenceId.toString() : null,
+      });
+    } catch (err) {
+      console.error('[steward] /v1/payments/:id/judge failed:', err);
+      res.status(500).json({ error: 'judge_error', message: err instanceof Error ? err.message : 'unknown' });
     }
   });
 

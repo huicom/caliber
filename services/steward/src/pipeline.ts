@@ -43,8 +43,10 @@ import { createHash } from 'node:crypto';
 import type { Hex, Address } from 'viem';
 import { randomUUID } from 'node:crypto';
 import { writePayment, writeIncident, writeApproval, linkIncident, writeSpec } from './ledger.js';
-import { issueEvidence } from './evidence.js';
+import { issueEvidence, findBreachEvidence, recordJudgeCorroboration } from './evidence.js';
 import { resolveAgentId } from './agent-resolver.js';
+import { getJudgeRuntime, judgeSampleRate, judgeMinConfidence } from './llm-config.js';
+import { judgeConformance } from './judge.js';
 import { VERDICT } from '@caliber/steward-core';
 import {
   findByHost,
@@ -745,6 +747,100 @@ export class StewardPipeline {
             });
           } catch (e) {
             console.error('[steward] issueEvidence (breach) failed:', e);
+          }
+        })();
+      }
+    }
+
+    // ── WS-4: Tier-1 LLM judge (the adjudication layer ABOVE Tier-0) ──────────
+    // For SIGNED-spec settled payments, sample at STEWARD_JUDGE_SAMPLE_RATE and run
+    // the SMART-model judge over the IN-MEMORY response body (rawBody isn't
+    // persisted, so the judge MUST run inline here while the body is in hand).
+    // Fire-and-forget — it NEVER blocks the pay response.
+    //
+    // The judge can ONLY ADD confidence to a breach (CONFORMANCE-to-spec only):
+    //   • Tier-0 already attested a breach for this payment → record the judge
+    //     verdict as CORROBORATION on the existing evidence row (NO double
+    //     attestation).
+    //   • Tier-0 did NOT attest a breach AND the judge returns conforms:false with
+    //     confidence ≥ STEWARD_JUDGE_MIN_CONFIDENCE → issue a Tier-1 (verifyingTier=1)
+    //     BREACH attestation (the same on-chain path Tier-0 uses).
+    //   • Otherwise (judge says conforms, or low confidence, or LLM outage →
+    //     conforms:true confidence:0) → no attestation. An LLM failure NEVER
+    //     manufactures a breach.
+    if (payTo && signedSpec) {
+      const judgeRt = getJudgeRuntime();
+      if (judgeRt && Math.random() < judgeSampleRate()) {
+        const judgeSpec = signedSpec;
+        const judgeBody = rawBody;
+        const judgeContentType = contentType;
+        const judgeLatency = latencyMs;
+        const tier0Violations = conformance.violations;
+        void (async () => {
+          try {
+            const verdict = await judgeConformance(judgeRt, {
+              spec: judgeSpec.spec,
+              responseBody: judgeBody,
+              contentType: judgeContentType,
+              latencyMs: judgeLatency,
+              tier0Violations,
+            });
+            console.log(
+              `[steward:judge] payment=${paymentId} tier1 conforms=${verdict.conforms} ` +
+                `confidence=${verdict.confidence} violations=${verdict.violations.map((v) => v.field).join(',') || '(none)'}`,
+            );
+
+            // When Tier-0 found violations it issues its OWN breach attestation on
+            // a CONCURRENT fire-and-forget path (above). To avoid a race where the
+            // judge attests before Tier-0's row lands (→ a double attestation),
+            // briefly poll for the Tier-0 breach row when Tier-0 violated. The
+            // judge's LLM call already took seconds, so Tier-0 has usually landed;
+            // this is a short safety wait, capped so it never lingers.
+            let existingBreach = await findBreachEvidence(paymentId);
+            if (!existingBreach && tier0Violations.length > 0) {
+              for (let i = 0; i < 20 && !existingBreach; i++) {
+                await new Promise((r) => setTimeout(r, 250));
+                existingBreach = await findBreachEvidence(paymentId);
+              }
+            }
+            if (existingBreach) {
+              // Tier-0 already attested a breach on-chain → corroborate, don't
+              // double-attest. Record the judge verdict on the existing row.
+              await recordJudgeCorroboration(existingBreach.id, verdict);
+              console.log(
+                `[steward:judge] payment=${paymentId} Tier-0 breach already attested ` +
+                  `(evidence #${existingBreach.id}) — recorded Tier-1 verdict as corroboration (no double attestation)`,
+              );
+              return;
+            }
+
+            // No prior breach attestation. Only a confident conforms:false issues
+            // a NEW Tier-1 attestation. A conforming verdict (or low confidence, or
+            // a fail-safe outage verdict) issues nothing.
+            if (!verdict.conforms && verdict.confidence >= judgeMinConfidence()) {
+              const agentId = await resolveAgentId(payTo);
+              if (agentId === null) {
+                console.warn(
+                  `[steward:judge] Tier-1 breach but payTo ${payTo} is not a registered Caliber agent — no evidence attested`,
+                );
+                return;
+              }
+              await issueEvidence({
+                paymentId,
+                spec: judgeSpec,
+                verdict: VERDICT.BREACH,
+                verifyingTier: 1,
+                responseHash: sha256,
+                agentId,
+                judgeVerdict: verdict,
+              });
+              console.log(
+                `[steward:judge] payment=${paymentId} Tier-1 BREACH attested (verifyingTier=1, confidence=${verdict.confidence})`,
+              );
+            }
+          } catch (e) {
+            // Belt-and-suspenders: a judge fault must never escape the payment path.
+            console.error('[steward:judge] Tier-1 judge block failed (non-fatal):', e);
           }
         })();
       }

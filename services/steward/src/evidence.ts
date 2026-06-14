@@ -77,6 +77,12 @@ export interface IssueEvidenceArgs {
   responseHash: string;
   /** The seller's Caliber agentId (resolved from pay_to). */
   agentId: bigint;
+  /**
+   * WS-4: the Tier-1 LLM judge's structured verdict, persisted on the evidence
+   * row. Present when the judge resolved this verdict (verifyingTier=1) so the
+   * attestation carries its adjudication. Omitted on a pure Tier-0 attestation.
+   */
+  judgeVerdict?: unknown;
 }
 
 // In-process per-agent nonce hint, so two breaches issued within one second don't
@@ -213,6 +219,7 @@ export async function issueEvidence(args: IssueEvidenceArgs): Promise<bigint | n
         attestation: attJson,
         signature,
         onchainTx,
+        judgeVerdict: (args.judgeVerdict ?? null) as never,
       })
       .returning({ id: stewardEvidence.id });
     const evidenceId = row.id;
@@ -250,6 +257,47 @@ export async function issueEvidence(args: IssueEvidenceArgs): Promise<bigint | n
     console.error('[steward:evidence] issueEvidence failed (non-fatal):', err);
     return null;
   }
+}
+
+/**
+ * WS-4: has a BREACH evidence row already been recorded for this payment? Used by
+ * the Tier-1 judge to decide whether to issue its OWN attestation (no prior breach)
+ * or merely record corroboration on the existing one (Tier-0 already attested).
+ * Returns the existing breach row's id (+ whether it already carries a judge
+ * verdict), or null when no breach evidence exists yet.
+ */
+export async function findBreachEvidence(
+  paymentId: bigint,
+): Promise<{ id: bigint; verifyingTier: number | null; hasJudgeVerdict: boolean } | null> {
+  const rows = await sql<{ id: string; verifying_tier: number | null; judge_verdict: unknown }[]>`
+    select id::text, verifying_tier, judge_verdict
+      from steward_evidence
+     where payment_id = ${paymentId.toString()} and verdict = 1
+     order by id asc limit 1
+  `;
+  if (!rows.length) return null;
+  return {
+    id: BigInt(rows[0].id),
+    verifyingTier: rows[0].verifying_tier,
+    hasJudgeVerdict: rows[0].judge_verdict != null,
+  };
+}
+
+/**
+ * WS-4: record the Tier-1 judge verdict as CORROBORATION on an existing breach
+ * evidence row (the Tier-0 layer already attested on-chain). This does NOT issue a
+ * second attestation — it only annotates the existing row so the judge's
+ * adjudication is queryable alongside the on-chain Tier-0 breach.
+ */
+export async function recordJudgeCorroboration(
+  evidenceId: bigint,
+  judgeVerdict: unknown,
+): Promise<void> {
+  await sql`
+    update steward_evidence
+       set judge_verdict = ${JSON.stringify(judgeVerdict)}::jsonb
+     where id = ${evidenceId.toString()}
+  `;
 }
 
 /** drizzle eq(stewardEvidence.id, id) without importing eq at top (keep deps tight). */
