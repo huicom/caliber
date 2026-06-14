@@ -1,0 +1,1 @@
+ALTER TABLE "steward_payments" ADD COLUMN "request_init" jsonb;

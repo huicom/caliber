@@ -9,6 +9,7 @@ import {
   smallint,
   timestamp,
   index,
+  uniqueIndex,
   customType,
   boolean,
 } from 'drizzle-orm/pg-core';
@@ -489,3 +490,197 @@ export const brokerMatches = pgTable(
 
 export type BrokerMatch = typeof brokerMatches.$inferSelect;
 export type NewBrokerMatch = typeof brokerMatches.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Steward (autonomous payment governor) — STEWARD_PLAN.md §3.
+// Steward is a proxy service (:3300) that probes, authorizes, signs, pays and
+// ledgers x402 payments on behalf of agents. The tables below back the
+// pipeline ledger, the mandate compiler, the incident/approval surfaces, the
+// route-pause state, the counterparty cache, and the integration-key counter.
+// ---------------------------------------------------------------------------
+
+// A mandate is the natural-language spending policy authored in the console.
+// `raw_text` is what the operator wrote; `compiled_policy` is the LLM-compiled
+// machine policy the pipeline actually enforces. Versioned + append-only: a new
+// edit inserts a fresh row (version+1, status 'active') and supersedes the prior.
+export const stewardMandates = pgTable('steward_mandates', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  rawText: text('raw_text').notNull(),
+  compiledPolicy: jsonb('compiled_policy').notNull(),
+  compileModel: text('compile_model'),
+  version: integer('version').notNull().default(1),
+  // 'active' | 'superseded'
+  status: text('status').notNull().default('active'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type StewardMandate = typeof stewardMandates.$inferSelect;
+export type NewStewardMandate = typeof stewardMandates.$inferInsert;
+
+// The ledger. One row per payment intent that passes through the pipeline —
+// allowed, held, or denied. `decision_stage` records where in the pipeline the
+// verdict was reached. `incident_id` is a PLAIN bigint (no FK) on purpose: it
+// would otherwise form a circular FK with steward_incidents.payment_id.
+export const stewardPayments = pgTable(
+  'steward_payments',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    requestId: text('request_id').notNull().unique(),
+    // 'hirebot' | 'api' | integration key name
+    source: text('source').notNull(),
+    sellerUrl: text('seller_url').notNull(),
+    host: text('host').notNull(),
+    payTo: text('pay_to'),
+    quotedUsdc: numeric('quoted_usdc', { precision: 18, scale: 6 }),
+    settledUsdc: numeric('settled_usdc', { precision: 18, scale: 6 }),
+    // 'allow' | 'hold' | 'deny'
+    decision: text('decision').notNull(),
+    // 'frozen' | 'policy' | 'detector' | 'sdn' | 'treasurer' | 'approval' | 'executed'
+    decisionStage: text('decision_stage').notNull(),
+    reasoning: text('reasoning'),
+    detectorHits: jsonb('detector_hits'),
+    // The original request ({ url, init, source }) captured on a HELD payment so
+    // it can be re-executed verbatim through the pipeline when the hold is approved.
+    requestInit: jsonb('request_init'),
+    sdnSource: text('sdn_source'),
+    sdnCheckedAt: timestamp('sdn_checked_at', { withTimezone: true }),
+    sdnResult: jsonb('sdn_result'),
+    caliberScore: smallint('caliber_score'),
+    llmModel: text('llm_model'),
+    paymentRef: text('payment_ref').unique(),
+    // 'n/a' | 'settled' | 'failed' | 'mismatch'
+    settleStatus: text('settle_status'),
+    mandateId: bigint('mandate_id', { mode: 'bigint' }).references(() => stewardMandates.id),
+    // PLAIN column, NO foreign key — avoids a circular FK with steward_incidents.
+    incidentId: bigint('incident_id', { mode: 'bigint' }),
+    latencyMs: integer('latency_ms'),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_steward_payments_created_at').on(table.createdAt),
+    hostIdx: index('idx_steward_payments_host').on(table.host),
+    decisionIdx: index('idx_steward_payments_decision').on(table.decision),
+  }),
+);
+
+export type StewardPayment = typeof stewardPayments.$inferSelect;
+export type NewStewardPayment = typeof stewardPayments.$inferInsert;
+
+// Detector / SDN / settle anomalies surface here as incidents, with an
+// LLM-authored `narrative`. `payment_id` links back to the offending ledger row.
+export const stewardIncidents = pgTable(
+  'steward_incidents',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    // 'runaway_loop' | 'price_spike' | 'redirect' | 'new_counterparty'
+    //   | 'conformance' | 'sdn_hit' | 'settle_mismatch'
+    kind: text('kind').notNull(),
+    severity: text('severity').notNull().default('medium'),
+    // 'open' | 'resolved'
+    status: text('status').notNull().default('open'),
+    host: text('host'),
+    payTo: text('pay_to'),
+    paymentId: bigint('payment_id', { mode: 'bigint' }).references(() => stewardPayments.id),
+    evidence: jsonb('evidence'),
+    narrative: text('narrative'),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: text('resolved_by'),
+  },
+  (table) => ({
+    createdAtIdx: index('idx_steward_incidents_created_at').on(table.createdAt),
+    statusIdx: index('idx_steward_incidents_status').on(table.status),
+  }),
+);
+
+export type StewardIncident = typeof stewardIncidents.$inferSelect;
+export type NewStewardIncident = typeof stewardIncidents.$inferInsert;
+
+// Pending human approvals for held payments. Pushed to Telegram (inline
+// approve/deny buttons) with an expiry; also approvable from the web console.
+export const stewardApprovals = pgTable('steward_approvals', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  paymentId: bigint('payment_id', { mode: 'bigint' })
+    .notNull()
+    .references(() => stewardPayments.id),
+  incidentId: bigint('incident_id', { mode: 'bigint' }).references(() => stewardIncidents.id),
+  // 'pending' | 'approved' | 'denied' | 'expired'
+  status: text('status').notNull().default('pending'),
+  telegramChatId: text('telegram_chat_id'),
+  telegramMessageId: text('telegram_message_id'),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  // 'telegram' | 'web'
+  decidedVia: text('decided_via'),
+});
+
+export type StewardApproval = typeof stewardApprovals.$inferSelect;
+export type NewStewardApproval = typeof stewardApprovals.$inferInsert;
+
+// Per-(host, path_prefix) circuit breaker. A route can be paused (manually or
+// by a detector) and optionally auto-resumed.
+export const stewardRoutes = pgTable(
+  'steward_routes',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    host: text('host').notNull(),
+    pathPrefix: text('path_prefix').notNull().default(''),
+    // 'active' | 'paused'
+    status: text('status').notNull().default('active'),
+    pausedReason: text('paused_reason'),
+    pausedAt: timestamp('paused_at', { withTimezone: true }),
+    autoResumeAt: timestamp('auto_resume_at', { withTimezone: true }),
+  },
+  (table) => ({
+    hostPathUnique: uniqueIndex('uq_steward_routes_host_path').on(table.host, table.pathPrefix),
+  }),
+);
+
+export type StewardRoute = typeof stewardRoutes.$inferSelect;
+export type NewStewardRoute = typeof stewardRoutes.$inferInsert;
+
+// Known counterparty cache keyed on payTo. Holds registration/trust flags, an
+// SDN-check cache, and trailing payment stats (count, total, price median) used
+// by the price-spike + new-counterparty detectors.
+export const stewardCounterparties = pgTable('steward_counterparties', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  payTo: text('pay_to').notNull().unique(),
+  host: text('host'),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  registered: boolean('registered').notNull().default(false),
+  trusted: boolean('trusted').notNull().default(false),
+  sdnResult: jsonb('sdn_result'),
+  sdnCheckedAt: timestamp('sdn_checked_at', { withTimezone: true }),
+  paymentCount: integer('payment_count').notNull().default(0),
+  totalUsdc: numeric('total_usdc', { precision: 18, scale: 6 }).notNull().default('0'),
+  priceMedianUsdc: numeric('price_median_usdc', { precision: 18, scale: 6 }),
+});
+
+export type StewardCounterparty = typeof stewardCounterparties.$inferSelect;
+export type NewStewardCounterparty = typeof stewardCounterparties.$inferInsert;
+
+// Singleton-ish key/value state for the service (e.g. the `frozen` flag).
+export const stewardState = pgTable('steward_state', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type StewardState = typeof stewardState.$inferSelect;
+export type NewStewardState = typeof stewardState.$inferInsert;
+
+// Integration API keys → "teams integrated" counter. `api_key_hash` is the
+// stored hash (never the raw key); `payer_class` tags ledger rows for honest
+// external/demo/internal traction reporting.
+export const stewardIntegrations = pgTable('steward_integrations', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  name: text('name').notNull().unique(),
+  apiKeyHash: text('api_key_hash').notNull(),
+  payerClass: text('payer_class').notNull().default('external'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+});
+
+export type StewardIntegration = typeof stewardIntegrations.$inferSelect;
+export type NewStewardIntegration = typeof stewardIntegrations.$inferInsert;

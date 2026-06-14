@@ -78,6 +78,20 @@
       "when": 1781183105219,
       "tag": "0010_harsh_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781310591726,
+      "tag": "0011_nappy_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781313163475,
+      "tag": "0012_salty_gamora",
+      "breakpoints": true
     }
   ]
 }
