@@ -14,6 +14,14 @@ export function middleware(req: NextRequest) {
       return NextResponse.rewrite(url);
     }
   }
+  // Steward console at the steward.poko.blue root: rewrite root → /steward.
+  if (host.startsWith('steward.')) {
+    const url = req.nextUrl.clone();
+    if (url.pathname === '/') {
+      url.pathname = '/steward';
+      return NextResponse.rewrite(url);
+    }
+  }
   return NextResponse.next();
 }
 
