@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@arc-agents/db": "workspace:*",
+    "@caliber/steward-client": "workspace:*",
     "@caliber/x402-client": "workspace:*"
   },
   "devDependencies": {

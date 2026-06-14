@@ -12,9 +12,7 @@
 // --loop for a self-driven dev loop.
 
 import { db, sql, hirebotDecisions } from '@arc-agents/db';
-import { CaliberPayer } from '@caliber/x402-client';
-
-type Hex = `0x${string}`;
+import { createSteward, StewardRefusal, type StewardClient } from '@caliber/steward-client';
 
 // ---- config -----------------------------------------------------------------
 
@@ -36,10 +34,19 @@ const INTERVAL_MS = num(process.env.HIREBOT_INTERVAL_MS, 10 * 60 * 1000);
 // Price as a number — X402_PRICE_USDC is a dollar string like "$0.001".
 const PRICE = num((process.env.X402_PRICE_USDC || '$0.001').replace(/[^0-9.]/g, ''), 0.001);
 
-function resolveKey(): Hex {
-  const k = process.env.HIREBOT_PRIVATE_KEY;
-  if (!k) throw new Error('HIREBOT_PRIVATE_KEY not set');
-  return (k.startsWith('0x') ? k : `0x${k}`) as Hex;
+// HireBot no longer holds a wallet — it asks Steward (the CFO) to pay. Steward
+// owns the checkbook, inspects each seller quote before signing, and ledgers.
+const STEWARD_BASE_URL = (process.env.STEWARD_BASE_URL || 'http://localhost:3300').replace(/\/+$/, '');
+
+function resolveStewardKey(): string {
+  const k = process.env.STEWARD_API_KEY;
+  if (!k) throw new Error('STEWARD_API_KEY not set');
+  return k;
+}
+
+/** The Caliber attest URL for one agent — built exactly as x402-client does. */
+function attestUrl(agentId: string): string {
+  return `${API_BASE}/v1/agents/arc/${agentId}/attest`;
 }
 
 // Hire rule: a provider is hireable at Gold/Silver with no risk flags.
@@ -145,11 +152,19 @@ const usd = (n: number) => `$${n.toFixed(3)}`;
 
 // ---- one pass ---------------------------------------------------------------
 
-async function runOnce(payer: CaliberPayer): Promise<void> {
+/** Shape of the attest body Steward returns as `data` on an allowed pay. */
+interface AttestData {
+  tier?: string;
+  score?: number;
+  confidence?: string;
+  flags?: string[];
+}
+
+async function runOnce(steward: StewardClient): Promise<void> {
   const spent = await todaySpent();
   let budgetLeft = Math.max(0, DAILY_BUDGET - spent);
   console.log(
-    `[hirebot] pass start · wallet ${payer.address} · budget ${usd(DAILY_BUDGET)} · spent today ${usd(spent)} · left ${usd(budgetLeft)}`,
+    `[hirebot] pass start · paying via Steward ${STEWARD_BASE_URL} · budget ${usd(DAILY_BUDGET)} · spent today ${usd(spent)} · left ${usd(budgetLeft)}`,
   );
 
   const allJobs = await fetchFundedJobs();
@@ -210,19 +225,37 @@ async function runOnce(payer: CaliberPayer): Promise<void> {
         rationale: `provider #${providerId}: cached attestation (tier ${tier}, ${cached.ageMin}m old) < ${CACHE_TTL_HOURS}h TTL — reused, $0 spent` });
       bump('cache_hit');
     } else if (budgetLeft >= PRICE) {
-      // Pay for the signed attestation. minTier/minConfidence wide so any rated
-      // agent returns 200 (HireBot applies its OWN hire rule on the result).
+      // Pay for the signed attestation THROUGH STEWARD. HireBot never signs —
+      // it POSTs the intent; Steward inspects the seller quote, decides, pays if
+      // allowed, and ledgers (source='hirebot'). minTier/minConfidence wide so
+      // any rated agent returns 200 (HireBot applies its OWN hire rule). expect
+      // {json:true} arms Steward's Tier-0 delivery conformance on the response.
       try {
-        const res = await payer.payForAttestation(providerId, { minTier: 'Dormant', minConfidence: 'insufficient' });
-        tier = res.data.tier ?? triage.tier ?? null;
-        score = (res.data.score ?? triage.score ?? null) as number | null;
-        flags = res.data.flags ?? triage.flags ?? [];
+        const res = await steward.pay(
+          attestUrl(providerId),
+          { method: 'POST', body: { minTier: 'Dormant', minConfidence: 'insufficient' } },
+          { json: true },
+        );
+        const data = (res.data ?? {}) as AttestData;
+        tier = data.tier ?? triage.tier ?? null;
+        score = (data.score ?? triage.score ?? null) as number | null;
+        flags = data.flags ?? triage.flags ?? [];
         budgetLeft = Math.max(0, budgetLeft - PRICE);
         await record({ jobId, providerId, action: 'purchased', costUsdc: PRICE, budgetLeft, tier, score,
-          paymentRef: res.payment.transaction || null,
-          rationale: `provider #${providerId}: escrow ${usd(escrow)} ≥ ${usd(MIN_JOB)} floor; no fresh cache; paid ${usd(PRICE)} for signed attestation → tier ${tier} score ${score}` });
+          paymentRef: res.txRef || null,
+          rationale: `provider #${providerId}: escrow ${usd(escrow)} ≥ ${usd(MIN_JOB)} floor; no fresh cache; Steward paid ${usd(PRICE)} for signed attestation → tier ${tier} score ${score}` });
         bump('purchased');
       } catch (e) {
+        // A Steward refusal (deny/hold) is NOT a crash — it's the CFO saying
+        // "not now". Log the structured rationale and skip this provider; a held
+        // payment just means skip this cycle (a human can approve it, then the
+        // next pass sails through).
+        if (e instanceof StewardRefusal) {
+          await record({ jobId, providerId, action: 'would_skip', budgetLeft,
+            rationale: `provider #${providerId}: Steward ${e.decision} at stage '${e.stage}' — ${e.reasoning} (skipping this cycle)` });
+          bump('would_skip');
+          continue;
+        }
         await record({ jobId, providerId, action: 'would_skip', budgetLeft,
           rationale: `provider #${providerId}: attestation purchase failed (${e instanceof Error ? e.message : e})` });
         bump('would_skip');
@@ -251,16 +284,16 @@ async function runOnce(payer: CaliberPayer): Promise<void> {
 // ---- entry ------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const payer = new CaliberPayer({ privateKey: resolveKey(), apiBase: API_BASE });
+  const steward = createSteward({ baseUrl: STEWARD_BASE_URL, apiKey: resolveStewardKey(), source: 'hirebot' });
   const loop = process.argv.includes('--loop');
-  await runOnce(payer);
+  await runOnce(steward);
   if (!loop) {
     await sql.end();
     return;
   }
   console.log(`[hirebot] loop mode · every ${Math.round(INTERVAL_MS / 1000)}s`);
   setInterval(() => {
-    runOnce(payer).catch((e) => console.error('[hirebot] pass error:', e instanceof Error ? e.message : e));
+    runOnce(steward).catch((e) => console.error('[hirebot] pass error:', e instanceof Error ? e.message : e));
   }, INTERVAL_MS);
 }
 
