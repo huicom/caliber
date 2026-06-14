@@ -1,0 +1,28 @@
+{
+  "name": "@caliber/steward",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Steward — the CFO layer for agent payments. Agents POST a payment intent; Steward inspects the seller's x402 quote before signing, authorizes/refuses, pays if allowed, and ledgers everything (Steward Phase 1, tasks 8 + 10).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "tsx --env-file=../../.env src/index.ts"
+  },
+  "dependencies": {
+    "@arc-agents/db": "workspace:*",
+    "@caliber/steward-core": "workspace:*",
+    "@caliber/x402-client": "workspace:*",
+    "@circle-fin/x402-batching": "^3.0.4",
+    "drizzle-orm": "^0.42.0",
+    "express": "^5.1.0",
+    "grammy": "^1.43.0",
+    "viem": "^2.27.3",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@caliber/steward-client": "workspace:*",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
