@@ -517,6 +517,49 @@ export const stewardMandates = pgTable('steward_mandates', {
 export type StewardMandate = typeof stewardMandates.$inferSelect;
 export type NewStewardMandate = typeof stewardMandates.$inferInsert;
 
+// Steward Phase 2 (WS-1): the signed DeliverySpec. Buyer (and optionally seller)
+// sign an EIP-712 DeliverySpec BEFORE payment — a pre-agreed, provable contract
+// for what the seller must deliver (URL, schema, size/deadline budget, JSON/
+// ok-field requirements). Tier-0 conformance bounds are then derived FROM this
+// spec instead of from response-observed defaults, making a breach attributable
+// + disputable. `spec_hash` (the EIP-712 typed-data hash) is the dedupe key and
+// the stable handle later embedded in an EvidenceAttestation (WS-2).
+//
+// `seller_sig` is nullable: a buyer-only-signed spec is accepted-but-undisputable
+// (no seller counter-signature to point at on a dispute). `raw_spec` stores the
+// exact typed message (bigint fields as strings) so the spec hash + signatures
+// can be re-verified verbatim.
+export const stewardSpecs = pgTable(
+  'steward_specs',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    specHash: text('spec_hash').notNull().unique(),
+    chain: text('chain').notNull().default('arc'),
+    buyer: text('buyer').notNull(),
+    seller: text('seller').notNull(),
+    sellerUrlHash: text('seller_url_hash'),
+    schemaHash: text('schema_hash'),
+    maxBytes: integer('max_bytes'),
+    deadlineMs: integer('deadline_ms'),
+    requireJson: boolean('require_json'),
+    requireOkField: boolean('require_ok_field'),
+    validUntil: timestamp('valid_until', { withTimezone: true }),
+    nonce: numeric('nonce'),
+    buyerSig: text('buyer_sig').notNull(),
+    // Null = buyer-only-signed (accepted, but undisputable — no seller commitment).
+    sellerSig: text('seller_sig'),
+    rawSpec: jsonb('raw_spec').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    buyerIdx: index('idx_steward_specs_buyer').on(table.buyer),
+    sellerIdx: index('idx_steward_specs_seller').on(table.seller),
+  }),
+);
+
+export type StewardSpec = typeof stewardSpecs.$inferSelect;
+export type NewStewardSpec = typeof stewardSpecs.$inferInsert;
+
 // The ledger. One row per payment intent that passes through the pipeline —
 // allowed, held, or denied. `decision_stage` records where in the pipeline the
 // verdict was reached. `incident_id` is a PLAIN bigint (no FK) on purpose: it
@@ -554,6 +597,12 @@ export const stewardPayments = pgTable(
     mandateId: bigint('mandate_id', { mode: 'bigint' }).references(() => stewardMandates.id),
     // PLAIN column, NO foreign key — avoids a circular FK with steward_incidents.
     incidentId: bigint('incident_id', { mode: 'bigint' }),
+    // WS-1: the signed DeliverySpec this payment was governed by (null = the
+    // legacy unsigned-`expect` path, Tier-0-only and non-disputable).
+    specId: bigint('spec_id', { mode: 'bigint' }).references(() => stewardSpecs.id),
+    // WS-1: which verification tier resolved conformance. 0 = Tier-0
+    // deterministic checks (the only tier today). Set when a signed spec governs.
+    verificationTier: smallint('verification_tier'),
     latencyMs: integer('latency_ms'),
   },
   (table) => ({
@@ -684,3 +733,48 @@ export const stewardIntegrations = pgTable('steward_integrations', {
 
 export type StewardIntegration = typeof stewardIntegrations.$inferSelect;
 export type NewStewardIntegration = typeof stewardIntegrations.$inferInsert;
+
+// Steward Phase 2 (WS-2 + WS-3): the flagship evidence record. When a signed-spec
+// payment breaches its pre-agreed DeliverySpec, Steward signs an EIP-712
+// EvidenceAttestation (the rating signer key) and records it on-chain in the
+// EvidenceRegistry. The on-chain event is the canonical record; this table is the
+// off-chain index + the bridge into the Caliber rating engine.
+//
+// `verdict`        0 = conforms · 1 = breach · 2 = inconclusive (steward-core VERDICT).
+// `verifying_tier` 0..3 — the judge Tier that resolved the verdict (0 today).
+// `onchain_tx`     the attest() tx hash; NULL when the chain send failed (the row is
+//                  still written so it can be retried — `attestation`/`signature`
+//                  hold the verbatim signed envelope to re-broadcast).
+// `feedback_event_id` — for a BREACH, the synthetic validator-observation row this
+//                  evidence wrote into feedback_events (score 0, tag steward:breach).
+//                  That row is what flows through rateAgent() and drops the score.
+export const stewardEvidence = pgTable(
+  'steward_evidence',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    paymentId: bigint('payment_id', { mode: 'bigint' }).references(() => stewardPayments.id),
+    specHash: text('spec_hash'),
+    responseHash: text('response_hash'),
+    agentId: bigint('agent_id', { mode: 'bigint' }),
+    verdict: smallint('verdict'),
+    verifyingTier: smallint('verifying_tier'),
+    buyerSig: text('buyer_sig'),
+    sellerSig: text('seller_sig'),
+    methodologyVersion: text('methodology_version'),
+    // The verbatim signed EvidenceAttestation message (bigint fields as strings) so
+    // a failed on-chain send can be re-broadcast without re-signing.
+    attestation: jsonb('attestation'),
+    signature: text('signature'),
+    onchainTx: text('onchain_tx'),
+    feedbackEventId: bigint('feedback_event_id', { mode: 'bigint' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    paymentIdx: index('idx_steward_evidence_payment').on(table.paymentId),
+    agentIdx: index('idx_steward_evidence_agent').on(table.agentId),
+    createdAtIdx: index('idx_steward_evidence_created_at').on(table.createdAt),
+  }),
+);
+
+export type StewardEvidence = typeof stewardEvidence.$inferSelect;
+export type NewStewardEvidence = typeof stewardEvidence.$inferInsert;

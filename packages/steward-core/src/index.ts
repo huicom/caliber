@@ -66,3 +66,35 @@ export {
   type LlmModel,
   type ChatJsonRequest,
 } from './llm.js';
+
+export {
+  // domain
+  CHAIN_ID,
+  ZERO_ADDRESS,
+  caliberDomain,
+  stringToBytes32,
+  // DeliverySpec
+  DELIVERY_SPEC_TYPES,
+  sellerUrlHash,
+  schemaHashFromExpect,
+  buildDeliverySpec,
+  deliverySpecHash,
+  signDeliverySpec,
+  recoverDeliverySpecSigner,
+  verifyDeliverySpecSig,
+  type DeliverySpec,
+  type DeliverySpecInput,
+  // EvidenceAttestation
+  VERDICT,
+  EVIDENCE_ATTESTATION_TYPES,
+  buildEvidenceAttestation,
+  signEvidenceAttestation,
+  evidenceAttestationHash,
+  verifyEvidence,
+  type VerdictValue,
+  type EvidenceAttestation,
+  type EvidenceAttestationInput,
+  type EvidenceEnvelope,
+  type EvidenceCheck,
+  type EvidenceVerifyResult,
+} from './eip712.js';

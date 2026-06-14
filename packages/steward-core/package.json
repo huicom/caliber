@@ -12,10 +12,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "policy-check": "tsx scripts/policy-check.ts",
-    "llm-check": "tsx --env-file=../../.env scripts/llm-check.ts"
+    "llm-check": "tsx --env-file=../../.env scripts/llm-check.ts",
+    "eip712-check": "tsx scripts/eip712-check.ts"
   },
   "dependencies": {
     "@caliber/x402-client": "workspace:*",
+    "viem": "^2.27.3",
     "zod": "^3.24.3"
   },
   "devDependencies": {
