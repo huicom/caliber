@@ -15,13 +15,16 @@
     "typecheck": "pnpm -r typecheck && pnpm typecheck:scripts",
     "typecheck:scripts": "tsc --noEmit --project scripts/tsconfig.json",
     "demo:redteam": "tsx --env-file=.env scripts/redteam-demo.ts",
-    "demo:treasurer": "tsx --env-file=.env scripts/treasurer-demo.ts"
+    "demo:treasurer": "tsx --env-file=.env scripts/treasurer-demo.ts",
+    "demo:flagship": "tsx --env-file=.env scripts/flagship-demo.ts"
   },
   "devDependencies": {
     "@arc-agents/db": "workspace:*",
     "@caliber/steward-client": "workspace:*",
+    "@caliber/steward-core": "workspace:*",
     "@types/node": "^22.0.0",
     "tsx": "^4.22.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "viem": "^2.27.3"
   }
 }

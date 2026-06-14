@@ -8,5 +8,5 @@
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "include": ["redteam-demo.ts", "treasurer-demo.ts", "lib/**/*.ts"]
+  "include": ["redteam-demo.ts", "treasurer-demo.ts", "flagship-demo.ts", "lib/**/*.ts"]
 }

@@ -14,6 +14,9 @@ importers:
       '@caliber/steward-client':
         specifier: workspace:*
         version: link:packages/steward-client
+      '@caliber/steward-core':
+        specifier: workspace:*
+        version: link:packages/steward-core
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
@@ -23,6 +26,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
 
   indexer/arc:
     dependencies:
@@ -128,6 +134,13 @@ importers:
         version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
 
   packages/steward-client:
+    dependencies:
+      '@caliber/steward-core':
+        specifier: workspace:*
+        version: link:../steward-core
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^22.15.2
@@ -141,6 +154,9 @@ importers:
       '@caliber/x402-client':
         specifier: workspace:*
         version: link:../x402-client
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zod:
         specifier: ^3.24.3
         version: 3.25.76
@@ -8170,7 +8186,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 
@@ -11297,7 +11313,7 @@ snapshots:
   ox@0.6.7(typescript@5.9.3)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -11311,7 +11327,7 @@ snapshots:
   ox@0.6.9(typescript@5.9.3)(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
