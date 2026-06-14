@@ -8,7 +8,7 @@ updated: 2026-05-24
 
 # Caliber Rating — Service Companion
 
-*Operational companion to the [Caliber Rating Methodology v2.0](https://caliber.poko.blue/methodology). The methodology paper is the source of truth on how ratings are computed; this document covers how the service is operated, what the API contract looks like, how the on-chain primitives compose, and the provenance lesson that produced v2.0. Live numbers as of 2026-05-22.*
+*Operational companion to the [Caliber Rating Methodology v2.0.1](https://caliber.poko.blue/methodology). The methodology paper is the source of truth on how ratings are computed; this document covers how the service is operated, what the API contract looks like, how the on-chain primitives compose, and the provenance lesson that produced v2.0. Live numbers as of 2026-05-28: 24,219 agents indexed · 56,709 jobs · 27,894 completed · 17,807 USDC volume settled · ~900 rated under v2.0.1.*
 
 ## 1. Where to start
 

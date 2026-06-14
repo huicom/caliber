@@ -2,28 +2,40 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Obsidian notes mapping (this project)
+
+This repo's Obsidian vault folder is **`~/obsidian-vault/01 - Projects/15 - Caliber/`**.
+(Vault sync + general PARA rules live in `~/.claude/CLAUDE.md`.)
+
+- **Write Caliber session/decision/pattern notes to that folder ONLY** — do not split to
+  `03 - Resources/` or anywhere else for this project.
+- **Read only that folder by default.** Read the rest of the vault solely when explicitly
+  asked, treated as one-time scoped permission.
+- Frontmatter `project: Caliber`, tags include `caliber`. Filenames `YYYY-MM-DD <topic>.md`.
+
 ## Project
 
-**Caliber** — a counterparty performance rating for ERC-8004 AI agents on Arc Testnet (chain 5042002), live at [caliber.poko.blue](https://caliber.poko.blue). API at [caliber-api.poko.blue](https://caliber-api.poko.blue). Methodology v2.0 published openly at `caliber.poko.blue/methodology`.
+**Caliber** — a counterparty performance rating for ERC-8004 AI agents on Arc Testnet (chain 5042002), live at [caliber.poko.blue](https://caliber.poko.blue). API at [caliber-api.poko.blue](https://caliber-api.poko.blue). Methodology **v2.0.1** published openly at `caliber.poko.blue/methodology` (source: `docs/02-riskmodel/01-Methodology.md`).
 
-**Current state (2026-05-22, late):** Methodology v2.0 adopted (pivot from earlier v1 PD/LGD/EAD framing — see "Methodology pivot" below). Phase 2 voyage shipped on `feat/passport-watchlist-discover` branch (17 commits, not yet pushed/deployed):
+**Current state (2026-05-28):** Methodology v2.0.1 shipped (metallurgical tier rename + calibration against the first ~900-agent rated cohort). Phase 2 voyage is fully merged to `main` and deployed. Circle Gateway x402 end-to-end is live. Phase 0 ops hardening (pg backup, banner restore, nodejs hold) landed today.
 
-- **Human surface (gatekeeper layer):** `/passport/arc/[id]` (per-agent proof page + OG card + embed badge + on-chain verifier at `/verify`), `/discover` + `/discover/category/[slug]` (semantic search + clustered category browse), `/watchlist` + `/api/watchlist` + `/watchlist.rss` + `/watchlist/subscribe` (Discord webhook subscriptions).
+- **Human surface (gatekeeper layer):** `/passport/arc/[id]` (per-agent proof page + OG card + embed badge + off-chain verifier at `/verify`), `/discover` + `/discover/category/[slug]` (semantic search + clustered category browse), `/watchlist` + `/api/watchlist` + `/watchlist.rss` + `/watchlist/subscribe` (Discord webhook subscriptions).
 - **AI-native surface:** pgvector 384-dim embeddings, `POST /api/v1/route` (intent → signed attestation in one call), `@caliber/sdk` v0.1 in `packages/sdk/`.
-- **Indexer:** auto-categorizes new agents at IPFS metadata-fetch time. Embedding catch-up runs every 15 min via `caliber-embed-pending.timer`.
+- **Circle integrations (shipped):** USDC settlement on Arc, Circle Programmable Wallets + Modular Wallets on `/jobs/new`, Circle Gateway via the batched-settlement x402 SDK (EIP-3009 signature → half-cent nanopayment queued in the seller batch), per-job rating attestations issued through that x402 flow.
+- **Indexer:** auto-categorizes new agents at IPFS metadata-fetch time. Embedding catch-up runs every 15 min via `caliber-embed-pending.timer`. Daily Sentinel snapshot at 04:00 UTC writes `rating_snapshots` + emits `tier_transitions` + fans out Discord webhooks.
 
-Live counts: 18,481 indexed, 2,298 named, 1,786 categorized into 8 visible buckets (Trading 778, Validation 451, Research 209, Payments 138, Utility 88, Assistants 71, Services 36, Content 19), 2,298 embedded.
+Live counts (2026-05-28, from `/api/stats`): **24,219 agents indexed · 56,709 jobs · 27,894 completed · 17,807 USDC volume**. Last 24h: 364 new agents, 2,010 new jobs. ~900 agents rated under v2.0.1 (Gold 9 · Silver ~130 · Bronze ~18 at the time of methodology paper publication; counts grow with each Sentinel run). 8 visible categories.
 
 ## Methodology pivot (v1 → v2)
 
-The first published Caliber methodology used credit-rating vocabulary (Caliber-AAA … Caliber-D, PD/LGD/EAD/EL, logistic-form scorecard). It was rejected on 2026-05-22 because the dataset does not support credit-rating-grade claims. The current v2.0 methodology uses **counterparty performance rating** vocabulary instead:
+The first published Caliber methodology used credit-rating vocabulary (Caliber-AAA … Caliber-D, PD/LGD/EAD/EL, logistic-form scorecard). It was rejected on 2026-05-22 because the dataset does not support credit-rating-grade claims. The current v2.0.1 methodology uses **counterparty performance rating** vocabulary with a **medal scheme** (intentionally not letter grades — every culture recognises Gold > Silver > Bronze without inheriting credit-rating semantics):
 
-- **Tiers:** Established / Proven / Emerging / Provisional / Watch / Inactive (6 values; ordinals 0–5)
-- **Score:** 0–100 (50% smoothed completion + 25% forward success + 15% network endorsement + 10% latency consistency)
-- **Confidence:** high / moderate / low / insufficient
-- **Flags:** 5 rule-based risk flags (counterparty concentration, validator concentration, sybil pattern, volume anomaly, dormancy) — any flag pushes the agent to Watch (or Inactive for Dormancy)
-- **Bond formula:** tier-stepped (50/150/500/1500 bps for Established/Proven/Emerging/Provisional; Watch + Inactive refused), admin-configurable on-chain
-- **Methodology version:** `2.0.0`
+- **Tiers:** `Gold | Silver | Bronze | Pending | Watch | Dormant` (6 values; ordinals 0–5 in `rating/engine/types.ts`)
+- **Score:** 0–100 (50% smoothed reliability + 25% forward estimate + 15% network diversity + 10% latency consistency)
+- **Confidence:** `high | moderate | low | insufficient` (cutoffs in completed jobs: ≥50 high, ≥20 moderate, ≥5 low, else insufficient → no rating issued)
+- **Flags:** 5 rule-based risk flags (`CounterpartyConcentration | ValidatorConcentration | SybilPattern | VolumeAnomaly | Dormancy`) — any flag pushes to Watch; Dormancy pushes to Dormant
+- **Bond rates:** configurable on-chain (admin-set, event-logged, capped at 50% of budget). The methodology paper does not pin specific bps per tier — the bond table is operational, not methodological, and lives at `caliber.poko.blue/integrate`. Material changes follow the same 30-day notice rule as methodology version changes.
+- **Methodology version:** `2.0.1` (signer stamps every attestation with this). The on-chain `RatingVerifier` was deployed with `bytes32("2.0.0")` and accepts both `2.0.0` and `2.0.1` during the v2.x dual-version window (per the 30-day rule). `contracts/script/SyncMethodologyVersion.s.sol` exists to bump on-chain when the window closes.
 
 The v1.x code is preserved at git tag `methodology-v1.0.1-final`. The provenance lesson is documented in the methodology paper's "Methodology Provenance" section and in `docs/04-public/02-methodology-and-service.md` §7.
 
@@ -90,46 +102,54 @@ pnpm db:studio     # drizzle-kit studio (https://local.drizzle.studio)
 - **Placeholder agent rows for FK safety.** Before inserting `feedback_events` or `validations`, the handler does an `ON CONFLICT DO NOTHING` insert into `agents` with empty `ownerAddress` and `registeredAtBlock=0`. This keeps the FK valid when an agent was registered *before* our backfill window. A real `AgentRegistered` event landing later does not overwrite (conflict clause) — that's why `applyEvents` cleans ` ` from strings but doesn't enforce non-empty `ownerAddress`.
 - **Aggregate recomputation in SQL.** `reputation_score` and `feedback_count` on `agents` are recomputed inline via raw `UPDATE … SELECT AVG/COUNT FROM feedback_events WHERE agent_id = …` after each feedback insert. Correct but O(n) per event — fine at current volume; revisit if volume grows.
 
-## Caliber Rating v2.0: Methodology Summary
+## Caliber Rating v2.0.1: Methodology Summary
 
-Full spec at `docs/02-riskmodel/01-Methodology.md`. Key points future Claude needs to honor:
+Full spec at `docs/02-riskmodel/01-Methodology.md`. Live at `caliber.poko.blue/methodology`. Key points future Claude needs to honor:
 
 **Framing.** Counterparty performance rating — **not** credit rating. The v1 PD/LGD/EAD/Caliber-AAA-D framing was rejected on 2026-05-22 because the dataset doesn't support credit-rating-grade claims. The current vocabulary is tier + score + confidence + flags.
 
-**Outputs.** Tier (Established / Proven / Emerging / Provisional / Watch / Inactive — 6 ordinals 0–5), score (0–100 integer), confidence label (high / moderate / low / insufficient), 5-bit risk flag bitmask (CounterpartyConcentration / ValidatorConcentration / SybilPattern / VolumeAnomaly / Dormancy — any flag pushes to Watch; Dormancy pushes to Inactive), `methodology_version: "2.0.0"`.
+**Outputs.** Tier (`Gold | Silver | Bronze | Pending | Watch | Dormant` — 6 ordinals 0–5), score (0–100 integer), confidence label (`high | moderate | low | insufficient`), 5-bit risk flag bitmask (`CounterpartyConcentration | ValidatorConcentration | SybilPattern | VolumeAnomaly | Dormancy` — any flag pushes to Watch; Dormancy pushes to Dormant), `methodology_version: "2.0.1"`.
 
-**Score composition** — 50% smoothed completion + 25% forward success + 15% network endorsement + 10% latency consistency.
+**Score composition** — 50% smoothed reliability + 25% forward estimate + 15% network diversity + 10% latency consistency. See `rating/engine/rating.ts` `SCORE_WEIGHTS`.
 
-**Smoothing** — Bühlmann credibility blend (k=20), forward-success exponential decay (60-day half-life).
+**Smoothing** — Bühlmann credibility blend (k=20), forward-success exponential decay (60-day half-life). Population mean reliability = 0.95 (hardcoded for v2.0.1 launch from the 2026-05-22 dataset; updated via the snapshot cron if it drifts).
 
-**Tier gates** — Established: score ≥ 80 AND jobs ≥ 50. Proven: 65 / 20. Emerging: 50 / 5. Anything else → Provisional (or Watch / Inactive if flags fire).
+**Tier gates (testnet calibration, v2.0.1).** Per `TIER_GATES` in `rating/engine/rating.ts`:
+- Gold: score ≥ 80 AND completed jobs ≥ **2**
+- Silver: score ≥ 75 AND completed jobs ≥ **2**
+- Bronze: score ≥ 50 AND completed jobs ≥ **1**
+- Else: Pending (or Watch if any flag fires; Dormant if Dormancy flag fires)
 
-**Confidence cutoffs** — high ≥50 interactions; moderate 15-49; low 5-14; insufficient <5 (no rating issued).
+The **production** thresholds (50 / 20 / 5 jobs) are the methodology's intended bar; they will activate when Arc Testnet accumulates enough genuine agent-to-agent commerce. The testnet column exists so the system is demonstrably operational from day one. See methodology paper §"Tier Assignment" and §Appendix F · Calibration history.
 
-**Bond formula (advisory, lives on `/integrate` not in the methodology paper)** — tier-stepped: Established 50bps / Proven 150bps / Emerging 500bps / Provisional 1500bps / Watch + Inactive refused. Admin-configurable per-tier on-chain via `CaliberEscrow.setBondBpsForTier`, ≤50% safety cap.
+**Confidence cutoffs** — completed jobs: `HIGH_CONFIDENCE_JOBS = 50`, `MODERATE_CONFIDENCE_JOBS = 20`, `LOW_CONFIDENCE_JOBS = 5`. Below 5 → unrated (`insufficient_interactions`). Less than 14 days on-chain → unrated (`insufficient_history`).
 
-**Governance** — material changes require a new minor version with 30-day notice; old and new versions accepted in parallel during transition. The on-chain `RatingVerifier` accepts the current methodology version and one previous version.
+**Bond rates** — configurable on-chain (admin-set, event-logged, capped at 50% of budget = `MAX_BOND_BPS = 5000`). The methodology paper does NOT publish per-tier bps. Current deployed configuration from `contracts/src/CaliberEscrow.sol` constructor: 50 / 150 / 500 / 1500 bps for ordinals 0–3 (Gold / Silver / Bronze / Pending); ordinals 4–5 (Watch / Dormant) refused. `CaliberEscrow.setBondBpsForTier(tier, bps)` is the admin lever; material changes follow the 30-day notice rule. Operational bond table also rendered at `caliber.poko.blue/integrate`.
 
-**Audience layering (decided 2026-05-22):** AI consumers are the long-term audience; humans (investors, grant judges, partners, builders) are the gatekeepers. Human-readable surfaces ship first as the demo layer; AI-native primitives (pgvector semantic search + `POST /v1/route`) ship second as the proof underneath. See [auto-memory](.claude/...) for the durable principle.
+**Contract-source naming quirk:** `contracts/src/CaliberEscrow.sol` still uses pre-pivot constant names (`TIER_ESTABLISHED`, `TIER_PROVEN`, `TIER_EMERGING`, `TIER_PROVISIONAL`, `TIER_WATCH`, `TIER_INACTIVE`) for the tier ordinals 0–5. Off-chain code (`rating/engine/types.ts` `CaliberTier`) maps those same ordinals to `Gold / Silver / Bronze / Pending / Watch / Dormant`. Same enum positions, different labels. The on-chain contract code doesn't care about the human label, only the ordinal — so attestations and bond gating stay consistent. A future contract rename would be cosmetic only.
 
-## Current Code State — v2.0 (Phase 2)
+**Governance** — material changes require a new minor version with 30-day notice; old and new versions accepted in parallel during transition. The on-chain `RatingVerifier` accepts the current methodology version and one previous version. Currently in the v2.0 → v2.0.1 dual-version window: contract holds `bytes32("2.0.0")`, signer stamps `2.0.1`; both verify.
 
-**Engine (rating/engine/, all post-Wave M):**
+**Audience layering (decided 2026-05-22):** AI consumers are the long-term audience; humans (investors, grant judges, partners, builders) are the gatekeepers. Human-readable surfaces ship first as the demo layer; AI-native primitives (pgvector semantic search + `POST /v1/route`) ship second as the proof underneath. See `~/.claude/projects/-home-huicom-arc-agents-explorer/memory/caliber_audience_layering.md` for the durable principle.
+
+## Current Code State — v2.0.1 (Phase 2 + Circle Gateway)
+
+**Engine (rating/engine/):**
 - `completion-rate.ts` — Step 1: weighted completion rate from job outcomes
-- `credibility.ts` — Step 2.1: Bühlmann blend with population mean (k=20)
+- `credibility.ts` — Step 2.1: Bühlmann blend with population mean (`POPULATION_COMPLETION_RATE = 0.95`, k=20)
 - `survival.ts` — Step 2.2: exponential-decay forward-success estimate (60-day half-life)
 - `flags.ts` — Step 2.3: 5 rule-based flags with explicit thresholds (see file constants)
-- `rating.ts` — orchestrator. Exports `rateAgent()`. Returns `RatingResult` (rated or unrated)
+- `rating.ts` — orchestrator. Exports `rateAgent()`. Returns `RatingResult` (rated or unrated). Owns `SCORE_WEIGHTS`, `TIER_GATES`, confidence cutoffs.
 - `features.ts` — per-agent feature vector from Postgres
-- `types.ts` — `CaliberTier`, `ConfidenceLabel`, `RatingFlag`, `FLAG_BIT`, `flagsToBitfield()`, `TIER_ORDINAL`
-- `version.ts` — `METHODOLOGY_VERSION = '2.0.0'`
+- `types.ts` — `CaliberTier` (Gold/Silver/Bronze/Pending/Watch/Dormant), `ConfidenceLabel`, `RatingFlag`, `FLAG_BIT`, `flagsToBitfield()`, `TIER_ORDINAL`
+- `version.ts` — `METHODOLOGY_VERSION = '2.0.1'`
 - `index.ts` — barrel export
 
-**Rating HTTP service (rating/src/, Express on port 3100):**
+**Rating HTTP service (rating/src/, Express on port 3100, exposed at `caliber-api.poko.blue` via Cloudflare Tunnel):**
 - `server.ts` — mounts the routes + `/health`
 - `rating.ts` — `GET /v1/agents/:chain/:id/rating`
 - `bulk.ts` — `GET /v1/ratings/bulk?chain=&ids=`
-- `attest.ts` — `POST /v1/agents/:chain/:id/attest` → signed EIP-712 v2 envelope
+- `attest.ts` — `POST /v1/agents/:chain/:id/attest` → signed EIP-712 envelope; **x402-gated** (half-cent USDC nanopayment via Circle Gateway batched-settlement SDK)
 - `distribution.ts`, `history.ts`, `distribution-history.ts`, `exposure-summary.ts` — read endpoints powering the web charts
 
 **Web Phase 2 surfaces (web/src/app/):**
@@ -144,32 +164,42 @@ Full spec at `docs/02-riskmodel/01-Methodology.md`. Key points future Claude nee
 - `api/v1/search/route.ts` — semantic + trigram search
 - `api/v1/categories/route.ts` — category counts + top reps
 - `api/watchlist/route.ts` + `subscribe/route.ts` — feed JSON + Discord webhook mgmt
+- `jobs/new/_components/PostJobForm.tsx` — 3-step Circle Programmable Wallet flow: USDC approve → EIP-3009 gasless signature for x402 attestation payment → RatingGateway tier check + escrow lock. MetaMask path also supported.
 
 **Contracts (Arc Testnet, redeployed 2026-05-22 for v2.0):**
 - RatingVerifier: `0xE3b1e82f1A047BC5B41d8982EaC635EC61526EE8`
 - RatingGateway: `0x003234AAd031242052d7e580d337386f1B261b78`
 - CaliberEscrow: `0xc76bb990E498ACace1ff6A83ea4CCDDa92485365`
-- methodologyVersion = bytes32("2.0.0"); signer = 0xbF017698BB2c936D54a74DCABF68Df42800bAA84
+- methodologyVersion stored on-chain = `bytes32("2.0.0")`; signer = `0xbF017698BB2c936D54a74DCABF68Df42800bAA84` stamps `2.0.1` on attestations. Both versions verify during the dual-version window. `contracts/script/SyncMethodologyVersion.s.sol` exists to bump on-chain when the window closes.
+
+**Circle integrations (shipped, video-validatable):**
+- **USDC** — settlement currency end-to-end (job budgets, escrow, x402 attestation payments)
+- **Circle Programmable Wallets** — `web/src/app/jobs/new/_components/PostJobForm.tsx` `wallet_flows: 'circle_pw'` branch. Uses Circle PW as EOA, signs EIP-3009 for x402 payments
+- **Circle Modular Wallets** — alternative wallet flow in the same form
+- **Circle Gateway** — `rating/src/x402-*` middleware uses `@circle/gateway-sdk` for batched-settlement (half-cent nanopayments queue in the seller batch; Circle settles in one tx with hundreds of other payments)
+- **Nanopayments** — per-job rating-attestation x402 charges (`X402_PRICE_USDC = 0.005` USDC settled ~$0.054 today including fees, half-cent target)
 
 **SDK (packages/sdk/):**
 - `@caliber/sdk` v0.1 — `Caliber` class wrapping rating + attest + route + off-chain verify
 - Defaults point at the live Arc Testnet deployment
 - Source-disclosed MIT after July 2026 hackathon close
 
-**Database (added in Phase 2, migrations 0004–0007):**
+**Database tables:**
+- `agents`, `feedback_events`, `validations`, `jobs`, `job_events`, `indexer_state` — original schema
 - `agents.category` text (nullable) — F2 classifier output, populated by `classify()` from `@arc-agents/db`
 - `agents.embedding` vector(384) — populated by `web/scripts/embed-agents.ts` (also runs on a 15-min timer)
-- `rating_snapshots.flags` smallint — bitmask of flags as of this snapshot
-- `tier_transitions` table — daily snapshot diff emits one row per interesting change (first_rating, tier_up, tier_down, enter_watch, enter_inactive, flag_added, flag_removed)
+- `rating_snapshots` table (with `flags` smallint bitmask) — Sentinel writes one row per rated agent per day
+- `tier_transitions` table — daily snapshot diff emits one row per interesting change (first_rating, tier_up, tier_down, enter_watch, enter_dormant, flag_added, flag_removed)
 - `watchlist_webhooks` table — Discord subscribers, fanned out from `snapshot-daily.ts` after the day's transitions are written
+- `job_drafts` — gated job form pre-commit state (min_tier + min_confidence stored as smallint ordinals)
 
-**Indexer auto-categorization (the new pattern):**
-Both `indexer/arc/lib/ipfs.ts` (backfill metadata sweep) and `indexer/arc/live.ts` (live AgentRegistered handler) now run `classify()` against the freshly-fetched metadata and write `agents.category` in the same `UPDATE`. New agents become category-tagged within minutes of their on-chain registration. Embedding catches up on the 15-min `caliber-embed-pending.timer`.
+**Indexer auto-categorization:**
+Both `indexer/arc/lib/ipfs.ts` (backfill metadata sweep) and `indexer/arc/live.ts` (live AgentRegistered handler) run `classify()` against the freshly-fetched metadata and write `agents.category` in the same `UPDATE`. New agents become category-tagged within minutes of their on-chain registration. Embedding catches up on the 15-min `caliber-embed-pending.timer`.
 
 **Known limitations:**
-- §4.1b: `validations` table has no `job_id` FK — flags ALL terminal jobs as defaulted when ANY validation in agent history is FAILED. Migration proposal documented in handlers.ts near `ValidationRequested`.
-- ~88% of Arc Testnet agents have no fetchable metadata (placeholder hostnames or shared image CIDs), so /discover browses ~12% of the index. See `docs/02-riskmodel/phase2-trust-surface-voyage.md` §6 risks for the full picture.
-- The `embed-pending.timer` is in `deploy/` but only activates after the next `deploy.sh` run.
+- §4.1b: `validations` table has no `job_id` FK — flags ALL terminal jobs as defaulted when ANY validation in agent history is FAILED. Migration proposal documented in `indexer/arc/lib/handlers.ts` near `ValidationRequested`.
+- ~88% of Arc Testnet agents have no fetchable metadata (placeholder hostnames or shared image CIDs), so /discover browses ~12% of the index. See `docs/02-riskmodel/phase2-trust-surface-voyage.md` §6.
+- `bond_events` indexer table NOT yet shipped — bond posts/releases on `CaliberEscrow` are on-chain but not indexed yet. Phase 1 of `~/.claude/plans/eager-plotting-horizon.md` covers this; lands post-grant/post-holiday.
 
 ## Commands
 
@@ -254,11 +284,20 @@ nginx terminates TLS for `caliber.poko.blue`, proxies `/` to `localhost:3000`, a
 
 ## Active Phase Context
 
-Today is **2026-05-22, late**. Phase 2 voyage (`docs/02-riskmodel/phase2-trust-surface-voyage.md`) shipped on `feat/passport-watchlist-discover` branch — 17 commits, **not yet pushed or deployed**. Next milestones:
+Today is **2026-05-28**. Phase 2 voyage is fully **merged to `main` and deployed**. v2.0.1 publication (metallurgical tier rename + calibration) shipped. Circle Gateway x402 end-to-end is live (commit `98a3ad8` + follow-up fixes). Phase 0 ops hardening (pg backup script + banner restore + harden.sh) landed today (`bd53652`). Healthcheck: 33/33 pass.
 
-- **2026-05-31:** Circle Developer Grant submission deadline. Phase A surfaces (Passport, Watchlist, Discover) are the demo artifact.
+**Active branch:** `main`.
+
+**Concurrent open commitments:**
+- **Agora** hackathon — submitted May 25
+- **Stablecoin Commerce Stack Challenge v1** — submitted
+- **Circle Developer Grant** — May 31 deadline. Submission demo artifacts: live site (Passport / Discover / Watchlist / Verify), `/methodology` v2.0.1 paper, Vimeo demo video, three deployed contracts, Circle PW + Gateway + Nanopayments integration. Application program details + form fields captured in `docs/05-grants/circle-developer-grant-program.md`.
+
+**Next milestones:**
+- **2026-05-30 → 2026-06-03:** Holiday window. Hands-off. Sentinel + embedding timer + pg backup continue running autonomously.
+- **2026-05-31:** Circle Developer Grant submission deadline (lands mid-holiday — submit before May 30 EOD).
+- **2026-06-04 → 2026-07-13:** Post-grant build window per `~/.claude/plans/eager-plotting-horizon.md` — Phase 1 (bond event indexer + auto-release/slash bot), Phase 2 (methodology v2.1 with bonding-rate factor), Phase 3 (CCTP cross-chain), Phase 4 (USYC + Stablecoin Commerce Stack v2 final submission).
 - **2026-06-15:** Phase 1 checkpoint review (continue/reduce/park decision).
+- **2026-07-13:** Stablecoin Commerce Stack Challenge v2 final deadline.
 
-When asked about scope, deadlines, or what's next, **read `docs/02-riskmodel/phase2-trust-surface-voyage.md` first**.
-
-The active working branch is `feat/passport-watchlist-discover`.
+When asked about scope, deadlines, or what's next, **read `~/.claude/plans/eager-plotting-horizon.md` first** (the authoritative 1-month roadmap), then `docs/02-riskmodel/phase2-trust-surface-voyage.md` for the shipped Phase 2 details.
