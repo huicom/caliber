@@ -15,7 +15,7 @@ This repo's Obsidian vault folder is **`~/obsidian-vault/01 - Projects/15 - Cali
 
 ## Project
 
-**Caliber** — a counterparty performance rating for ERC-8004 AI agents on Arc Testnet (chain 5042002), live at [caliber.poko.blue](https://caliber.poko.blue). API at [caliber-api.poko.blue](https://caliber-api.poko.blue). Methodology **v2.0.1** published openly at `caliber.poko.blue/methodology` (source: `docs/02-riskmodel/01-Methodology.md`).
+**Caliber** — a counterparty performance rating for ERC-8004 AI agents on Arc Testnet (chain 5042002), live at [caliber.poko.blue](https://caliber.poko.blue). API at [caliber-api.poko.blue](https://caliber-api.poko.blue). Methodology **v2.1.0** (announced and active on Arc Testnet 2026-06-14; 2026-06-14 → 2026-07-14 is the dual-version acceptance window, during which both v2.0.1 and v2.1.0 attestations verify on-chain; the 30-day-notice-before-effective-date rule still governs any future production/mainnet deployment) published openly at `caliber.poko.blue/methodology` (source: `docs/02-riskmodel/01-Methodology.md`).
 
 **Current state (2026-05-28):** Methodology v2.0.1 shipped (metallurgical tier rename + calibration against the first ~900-agent rated cohort). Phase 2 voyage is fully merged to `main` and deployed. Circle Gateway x402 end-to-end is live. Phase 0 ops hardening (pg backup, banner restore, nodejs hold) landed today.
 
@@ -35,7 +35,7 @@ The first published Caliber methodology used credit-rating vocabulary (Caliber-A
 - **Confidence:** `high | moderate | low | insufficient` (cutoffs in completed jobs: ≥50 high, ≥20 moderate, ≥5 low, else insufficient → no rating issued)
 - **Flags:** 5 rule-based risk flags (`CounterpartyConcentration | ValidatorConcentration | SybilPattern | VolumeAnomaly | Dormancy`) — any flag pushes to Watch; Dormancy pushes to Dormant
 - **Bond rates:** configurable on-chain (admin-set, event-logged, capped at 50% of budget). The methodology paper does not pin specific bps per tier — the bond table is operational, not methodological, and lives at `caliber.poko.blue/integrate`. Material changes follow the same 30-day notice rule as methodology version changes.
-- **Methodology version:** `2.0.1` (signer stamps every attestation with this). The on-chain `RatingVerifier` was deployed with `bytes32("2.0.0")` and accepts both `2.0.0` and `2.0.1` during the v2.x dual-version window (per the 30-day rule). `contracts/script/SyncMethodologyVersion.s.sol` exists to bump on-chain when the window closes.
+- **Methodology version:** `2.1.0` (signer stamps every attestation with this). v2.1.0 adds the **adverse-evidence factor**: negative validator feedback (a `feedback_events` row with `score < 50`, e.g. a signed conformance breach) now nets against the network-endorsement sub-score (weight 40 positive-equivalents per adverse observation, net floored at 0; see `rating/engine/rating.ts` `NEGATIVE_FEEDBACK_WEIGHT`). v2.1.0 is **active on Arc Testnet from 2026-06-14** (testnet is the calibration environment; new attestations are stamped `2.1.0` now). The on-chain `RatingVerifier` holds `bytes32("2.1.0")` (previous `bytes32("2.0.1")`) and accepts both during the **dual-version acceptance window 2026-06-14 → 2026-07-14**; after it closes, v2.0.1 is retired from operational use. The 30-day-notice-before-effective-date rule is unchanged for any future production/mainnet deployment. Bumped on-chain via `contracts/script/SyncMethodologyVersion.s.sol`.
 
 The v1.x code is preserved at git tag `methodology-v1.0.1-final`. The provenance lesson is documented in the methodology paper's "Methodology Provenance" section and in `docs/04-public/02-methodology-and-service.md` §7.
 
@@ -102,15 +102,15 @@ pnpm db:studio     # drizzle-kit studio (https://local.drizzle.studio)
 - **Placeholder agent rows for FK safety.** Before inserting `feedback_events` or `validations`, the handler does an `ON CONFLICT DO NOTHING` insert into `agents` with empty `ownerAddress` and `registeredAtBlock=0`. This keeps the FK valid when an agent was registered *before* our backfill window. A real `AgentRegistered` event landing later does not overwrite (conflict clause) — that's why `applyEvents` cleans ` ` from strings but doesn't enforce non-empty `ownerAddress`.
 - **Aggregate recomputation in SQL.** `reputation_score` and `feedback_count` on `agents` are recomputed inline via raw `UPDATE … SELECT AVG/COUNT FROM feedback_events WHERE agent_id = …` after each feedback insert. Correct but O(n) per event — fine at current volume; revisit if volume grows.
 
-## Caliber Rating v2.0.1: Methodology Summary
+## Caliber Rating v2.1.0: Methodology Summary
 
 Full spec at `docs/02-riskmodel/01-Methodology.md`. Live at `caliber.poko.blue/methodology`. Key points future Claude needs to honor:
 
 **Framing.** Counterparty performance rating — **not** credit rating. The v1 PD/LGD/EAD/Caliber-AAA-D framing was rejected on 2026-05-22 because the dataset doesn't support credit-rating-grade claims. The current vocabulary is tier + score + confidence + flags.
 
-**Outputs.** Tier (`Gold | Silver | Bronze | Pending | Watch | Dormant` — 6 ordinals 0–5), score (0–100 integer), confidence label (`high | moderate | low | insufficient`), 5-bit risk flag bitmask (`CounterpartyConcentration | ValidatorConcentration | SybilPattern | VolumeAnomaly | Dormancy` — any flag pushes to Watch; Dormancy pushes to Dormant), `methodology_version: "2.0.1"`.
+**Outputs.** Tier (`Gold | Silver | Bronze | Pending | Watch | Dormant` — 6 ordinals 0–5), score (0–100 integer), confidence label (`high | moderate | low | insufficient`), 5-bit risk flag bitmask (`CounterpartyConcentration | ValidatorConcentration | SybilPattern | VolumeAnomaly | Dormancy` — any flag pushes to Watch; Dormancy pushes to Dormant), `methodology_version: "2.1.0"`.
 
-**Score composition** — 50% smoothed reliability + 25% forward estimate + 15% network diversity + 10% latency consistency. See `rating/engine/rating.ts` `SCORE_WEIGHTS`.
+**Score composition** — 50% smoothed reliability + 25% forward estimate + 15% network diversity + 10% latency consistency. See `rating/engine/rating.ts` `SCORE_WEIGHTS`. **v2.1.0 adverse-evidence factor:** the network sub-score's feedback-volume component is netted — each `feedback_events.score < 50` observation subtracts `NEGATIVE_FEEDBACK_WEIGHT = 40` positive-equivalents (net floored at 0), so a single signed breach zeroes the feedback-volume credit and drops the score.
 
 **Smoothing** — Bühlmann credibility blend (k=20), forward-success exponential decay (60-day half-life). Population mean reliability = 0.95 (hardcoded for v2.0.1 launch from the 2026-05-22 dataset; updated via the snapshot cron if it drifts).
 
@@ -128,11 +128,11 @@ The **production** thresholds (50 / 20 / 5 jobs) are the methodology's intended 
 
 **Contract-source naming quirk:** `contracts/src/CaliberEscrow.sol` still uses pre-pivot constant names (`TIER_ESTABLISHED`, `TIER_PROVEN`, `TIER_EMERGING`, `TIER_PROVISIONAL`, `TIER_WATCH`, `TIER_INACTIVE`) for the tier ordinals 0–5. Off-chain code (`rating/engine/types.ts` `CaliberTier`) maps those same ordinals to `Gold / Silver / Bronze / Pending / Watch / Dormant`. Same enum positions, different labels. The on-chain contract code doesn't care about the human label, only the ordinal — so attestations and bond gating stay consistent. A future contract rename would be cosmetic only.
 
-**Governance** — material changes require a new minor version with 30-day notice; old and new versions accepted in parallel during transition. The on-chain `RatingVerifier` accepts the current methodology version and one previous version. Currently in the v2.0 → v2.0.1 dual-version window: contract holds `bytes32("2.0.0")`, signer stamps `2.0.1`; both verify.
+**Governance** — material changes require a new minor version with 30-day notice; old and new versions accepted in parallel during transition. The on-chain `RatingVerifier` accepts the current methodology version and one previous version. Currently in the v2.0.1 → v2.1.0 dual-version window (2026-06-14 → 2026-07-14): contract holds `bytes32("2.1.0")` with previous `bytes32("2.0.1")`, signer stamps `2.1.0`; both verify.
 
 **Audience layering (decided 2026-05-22):** AI consumers are the long-term audience; humans (investors, grant judges, partners, builders) are the gatekeepers. Human-readable surfaces ship first as the demo layer; AI-native primitives (pgvector semantic search + `POST /v1/route`) ship second as the proof underneath. See `~/.claude/projects/-home-huicom-arc-agents-explorer/memory/caliber_audience_layering.md` for the durable principle.
 
-## Current Code State — v2.0.1 (Phase 2 + Circle Gateway)
+## Current Code State — v2.1.0 (Phase 2 + Circle Gateway)
 
 **Engine (rating/engine/):**
 - `completion-rate.ts` — Step 1: weighted completion rate from job outcomes
@@ -142,7 +142,7 @@ The **production** thresholds (50 / 20 / 5 jobs) are the methodology's intended 
 - `rating.ts` — orchestrator. Exports `rateAgent()`. Returns `RatingResult` (rated or unrated). Owns `SCORE_WEIGHTS`, `TIER_GATES`, confidence cutoffs.
 - `features.ts` — per-agent feature vector from Postgres
 - `types.ts` — `CaliberTier` (Gold/Silver/Bronze/Pending/Watch/Dormant), `ConfidenceLabel`, `RatingFlag`, `FLAG_BIT`, `flagsToBitfield()`, `TIER_ORDINAL`
-- `version.ts` — `METHODOLOGY_VERSION = '2.0.1'`
+- `version.ts` — `METHODOLOGY_VERSION = '2.1.0'`
 - `index.ts` — barrel export
 
 **Rating HTTP service (rating/src/, Express on port 3100, exposed at `caliber-api.poko.blue` via Cloudflare Tunnel):**
@@ -170,7 +170,7 @@ The **production** thresholds (50 / 20 / 5 jobs) are the methodology's intended 
 - RatingVerifier: `0xE3b1e82f1A047BC5B41d8982EaC635EC61526EE8`
 - RatingGateway: `0x003234AAd031242052d7e580d337386f1B261b78`
 - CaliberEscrow: `0xc76bb990E498ACace1ff6A83ea4CCDDa92485365`
-- methodologyVersion stored on-chain = `bytes32("2.0.0")`; signer = `0xbF017698BB2c936D54a74DCABF68Df42800bAA84` stamps `2.0.1` on attestations. Both versions verify during the dual-version window. `contracts/script/SyncMethodologyVersion.s.sol` exists to bump on-chain when the window closes.
+- methodologyVersion stored on-chain = `bytes32("2.1.0")` (previous = `bytes32("2.0.1")`); signer = `0xbF017698BB2c936D54a74DCABF68Df42800bAA84` stamps `2.1.0` on attestations. Both versions verify during the v2.0.1↔v2.1.0 dual-version window (2026-06-14 → 2026-07-14). `contracts/script/SyncMethodologyVersion.s.sol` bumps on-chain (run it again after 2026-07-14 to close the window). EvidenceRegistry `0xD6A8184372EbcDcBe479513187Fdc6E7E50C4A1D` `methodologyVersion()` likewise bumped to `2.1.0` via `setMethodologyVersion`.
 
 **Circle integrations (shipped, video-validatable):**
 - **USDC** — settlement currency end-to-end (job budgets, escrow, x402 attestation payments)

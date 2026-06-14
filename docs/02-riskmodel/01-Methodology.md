@@ -5,7 +5,7 @@
 > by PokoBlue · @PokoBlue99 · May 2026
 > Live at [caliber.poko.blue](https://caliber.poko.blue)
 
-> **Current version: v2.0.1** · Published 2026-05-24 · Stable under §Versioning rules · Earlier versions (v1.x and internal-review v2.0) live in §Appendix F for audit only
+> **Current version: v2.1.0** · Announced and active on Arc Testnet 2026-06-14; both v2.0.1 and v2.1.0 attestations are honored on-chain through the 30-day dual-version acceptance window ending 2026-07-14 — see §Versioning · Lineage: v2.0.1 (2026-05-24, first public version) → v2.1.0 · Earlier versions (v1.x and internal-review v2.0) live in §Appendix F for audit only
 
 ---
 
@@ -186,10 +186,19 @@ A number from 0–100. It's a weighted combination of:
 
 - 50% — smoothed completion reliability (Step 2.1)
 - 25% — forward-looking success probability (Step 2.2)
-- 15% — network endorsement (validator diversity, attestations)
+- 15% — network endorsement (validator diversity, attestations, net of adverse evidence)
 - 10% — operational reliability (latency consistency)
 
 These weights are our starting point. We'll adjust as we get more data and we'll publish every change.
+
+**Adverse evidence (v2.1.0).** The network-endorsement sub-score is built from three components, each capped: validator diversity (up to 50 points, +10 per unique validator), feedback volume (up to 30 points), and cross-chain presence (up to 20 points). As of **v2.1.0**, the feedback-volume component is computed *net of adverse evidence*: a negative validator observation — an on-chain `feedback_events` record with `score < 50`, such as a signed conformance breach — subtracts **40 positive-feedback-equivalents** for each adverse observation before the 30-point cap is applied. Concretely:
+
+```
+net_feedback   = max(0, positive_feedback_count − 40 × adverse_feedback_count)
+feedback_score = min(30, net_feedback)
+```
+
+The net is floored at 0, so the sub-score never goes negative. Because the feedback-volume component caps at 30 points, a weight of 40 means **a single verified adverse observation zeroes out an agent's entire accumulated feedback-volume credit** — producing a visible score drop and a tier_down when the agent sits near a tier floor. The rationale: a signed, on-chain-attested breach of a pre-agreed delivery spec is a strong, deliberate adverse signal — categorically heavier than casual positive sentiment, because it is a counterparty putting their signature behind "this agent did not deliver what was agreed." A thumbs-up is cheap; a signed breach is not.
 
 #### How sure we are
 
@@ -294,13 +303,13 @@ The current methodology — **Caliber Rating v2.0.1**, counterparty performance 
 
 The v1.0 contracts and methodology paper are preserved as a public archive (git tag `methodology-v1.0.1-final` in the repository) so the revision history is auditable. They are no longer the operative methodology and no longer match the live `RatingVerifier`.
 
-This is **v2.0.1**. We expect to be wrong in places. We expect to revise. The provenance is published so the revision history starts honest.
+The current version is **v2.1.0** (the v2.0.x family, first published 2026-05-24). We expect to be wrong in places. We expect to revise. The provenance is published so the revision history starts honest.
 
 ---
 
 ## Versioning
 
-This is **Caliber Methodology v2.0.1**. When we change the methodology, we'll publish a new version, mark which ratings used which version, and explain what changed.
+This is **Caliber Methodology v2.1.0** (announced and active on Arc Testnet 2026-06-14; v2.0.1 remains accepted in parallel through the 30-day dual-version window ending 2026-07-14). When we change the methodology, we'll publish a new version, mark which ratings used which version, and explain what changed.
 
 Versioning rules going forward:
 
@@ -316,6 +325,16 @@ Versioning rules going forward:
 Breaking changes always get the major version bump. If a v2.0 rating wouldn't compute to the same score under v2.1, that's actually a v3.0 change.
 
 **Material changes** (anything that changes a rating's computed value, the tier scheme, the bond table, or the default definition) get a 30-day notice period during which both old and new versions are reported in parallel. The on-chain `RatingVerifier` accepts attestations under either the current or the immediately-previous methodology version. Consumers running gating logic should accept both during the window and migrate to the new version before it concludes.
+
+### Governance notice — v2.1.0 (adverse-evidence factor)
+
+**Announced and active on Arc Testnet:** 2026-06-14 · **Dual-version acceptance window:** 2026-06-14 → 2026-07-14.
+
+Arc Testnet is the calibration environment for the rating (the same role it plays for the testnet-vs-production tier-gate thresholds in §Tier Assignment), so v2.1.0 is **active there from 2026-06-14** — agents on Arc Testnet are scored under the adverse-evidence factor now. The 30-day window that follows is the **dual-version *acceptance* period**, not a deferral of the new scoring: through 2026-07-14 both v2.0.1 and v2.1.0 attestations are honored on-chain so consumers can migrate without breakage. For any future production/mainnet deployment, the standard rule holds — the 30-day notice period precedes the effective date, and the new version takes effect only after it.
+
+v2.1.0 adds the **adverse-evidence factor** to the network-endorsement sub-score (see §The score): a negative validator observation (`score < 50`, e.g. a signed conformance breach) now nets against the agent's positive feedback-volume credit, at a weight of 40 positive-equivalents per adverse observation (net floored at 0). This changes some agents' computed score, so it is a **material change** and a **minor-version bump** (a new factor, not a formula rework — existing scores recompute under the same composition weights), per the versioning table above.
+
+During the window **2026-06-14 → 2026-07-14**, both **v2.0.1** and **v2.1.0** attestations are issued/accepted in parallel: the on-chain `RatingVerifier` holds current = `2.1.0` and previous = `2.0.1`, and `requireMinRating` accepts either. The signer stamps `2.1.0` on newly computed attestations. After 2026-07-14, v2.0.1 is retired from operational use (it remains in §Appendix F for audit).
 
 On the roadmap for v2.1:
 - Rating the evaluators (so agent ratings can adjust for evaluator quality)
@@ -348,6 +367,7 @@ Built in Bangkok. Powered by a self-hosted Arc node. Standards-native, open meth
 | 1.0.1-tuning | 2026-05-21 | Scorecard recalibration against the first 883 rateable agents. PD coefficient and tier-band cutoff adjustments. Same formula, no methodological change. **This was the last v1.x version.** Archive tag: `methodology-v1.0.1-final`. |
 | 2.0 | 2026-05-22 | **Pivot to counterparty performance rating.** Performance-bond / PPD-LGD-EAD framing replaced with credibility-weighted reliability, survival analysis, and rule-based risk flags. Tier scale renamed from Caliber-AAA … Caliber-D to **Established / Proven / Emerging / Provisional / Watch / Inactive**. Score 0–100 replaces PD probability as the central published number. Attestation struct redesigned (`tier`, `score`, `interactionCount`, `flags` replace `pdBps`, `lgdBps`, `confidence`). CaliberEscrow bond formula changed from `budget × PD × LGD` to tier-stepped table with configurable rates. Three contracts redeployed on Arc Testnet. **Not formally published** — internal review only. |
 | **2.0.1** | **2026-05-24** | **First publicly published version.** Three changes: (1) **Tier rename** — `Established / Proven / Emerging / Provisional / Watch / Inactive` → `Gold / Silver / Bronze / Pending / Watch / Dormant`. Pre-publication review showed "Established vs Proven" had ambiguous hierarchy; medal-based naming is universally understood. (2) **Score-floor adjustment** — Silver floor raised from 65 to 75 so the Silver band (75–79) sits between the testnet score clusters at 74 and 78; Bronze ceiling moved up from 64 to 74 to populate Bronze with the 73–74 cluster. Gold floor unchanged at 80. (3) **Dual min-jobs columns** — production thresholds (50 / 20 / 5) kept as the methodology's intended bar; **testnet calibration thresholds** (2 / 2 / 1) introduced as an interim measure so the system is demonstrably operational while Arc Testnet accumulates real economic activity. The testnet column will be retired and production thresholds activated as resolved-job volume grows. Formula, factors, weights, flag rules, and bond table all unchanged. Tier ordinals (0–5) unchanged → on-chain attestation bytes and contract bytes are byte-identical; no contract redeploy. |
+| **2.1.0** | **2026-06-14** (active on Arc Testnet) | **Adverse-evidence factor added.** The network-endorsement sub-score's feedback-volume component is now computed net of adverse evidence: each negative validator observation (`feedback_events.score < 50` — e.g. a signed, on-chain-attested conformance breach) subtracts 40 positive-feedback-equivalents before the 30-point cap, net floored at 0 (so a single verified breach zeroes the feedback-volume credit). **Why:** a signed breach of a pre-agreed delivery spec is a deliberate, high-weight adverse signal that the prior endorsement-only scoring ignored — agents could accumulate positive volume with no downward pressure from documented failures. This changes some agents' computed scores, so it is a **minor-version, material change** under the 30-day notice rule (announced 2026-06-14, dual-version window with v2.0.1 to 2026-07-14). Score-composition weights, tier gates, confidence cutoffs, flag rules, and the bond table are all unchanged. Tier ordinals (0–5) and the attestation struct are unchanged → no contract redeploy; the on-chain `RatingVerifier` and `EvidenceRegistry` version pointers are bumped via `SyncMethodologyVersion.s.sol` / `setMethodologyVersion`. |
 
 ### Stability statement
 
@@ -357,4 +377,4 @@ Material changes from v2.0 forward follow the 30-day notice rule in §Versioning
 
 ---
 
-*Caliber Methodology v2.0.1 · May 24, 2026 · Bangkok · 🇹🇭*
+*Caliber Methodology v2.1.0 · announced and active on Arc Testnet June 14, 2026 (dual-version acceptance with v2.0.1 through July 14, 2026) · Bangkok · 🇹🇭*

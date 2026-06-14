@@ -49,6 +49,16 @@ export const HIGH_CONFIDENCE_JOBS = 50;
 export const MODERATE_CONFIDENCE_JOBS = 20;
 export const LOW_CONFIDENCE_JOBS = 5;
 
+/** v2.1.0 ADVERSE-EVIDENCE FACTOR (methodology §Step 3 / Appendix F).
+ *  How many positive-feedback-equivalents one adverse validator observation
+ *  (score < 50) subtracts from the network-endorsement sub-score. A signed,
+ *  on-chain-attested conformance breach is a strong negative signal: it nullifies
+ *  the agent's accumulated positive-endorsement credit (the feedback-volume
+ *  component caps at 30, so a weight of 40 means one verified breach can zero out
+ *  that component) — driving a visible score drop, and a tier_down when the agent
+ *  was sitting near a tier floor. */
+export const NEGATIVE_FEEDBACK_WEIGHT = 40;
+
 /** Score-component weights (must sum to 1.0). Methodology §Step 3. */
 export const SCORE_WEIGHTS = {
   reliability: 0.50,
@@ -82,8 +92,20 @@ function networkEndorsement(features: AgentFeatures, completion: CompletionFeatu
   score += Math.min(50, completion.uniqueValidators * 10);
 
   // Feedback volume — up to 30 points. 30+ positive feedback events caps out.
+  // Negative feedback (score < 50) is a validator's adverse observation and nets
+  // AGAINST the positive endorsement. A verified conformance breach recorded by a
+  // validator (e.g. Steward's on-chain-attested 'steward:breach', score 0) is a
+  // strong adverse signal: it carries more weight than a single thumbs-up, because
+  // it is a signed, pre-agreed-spec breach, not casual sentiment. Each negative
+  // observation therefore subtracts NEGATIVE_FEEDBACK_WEIGHT positive-equivalents.
+  // Net floored at 0 so the sub-score never goes below zero.
   const positiveFeedback = features.feedbackEvents.filter((f) => f.score >= 50).length;
-  score += Math.min(30, positiveFeedback);
+  const negativeFeedback = features.feedbackEvents.filter((f) => f.score < 50).length;
+  const netFeedback = Math.max(
+    0,
+    positiveFeedback - negativeFeedback * NEGATIVE_FEEDBACK_WEIGHT,
+  );
+  score += Math.min(30, netFeedback);
 
   // Cross-chain presence — up to 20 points. Per additional chain.
   const otherChains = Math.max(0, features.crossChainChains.length - 1);

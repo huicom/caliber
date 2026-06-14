@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import 'dotenv/config';
 import { rateAgent } from '../engine/rating';
 import { TIER_ORDER } from '../engine/types';
+import { METHODOLOGY_VERSION } from '../engine/version';
 
 const runIntegration = process.env.RUN_INTEGRATION === '1';
 
@@ -22,7 +23,7 @@ describe.skipIf(!runIntegration)('Integration: rate real agents against live DB 
     expect(result.confidence).toMatch(/^(high|moderate|low|insufficient)$/);
     expect(result.confidence_label).toBeTruthy();
     expect(Array.isArray(result.flags)).toBe(true);
-    expect(result.methodology_version).toBe('2.0.1');
+    expect(result.methodology_version).toBe(METHODOLOGY_VERSION);
     expect(result.view).toBe('PIT');
 
     // Factors

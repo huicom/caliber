@@ -13,7 +13,8 @@
     "spike:score": "tsx scripts/score-sanity.ts",
     "rate-one": "tsx scripts/rate-one.ts",
     "backfill-registered-at": "tsx scripts/backfill-registered-at.ts",
-    "snapshot:daily": "tsx scripts/snapshot-daily.ts"
+    "snapshot:daily": "tsx scripts/snapshot-daily.ts",
+    "snapshot:once": "tsx scripts/snapshot-once.ts"
   },
   "dependencies": {
     "@arc-agents/db": "workspace:*",
