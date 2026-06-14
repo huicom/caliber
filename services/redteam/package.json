@@ -1,0 +1,20 @@
+{
+  "name": "@caliber/redteam",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Controllable malicious x402 seller fixture — makes Steward's payment-risk detectors fire on demand (Steward Phase 1, task 9).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "start": "tsx --env-file=../../.env src/index.ts"
+  },
+  "dependencies": {
+    "@circle-fin/x402-batching": "^3.0.4",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
