@@ -20,7 +20,41 @@ import { eq } from 'drizzle-orm';
 import { trustCounterparty } from './counterparties.js';
 import { reactivateRoute } from './routes-state.js';
 import { notifyApproval } from './ledger.js';
-import type { StewardPipeline, PayIntent, PayOutcome, ApprovedContext } from './pipeline.js';
+import type { StewardPipeline, PayIntent, PayOutcome, ApprovedContext, SignedSpec } from './pipeline.js';
+import type { DeliverySpec } from '@caliber/steward-core';
+import type { Hex } from 'viem';
+
+/**
+ * WS-1 — rehydrate a signed DeliverySpec stored on a held payment. JSON
+ * serialization (via the BigInt.toJSON monkeypatch) turned the spec's bigint
+ * fields into strings; coerce validUntil/nonce back to bigint so the replayed
+ * intent re-verifies + re-hashes identically. Returns undefined for the legacy
+ * (no-spec) held rows.
+ */
+function reReadSpec(stored: unknown): SignedSpec | undefined {
+  if (!stored || typeof stored !== 'object') return undefined;
+  const s = stored as { spec?: Record<string, unknown>; buyerSig?: unknown; sellerSig?: unknown };
+  if (!s.spec || typeof s.buyerSig !== 'string') return undefined;
+  const raw = s.spec;
+  const spec: DeliverySpec = {
+    chain: raw.chain as Hex,
+    buyer: raw.buyer as DeliverySpec['buyer'],
+    seller: raw.seller as DeliverySpec['seller'],
+    sellerUrlHash: raw.sellerUrlHash as Hex,
+    schemaHash: raw.schemaHash as Hex,
+    maxBytes: Number(raw.maxBytes),
+    deadlineMs: Number(raw.deadlineMs),
+    requireJson: Boolean(raw.requireJson),
+    requireOkField: Boolean(raw.requireOkField),
+    validUntil: BigInt(raw.validUntil as string | number),
+    nonce: BigInt(raw.nonce as string | number),
+  };
+  return {
+    spec,
+    buyerSig: s.buyerSig as Hex,
+    sellerSig: typeof s.sellerSig === 'string' ? (s.sellerSig as Hex) : undefined,
+  };
+}
 
 /** Shape returned by GET /v1/approvals. */
 export interface ApprovalListItem {
@@ -210,12 +244,16 @@ export async function decideApproval(
     init?: PayIntent['init'];
     source?: string;
     expect?: PayIntent['expect'];
+    // WS-1: a held payment may carry a signed spec (bigint fields stored as
+    // strings via the JSON round-trip — reReadSpec coerces them back).
+    spec?: unknown;
   };
   const intent: PayIntent = {
     url: stored.url,
     init: stored.init,
     source: stored.source,
     expect: stored.expect ?? undefined,
+    spec: reReadSpec(stored.spec),
   };
   const approvedCtx: ApprovedContext = {
     approvalId,

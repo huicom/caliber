@@ -12,6 +12,10 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@caliber/steward-core": "workspace:*",
+    "viem": "^2.27.3"
+  },
   "devDependencies": {
     "@types/node": "^22.15.2",
     "typescript": "^5.8.3"

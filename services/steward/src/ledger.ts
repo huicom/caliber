@@ -9,8 +9,13 @@
 // by emitting only the fields the console renders (no detector_hits / evidence
 // blobs go over the wire — those stay in the row, fetched on demand).
 
-import { db, sql, stewardPayments, stewardIncidents, stewardApprovals } from '@arc-agents/db';
-import type { NewStewardPayment, NewStewardIncident, NewStewardApproval } from '@arc-agents/db';
+import { db, sql, stewardPayments, stewardIncidents, stewardApprovals, stewardSpecs } from '@arc-agents/db';
+import type {
+  NewStewardPayment,
+  NewStewardIncident,
+  NewStewardApproval,
+  NewStewardSpec,
+} from '@arc-agents/db';
 
 const CHANNEL = 'steward_events';
 
@@ -48,6 +53,26 @@ export async function writePayment(row: NewStewardPayment): Promise<{ id: bigint
     },
   });
   return { id: inserted.id };
+}
+
+/**
+ * Persist a signed DeliverySpec (WS-1), deduped by spec_hash, and return its id.
+ * A spec is content-addressed by its EIP-712 hash, so two payments under the
+ * same pre-agreed spec reuse one row. Idempotent: ON CONFLICT (spec_hash) DO
+ * NOTHING then read the existing id back. No NOTIFY — specs aren't a ledger event.
+ */
+export async function writeSpec(row: NewStewardSpec): Promise<{ id: bigint }> {
+  const [inserted] = await db
+    .insert(stewardSpecs)
+    .values(row)
+    .onConflictDoNothing({ target: stewardSpecs.specHash })
+    .returning({ id: stewardSpecs.id });
+  if (inserted) return { id: inserted.id };
+  // Conflict: the spec already exists — read its id back by the unique hash.
+  const [existing] = await sql<{ id: string }[]>`
+    select id from steward_specs where spec_hash = ${row.specHash} limit 1
+  `;
+  return { id: BigInt(existing.id) };
 }
 
 /** Insert one incident row, fire its NOTIFY, and return the new row id. */
@@ -91,6 +116,21 @@ export async function writeApproval(
     },
   });
   return { id: inserted.id };
+}
+
+/**
+ * Fire an 'evidence' NOTIFY when WS-2 records an EvidenceAttestation. NEW kind on
+ * the steward_events channel (joins payment/incident/approval/freeze) — keep the
+ * shape stable for the console listener. Best-effort: never throws.
+ */
+export async function notifyEvidence(evidence: {
+  id: string;
+  verdict: number;
+  agentId: string;
+  paymentId: string;
+  onchainTx: string | null;
+}): Promise<void> {
+  await notify({ kind: 'evidence', evidence });
 }
 
 /** Fire an 'approval' NOTIFY for a status change (decide/expire). Best-effort. */

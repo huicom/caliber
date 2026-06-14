@@ -48,6 +48,21 @@ export class PolicyHold extends PreSignAbort {
   }
 }
 
+/**
+ * WS-1: a signed DeliverySpec failed to bind to the actual payment. The only
+ * spec check that needs the live quote is `spec.seller == quote.payTo` (the spec
+ * must name the address that actually gets paid); the signature/expiry/url-hash
+ * checks happen pre-network and refuse before the probe. Thrown from preSign so
+ * NOTHING is signed; ledgered as a deny (stage 'policy', HTTP 403). Spec
+ * mismatches are buyer-config errors, not detector findings — no incident.
+ */
+export class SpecViolation extends PreSignAbort {
+  constructor(code: string, message: string) {
+    super('policy', code, message);
+    this.name = 'SpecViolation';
+  }
+}
+
 /** A runtime detector fired and DENIED (stage 'detector'); `hit` is the finding. */
 export class DetectorViolation extends PreSignAbort {
   constructor(code: string, message: string, hit: DetectorHit) {

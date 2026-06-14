@@ -30,13 +30,22 @@ import {
   evaluatePolicy,
   checkConformance,
   contentTypeIsJson,
+  verifyDeliverySpecSig,
+  recoverDeliverySpecSigner,
+  caliberDomain,
+  sellerUrlHash,
+  deliverySpecHash,
   type ConformanceExpect,
   type ConformanceViolation,
+  type DeliverySpec,
 } from '@caliber/steward-core';
 import { createHash } from 'node:crypto';
-import type { Hex } from 'viem';
+import type { Hex, Address } from 'viem';
 import { randomUUID } from 'node:crypto';
-import { writePayment, writeIncident, writeApproval, linkIncident } from './ledger.js';
+import { writePayment, writeIncident, writeApproval, linkIncident, writeSpec } from './ledger.js';
+import { issueEvidence } from './evidence.js';
+import { resolveAgentId } from './agent-resolver.js';
+import { VERDICT } from '@caliber/steward-core';
 import {
   findByHost,
   registerFirstUse,
@@ -57,6 +66,7 @@ import {
   TreasurerDeny,
   SdnDeny,
   SdnHold,
+  SpecViolation,
   PreSignAbort,
 } from './errors.js';
 import { screenSdn, SdnError } from './sdn.js';
@@ -66,6 +76,7 @@ import { getLlmRuntime } from './llm-config.js';
 import { treasurerDecide } from './treasurer.js';
 import { narrateIncident } from './narrate.js';
 import type { StewardConfig } from './config.js';
+import type { NewStewardSpec } from '@arc-agents/db';
 
 /** Request shape for POST /v1/pay. */
 export interface PayIntent {
@@ -80,6 +91,23 @@ export interface PayIntent {
    * none. Stored verbatim in request_init so an approved re-execution re-checks.
    */
   expect?: ConformanceExpect;
+  /**
+   * WS-1: a buyer/seller-signed DeliverySpec. When present it SUPERSEDES `expect`:
+   * the Tier-0 conformance bounds (maxBytes/deadlineMs/requireJson/requireOkField)
+   * are derived from the signed, pre-agreed spec instead of response-observed
+   * defaults — making a delivery breach attributable and disputable. The buyer
+   * signature is mandatory; the seller signature is optional (a buyer-only spec is
+   * accepted but undisputable). When omitted, the pipeline behaves exactly as
+   * before (Tier-0-only, spec_id null) — full back-compat for HireBot/Phase-1.
+   */
+  spec?: SignedSpec;
+}
+
+/** A DeliverySpec plus the buyer (mandatory) and seller (optional) signatures. */
+export interface SignedSpec {
+  spec: DeliverySpec;
+  buyerSig: Hex;
+  sellerSig?: Hex;
 }
 
 /** 1 MiB default ceiling on a paid response body. */
@@ -191,6 +219,23 @@ function resolveExpect(
   return e;
 }
 
+/**
+ * WS-1: derive the conformance bounds from a SIGNED, pre-agreed DeliverySpec.
+ * Unlike resolveExpect there is NO response-observed defaulting — the bounds are
+ * exactly what both parties signed (maxBytes/deadlineMs/requireJson/
+ * requireOkField map 1:1 to ConformanceExpect). maxBytes/deadlineMs of 0 mean
+ * "no limit" (a buyer who didn't want to bound that dimension), so they disable
+ * the corresponding rule rather than rejecting every response.
+ */
+function expectFromSpec(spec: DeliverySpec): ConformanceExpect {
+  return {
+    json: spec.requireJson,
+    okField: spec.requireOkField,
+    ...(spec.maxBytes > 0 ? { maxBytes: spec.maxBytes } : {}),
+    ...(spec.deadlineMs > 0 ? { deadlineMs: spec.deadlineMs } : {}),
+  };
+}
+
 export class StewardPipeline {
   private readonly payer: CaliberPayer;
 
@@ -211,8 +256,33 @@ export class StewardPipeline {
     const reasonPrefix = approved ? `approved hold #${approved.approvalId.toString()}: ` : '';
     // The snapshot stored on a held row so the hold can be replayed on approval.
     // `expect` rides along so an approved re-execution re-runs the same Tier-0
-    // conformance checks the original intent asked for.
-    const requestInit = { url, init: intent.init ?? null, source, expect: intent.expect ?? null };
+    // conformance checks the original intent asked for. `spec` rides along too so
+    // a re-executed hold stays governed by the same signed DeliverySpec (WS-1).
+    // Note: spec bigints (validUntil/nonce) serialize via BigInt.prototype.toJSON
+    // monkeypatch → strings; reReadSpec() coerces them back on replay.
+    const requestInit = {
+      url,
+      init: intent.init ?? null,
+      source,
+      expect: intent.expect ?? null,
+      spec: intent.spec ?? null,
+    };
+
+    // ── Stage 0 (WS-1): signed-spec verification (pre-network refusals) ───────
+    // A signed DeliverySpec must verify BEFORE we probe or pay. The checks that
+    // don't need the live quote run here: buyer signature (mandatory), seller
+    // signature (when present), expiry, and the URL binding. The one check that
+    // needs the quote — spec.seller == quote.payTo — runs inside preSign (so it
+    // aborts before signing too). An invalid spec is a clean refusal: no probe,
+    // no signature, decision 'deny', stage 'policy', HTTP 400.
+    const signedSpec = intent.spec ?? null;
+    let specId: bigint | null = null;
+    if (signedSpec) {
+      const refusal = await this.verifySpecPreNetwork(
+        signedSpec, url, requestId, source, host, started, reasonPrefix,
+      );
+      if (refusal) return refusal;
+    }
 
     // ── Stage 1: freeze check (freeze ALWAYS wins, even on a re-execution) ────
     const frozen = await readFrozen();
@@ -291,6 +361,17 @@ export class StewardPipeline {
     const preSign = async (quote: X402Quote): Promise<void> => {
       seenQuote = quote;
       const payToUsdc = microsToUsdc(quote.amountMicros);
+
+      // 4·0 (WS-1). Bind the signed spec to the ACTUAL recipient. The spec names
+      // the seller it was negotiated with; the live quote names who actually gets
+      // paid. They MUST match — otherwise a buyer-signed spec for seller A could
+      // be replayed to pay seller B. Throwing here aborts before any signature.
+      if (signedSpec && signedSpec.spec.seller.toLowerCase() !== quote.payTo.toLowerCase()) {
+        throw new SpecViolation(
+          'spec_seller_mismatch',
+          `signed spec seller ${signedSpec.spec.seller} != quote payTo ${quote.payTo} — refusing to pay a recipient the spec doesn't bind`,
+        );
+      }
 
       // 4a. Compiled policy (caps / hosts / approval threshold / new-counterparty).
       const registered = await findByHost(host);
@@ -518,9 +599,22 @@ export class StewardPipeline {
         : 'no settlement transaction reference echoed after the server accepted the payment';
     }
 
-    // (b) Tier-0 delivery conformance. Resolve `expect` defaults against the
-    // observed response, then run the pure checks.
-    const expect = resolveExpect(intent.expect, contentType, rawBody);
+    // (b·WS-1) Persist the signed spec (deduped by hash) and bind it to this row.
+    // The spec_hash is content-addressed so two payments under the same pre-agreed
+    // spec share one steward_specs row.
+    if (signedSpec) {
+      const { id } = await writeSpec(this.specRow(signedSpec));
+      specId = id;
+    }
+
+    // (b) Tier-0 delivery conformance. When a signed spec governs this payment the
+    // bounds come FROM the signed, pre-agreed spec (no response-observed
+    // defaulting — that's the whole point of WS-1). Otherwise fall back to the
+    // legacy resolveExpect path (Tier-0-only, non-disputable). The check logic
+    // itself is identical; only the source of the bounds differs.
+    const expect = signedSpec
+      ? expectFromSpec(signedSpec.spec)
+      : resolveExpect(intent.expect, contentType, rawBody);
     const { bodyOkField, parsedOk } = inspectBody(rawBody, contentType);
     const conformance = checkConformance(expect, {
       status: paid.status,
@@ -550,6 +644,10 @@ export class StewardPipeline {
       mandateId: mandate.id ?? null,
       llmModel: treasurerModel,
       paymentRef: paid.txRef ?? null, settleStatus,
+      // WS-1: when a signed spec governed this payment, bind the row to it and
+      // stamp the verification tier (0 = Tier-0 deterministic conformance, the
+      // only tier today). Both stay null on the legacy unsigned-`expect` path.
+      specId, verificationTier: signedSpec ? 0 : null,
       // Record the clean SDN screen on the settled row (when SDN ran this call).
       // `sdnResult` is set inside the preSign closure; TS can't see that across
       // the closure boundary and narrows it to the literal null it was declared
@@ -595,12 +693,61 @@ export class StewardPipeline {
           bytes,
           latencyMs,
           url,
+          // WS-1: when a signed spec governed this payment, record WHICH bounds
+          // the breach was judged against (they came from the pre-agreed spec,
+          // not response defaults) + the spec handle, so the incident is provable.
+          ...(signedSpec
+            ? {
+                specId: specId?.toString() ?? null,
+                specHash: deliverySpecHash(signedSpec.spec, caliberDomain('arc')),
+                specBounds: expect,
+                verificationTier: 0,
+              }
+            : {}),
         },
       });
       await linkIncident(paymentId, inc.id);
       void narrateIncident(inc.id).catch((e) =>
         console.error('[steward] narrateIncident (conformance) failed:', e),
       );
+
+      // WS-2 + WS-3 (the flagship): a signed-spec payment that BREACHED its
+      // pre-agreed DeliverySpec → sign a BREACH EvidenceAttestation over (specHash,
+      // responseHash=sha256, verifyingTier=0) with the rating signer, record it
+      // on-chain in the EvidenceRegistry, AND write a Steward-as-validator breach
+      // observation into feedback_events so it flows through the Caliber rating
+      // engine and lowers the seller's score. The spec is a signed, pre-agreed
+      // contract, so a breach against it is attestable + attributable.
+      // Adjudication stays CONFORMANCE-TO-SPEC only, never quality.
+      //
+      // Fire-and-forget: issueEvidence NEVER throws into the payment path (the
+      // payment already settled). The seller agentId is resolved from the actual
+      // recipient (payTo); when the recipient isn't a registered Caliber agent we
+      // skip attestation (you can't attest against a non-existent agentId).
+      if (payTo && signedSpec) {
+        const evidenceSpec = signedSpec;
+        void (async () => {
+          try {
+            const agentId = await resolveAgentId(payTo);
+            if (agentId === null) {
+              console.warn(
+                `[steward] breach on signed spec but payTo ${payTo} is not a registered Caliber agent — no evidence attested`,
+              );
+              return;
+            }
+            await issueEvidence({
+              paymentId,
+              spec: evidenceSpec,
+              verdict: VERDICT.BREACH,
+              verifyingTier: 0,
+              responseHash: sha256,
+              agentId,
+            });
+          } catch (e) {
+            console.error('[steward] issueEvidence (breach) failed:', e);
+          }
+        })();
+      }
     }
 
     return {
@@ -609,9 +756,112 @@ export class StewardPipeline {
         requestId, decision: 'allow', stage: 'executed', reasoning,
         quote: { payTo: payTo ?? '', amountUsdc: settledUsdc },
         txRef: paid.txRef,
+        // Expose the ledger row id so a caller can trace post-settle artifacts (the
+        // WS-2 EvidenceAttestation rides on the same paymentId). Always present on a
+        // settled allow.
+        paymentId: paymentId.toString(),
         data: paid.data,
         sha256,
         ...(violated ? { conformance: conformance.violations } : {}),
+      },
+    };
+  }
+
+  /**
+   * WS-1 — verify a signed DeliverySpec's quote-independent invariants BEFORE any
+   * network call. Returns a refusal PayOutcome (decision 'deny', stage 'policy',
+   * HTTP 400) when the spec is invalid, or null when it passes. The one check that
+   * needs the live quote (spec.seller == payTo) runs inside preSign instead.
+   *
+   * Checks: buyer signature recovers to spec.buyer (mandatory); seller signature
+   * (when present) recovers to spec.seller; validUntil not in the past; the spec's
+   * sellerUrlHash binds to the requested URL. Spec signing is OFF-CHAIN, so the
+   * domain's verifyingContract stays the zero-address default.
+   */
+  private async verifySpecPreNetwork(
+    signed: SignedSpec,
+    url: string,
+    requestId: string,
+    source: string,
+    host: string,
+    started: number,
+    reasonPrefix: string,
+  ): Promise<PayOutcome | null> {
+    const domain = caliberDomain('arc');
+    const { spec, buyerSig, sellerSig } = signed;
+
+    const refuse = async (reasoning: string): Promise<PayOutcome> => {
+      await writePayment({
+        requestId, source, sellerUrl: url, host,
+        decision: 'deny', decisionStage: 'policy',
+        reasoning: `${reasonPrefix}${reasoning}`,
+        settleStatus: 'n/a', latencyMs: Date.now() - started,
+      });
+      return {
+        httpStatus: 400,
+        body: { requestId, decision: 'deny', stage: 'policy', reasoning: `${reasonPrefix}${reasoning}` },
+      };
+    };
+
+    // 1. Buyer signature is mandatory and must recover to spec.buyer.
+    const buyerOk = await verifyDeliverySpecSig(spec, buyerSig, spec.buyer as Address, domain);
+    if (!buyerOk) {
+      let recovered = '(unrecoverable)';
+      try { recovered = await recoverDeliverySpecSigner(spec, buyerSig, domain); } catch { /* keep default */ }
+      return refuse(`signed spec rejected: buyer signature does not recover to ${spec.buyer} (got ${recovered})`);
+    }
+
+    // 2. Seller signature, when present, must recover to spec.seller. Absent = a
+    //    buyer-only spec (accepted but undisputable).
+    if (sellerSig) {
+      const sellerOk = await verifyDeliverySpecSig(spec, sellerSig, spec.seller as Address, domain);
+      if (!sellerOk) {
+        return refuse(`signed spec rejected: seller signature does not recover to ${spec.seller}`);
+      }
+    }
+
+    // 3. Expiry: validUntil is unix seconds; 0 = never expires.
+    const nowSec = BigInt(Math.floor(Date.now() / 1000));
+    if (spec.validUntil !== 0n && spec.validUntil < nowSec) {
+      return refuse(`signed spec rejected: validUntil ${spec.validUntil} is in the past (now ${nowSec})`);
+    }
+
+    // 4. URL binding: the spec's sellerUrlHash must match the requested URL.
+    const expectedUrlHash = sellerUrlHash(url);
+    if (spec.sellerUrlHash.toLowerCase() !== expectedUrlHash.toLowerCase()) {
+      return refuse(
+        `signed spec rejected: sellerUrlHash ${spec.sellerUrlHash} does not bind to the requested URL (expected ${expectedUrlHash})`,
+      );
+    }
+
+    return null;
+  }
+
+  /** WS-1 — build the steward_specs insert row from a verified signed spec. */
+  private specRow(signed: SignedSpec): NewStewardSpec {
+    const { spec, buyerSig, sellerSig } = signed;
+    const specHash = deliverySpecHash(spec, caliberDomain('arc'));
+    return {
+      specHash,
+      chain: 'arc',
+      buyer: spec.buyer.toLowerCase(),
+      seller: spec.seller.toLowerCase(),
+      sellerUrlHash: spec.sellerUrlHash,
+      schemaHash: spec.schemaHash,
+      maxBytes: spec.maxBytes,
+      deadlineMs: spec.deadlineMs,
+      requireJson: spec.requireJson,
+      requireOkField: spec.requireOkField,
+      // validUntil is unix seconds (0 = never); store NULL when unbounded.
+      validUntil: spec.validUntil === 0n ? null : new Date(Number(spec.validUntil) * 1000),
+      nonce: spec.nonce.toString(),
+      buyerSig,
+      sellerSig: sellerSig ?? null,
+      // Raw typed message with bigint fields as strings so it re-verifies verbatim.
+      rawSpec: {
+        ...spec,
+        validUntil: spec.validUntil.toString(),
+        nonce: spec.nonce.toString(),
       },
     };
   }
