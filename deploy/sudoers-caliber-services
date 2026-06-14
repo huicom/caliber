@@ -1,0 +1,23 @@
+# Passwordless systemctl control for the project's own services.
+# Install:  sudo cp deploy/sudoers-caliber-services /etc/sudoers.d/arc-services
+#           sudo chmod 0440 /etc/sudoers.d/arc-services
+#           sudo visudo -c            # must print "parsed OK"
+#
+# Scope: lifecycle verbs (start/stop/restart/reload) on units named arc-* or
+# caliber-* only, plus daemon-reload. This covers every current AND future
+# project service without re-editing this file.
+#
+# Why this is safe on a single-owner box:
+#   - Verbs are limited to start/stop/restart/reload — NOT edit/link/set-property,
+#     so it cannot be used to redefine a unit and run arbitrary code as root.
+#   - Creating/installing a unit file still requires full (password) sudo, so a
+#     new root-running service can't be introduced through this rule.
+#   - Worst-case misuse is restarting/stopping another arc-*/caliber-* unit
+#     (a self-inflicted restart), never privilege escalation.
+# If you want maximum tightness instead of convenience, replace the wildcards
+# below with explicit unit names (arc-web, caliber-steward, ...).
+
+huicom ALL=(root) NOPASSWD: /usr/bin/systemctl start arc-*, /usr/bin/systemctl stop arc-*, /usr/bin/systemctl restart arc-*, /usr/bin/systemctl reload arc-*
+huicom ALL=(root) NOPASSWD: /usr/bin/systemctl start caliber-*, /usr/bin/systemctl stop caliber-*, /usr/bin/systemctl restart caliber-*, /usr/bin/systemctl reload caliber-*
+huicom ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+huicom ALL=(root) NOPASSWD: /usr/bin/systemctl restart cloudflared, /usr/bin/systemctl reload cloudflared

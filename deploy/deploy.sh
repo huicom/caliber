@@ -23,6 +23,8 @@ sudo cp deploy/caliber-embed-pending.timer /etc/systemd/system/
 sudo cp deploy/caliber-hirebot.service /etc/systemd/system/
 sudo cp deploy/caliber-hirebot.timer /etc/systemd/system/
 sudo cp deploy/caliber-broker.service /etc/systemd/system/
+sudo cp deploy/caliber-steward.service /etc/systemd/system/
+sudo cp deploy/caliber-redteam.service /etc/systemd/system/
 
 echo "📋 Installing nginx config (for arcagents.poko.blue only — rating uses Cloudflare Tunnel)..."
 sudo cp deploy/nginx-arcagents.conf /etc/nginx/sites-available/arcagents
@@ -37,7 +39,9 @@ sudo touch /var/log/caliber-snapshot.log /var/log/caliber-snapshot-err.log
 sudo touch /var/log/caliber-embed-pending.log /var/log/caliber-embed-pending-err.log
 sudo touch /var/log/caliber-hirebot.log /var/log/caliber-hirebot-err.log
 sudo touch /var/log/caliber-broker.log /var/log/caliber-broker-err.log
-sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log /var/log/caliber-embed-pending*.log /var/log/caliber-hirebot*.log /var/log/caliber-broker*.log
+sudo touch /var/log/caliber-steward.log /var/log/caliber-steward-err.log
+sudo touch /var/log/caliber-redteam.log /var/log/caliber-redteam-err.log
+sudo chown huicom:huicom /var/log/arc-indexer*.log /var/log/arc-web*.log /var/log/arc-rating*.log /var/log/caliber-snapshot*.log /var/log/caliber-embed-pending*.log /var/log/caliber-hirebot*.log /var/log/caliber-broker*.log /var/log/caliber-steward*.log /var/log/caliber-redteam*.log
 
 echo "🔧 Reloading systemd..."
 sudo systemctl daemon-reload
@@ -64,6 +68,14 @@ sudo systemctl enable --now caliber-hirebot.timer
 echo "▶️  Starting Bonded Broker service (Lepton Phase 2 / B2-B3) on :3200..."
 sudo systemctl enable caliber-broker
 sudo systemctl restart caliber-broker
+
+echo "▶️  Starting Steward service (CFO layer) on :3300..."
+sudo systemctl enable caliber-steward
+sudo systemctl restart caliber-steward
+
+echo "▶️  Starting Steward red-team fixture (detector demos) on :3400..."
+sudo systemctl enable caliber-redteam
+sudo systemctl restart caliber-redteam
 
 echo ""
 echo "✅  Deploy complete. Check status:"

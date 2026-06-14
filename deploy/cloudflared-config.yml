@@ -21,5 +21,19 @@ ingress:
   - hostname: caliber-api.poko.blue
     service: http://localhost:3100
 
+  # Steward console (CFO layer). Same Next.js app + port as caliber.poko.blue;
+  # web/src/middleware.ts rewrites the steward.* host root → /steward so the
+  # console is this subdomain's home page. cloudflared preserves the Host
+  # header, so the middleware sees "steward.poko.blue".
+  - hostname: steward.poko.blue
+    service: http://localhost:3000
+
+  # public Steward API (Express, :3300). Mirrors caliber-api: single-level
+  # subdomain (hyphen) so external integrators can use the 3-line
+  # steward-client directly. The web console proxies the judge-facing surface;
+  # this exposes POST /v1/pay + /health for programmatic integrators.
+  - hostname: steward-api.poko.blue
+    service: http://localhost:3300
+
   # catch-all
   - service: http_status:404

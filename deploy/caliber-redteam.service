@@ -1,0 +1,24 @@
+[Unit]
+Description=Caliber Steward — adversarial seller fixture for detector demos
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=huicom
+WorkingDirectory=/home/huicom/arc-agents-explorer/services/redteam
+EnvironmentFile=/home/huicom/arc-agents-explorer/.env
+Environment=PATH=/home/huicom/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+# Long-running malicious x402 seller fixture on :3400 (REDTEAM_PORT). Modes
+# (honest | overcharge | redirect | garbage | loopbait) are flipped via
+# /admin/mode so judges can trigger Steward's detectors on the live URL.
+# MUST run in production — the demo drives it through the Steward service.
+ExecStart=/home/huicom/.npm-global/bin/pnpm --filter @caliber/redteam start
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/caliber-redteam.log
+StandardError=append:/var/log/caliber-redteam-err.log
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

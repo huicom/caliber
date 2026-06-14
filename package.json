@@ -12,6 +12,16 @@
     "build:indexer": "pnpm --filter @arc-agents/indexer build",
     "start:web": "pnpm --filter web start",
     "start:indexer:live": "pnpm --filter @arc-agents/indexer start:live",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck && pnpm typecheck:scripts",
+    "typecheck:scripts": "tsc --noEmit --project scripts/tsconfig.json",
+    "demo:redteam": "tsx --env-file=.env scripts/redteam-demo.ts",
+    "demo:treasurer": "tsx --env-file=.env scripts/treasurer-demo.ts"
+  },
+  "devDependencies": {
+    "@arc-agents/db": "workspace:*",
+    "@caliber/steward-client": "workspace:*",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.22.0",
+    "typescript": "^5.9.3"
   }
 }
