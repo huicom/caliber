@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getConsoleKey, consoleHeaders } from '../../../_components/consoleKey';
 
 // Resolve control on the incident detail page. Optimistic: flips to a resolved
 // pill immediately, posts, then refreshes the server component to reconcile.
@@ -27,13 +28,28 @@ export function ResolveButton({
   }
 
   async function resolve() {
+    if (getConsoleKey().length === 0) {
+      setError('Enter console key to act');
+      return;
+    }
     setPending(true);
     setError(null);
     setStatus('resolved'); // optimistic
     try {
       const res = await fetch(`/api/steward/incidents/${id}/resolve`, {
         method: 'POST',
+        headers: consoleHeaders(false),
       });
+      if (res.status === 401) {
+        setStatus('open');
+        setError('console key rejected');
+        return;
+      }
+      if (res.status === 503) {
+        setStatus('open');
+        setError('console key not configured');
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       router.refresh();
     } catch (e) {

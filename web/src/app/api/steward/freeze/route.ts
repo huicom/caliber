@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { requireConsoleKey } from '@/lib/steward-console-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,9 +10,9 @@ export const runtime = 'nodejs';
 // pipeline denies every payment at the first stage. Toggling here also fires a
 // `steward_events` notify so every open console reconciles instantly.
 //
-// TODO auth — v0 is unauthenticated on purpose: this is a testnet demo and the
-// hackathon judges must be able to drive the freeze themselves. Gate before any
-// real funds flow through Steward.
+// AUTH: the POST handler is gated by requireConsoleKey (x-steward-console-key
+// header). GET (read freeze state) stays open. Judges drive the demo with the
+// shared console key; anonymous public traffic on steward.poko.blue cannot toggle.
 
 const FREEZE_KEY = 'frozen';
 
@@ -34,6 +35,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = requireConsoleKey(req);
+  if (denied) return denied;
+
   let body: { frozen?: unknown; reason?: unknown };
   try {
     body = await req.json();

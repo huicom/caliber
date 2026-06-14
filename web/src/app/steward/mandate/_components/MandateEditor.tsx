@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PolicyView, type CompiledPolicy } from './PolicyView';
+import { getConsoleKey, consoleHeaders } from '../../_components/consoleKey';
 
 // The mandate editor. The human owner writes their spending policy in plain
 // English; "Compile & activate" POSTs to /api/steward/mandate which proxies the
@@ -34,6 +35,7 @@ type Banner =
   | { kind: 'compile_failed_credits' }
   | { kind: 'compile_failed'; detail?: string }
   | { kind: 'unreachable'; detail?: string }
+  | { kind: 'locked'; detail?: string }
   | { kind: 'error'; detail: string }
   | null;
 
@@ -60,6 +62,13 @@ export function MandateEditor({
 
   async function compile() {
     if (submitting) return;
+    if (getConsoleKey().length === 0) {
+      setBanner({
+        kind: 'locked',
+        detail: 'Enter the console key (top-right of the nav) to compile.',
+      });
+      return;
+    }
     setSubmitting(true);
     setBanner(null);
 
@@ -67,7 +76,7 @@ export function MandateEditor({
     try {
       res = await fetch('/api/steward/mandate', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: consoleHeaders(),
         body: JSON.stringify({ rawText: text }),
       });
     } catch {
@@ -103,6 +112,24 @@ export function MandateEditor({
       setBanner({
         kind: 'treasurer_disabled',
         detail: typeof data.detail === 'string' ? data.detail : undefined,
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    if (res.status === 401 && data.error === 'unauthorized') {
+      setBanner({
+        kind: 'locked',
+        detail: 'Console key rejected — check the key and try again.',
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    if (res.status === 503 && data.error === 'console_key_not_configured') {
+      setBanner({
+        kind: 'locked',
+        detail: 'Console key not configured on the server.',
       });
       setSubmitting(false);
       return;
@@ -270,6 +297,21 @@ function ResultBanner({ banner }: { banner: NonNullable<Banner> }) {
         <p className="text-xs text-[var(--color-ink)] mt-1 leading-relaxed">
           The treasurer is out of credits. Your active mandate is still
           enforced; try editing again shortly.
+        </p>
+      </div>
+    );
+  }
+
+  if (banner.kind === 'locked') {
+    return (
+      <div className="rounded-[2px] border border-[var(--color-hairline)] bg-[var(--color-bg-elev)] px-4 py-3">
+        <p className="font-mono text-sm font-semibold text-[var(--color-ink)]">
+          Enter console key to act
+        </p>
+        <p className="text-xs text-[var(--color-ink)] mt-1 leading-relaxed">
+          Compiling a new mandate is a protected action.
+          {banner.detail ? ` ${banner.detail}` : ''} Your active mandate is
+          unchanged and still enforced.
         </p>
       </div>
     );

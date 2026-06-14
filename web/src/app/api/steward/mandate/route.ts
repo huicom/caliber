@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireConsoleKey } from '@/lib/steward-console-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,9 +16,9 @@ export const runtime = 'nodejs';
 // copy. If the steward service is unreachable (not yet deployed), we surface a
 // 503 of our own kind so the editor degrades gracefully instead of throwing.
 //
-// TODO auth — v0 is unauthenticated on the console side, consistent with the
-// other /api/steward routes: hackathon judges must be able to drive this alone.
-// Gate before any real funds flow through Steward.
+// AUTH: the POST handler (compile + activate a new policy) is gated by
+// requireConsoleKey (x-steward-console-key header). GET (read active policy)
+// stays open. Judges drive the demo with the shared console key.
 
 const STEWARD_BASE_URL =
   process.env.STEWARD_BASE_URL ?? 'http://localhost:3300';
@@ -58,6 +59,9 @@ export async function POST(req: Request) {
   if (process.env.NEXT_PUBLIC_STEWARD !== '1') {
     return NextResponse.json({ error: 'not_enabled' }, { status: 404 });
   }
+
+  const denied = requireConsoleKey(req);
+  if (denied) return denied;
 
   let body: { rawText?: unknown };
   try {

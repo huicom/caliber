@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ConsoleKeyUnlock } from './ConsoleKeyUnlock';
 
 // Small top tab strip shared by every Steward page. `active` highlights the
 // current tab. Kept a plain server component — no client state needed.
@@ -12,7 +13,7 @@ const TABS: { href: string; label: string; key: string }[] = [
 
 export function StewardNav({ active }: { active: string }) {
   return (
-    <div className="border-b border-[var(--color-hairline)] mb-8">
+    <div className="border-b border-[var(--color-hairline)] mb-8 flex items-end justify-between gap-3 flex-wrap">
       <nav className="flex items-end gap-1 -mb-px">
         {TABS.map((t) => {
           const isActive = t.key === active;
@@ -32,6 +33,9 @@ export function StewardNav({ active }: { active: string }) {
           );
         })}
       </nav>
+      <div className="pb-1.5">
+        <ConsoleKeyUnlock />
+      </div>
     </div>
   );
 }

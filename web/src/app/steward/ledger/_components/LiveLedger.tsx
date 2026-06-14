@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  getConsoleKey,
+  consoleHeaders,
+  CONSOLE_KEY_EVENT,
+} from '../../_components/consoleKey';
 
 // Shared row shape — matches the SSE `payment` payload from services/steward
 // exactly, and the page normalizes its initial DB rows into the same shape.
@@ -172,9 +177,23 @@ export function LiveLedger({
   const [freeze, setFreeze] = useState<FreezeState>(initialFreeze);
   const [connected, setConnected] = useState(false);
   const [pending, setPending] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const seen = useRef<Set<string>>(
     new Set(initialRows.map((r) => String(r.id))),
   );
+
+  // Track whether the console key is set so we can prompt instead of failing.
+  useEffect(() => {
+    const sync = () => setHasKey(getConsoleKey().length > 0);
+    sync();
+    window.addEventListener(CONSOLE_KEY_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(CONSOLE_KEY_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
 
   // SSE subscription — prepend payments, reconcile freeze.
   useEffect(() => {
@@ -202,19 +221,34 @@ export function LiveLedger({
 
   const toggleFreeze = useCallback(
     async (next: boolean) => {
+      if (getConsoleKey().length === 0) {
+        setAuthError('Enter console key to act (top-right of the nav).');
+        return;
+      }
+      setAuthError(null);
       const reason = next
         ? window.prompt('Reason for freezing the treasury?', 'manual freeze') ??
           'manual freeze'
         : null;
       // Optimistic; SSE + server response reconcile.
+      const prevFreeze = freeze;
       setFreeze({ frozen: next, reason });
       setPending(true);
       try {
         const res = await fetch('/api/steward/freeze', {
           method: 'POST',
-          headers: { 'content-type': 'application/json' },
+          headers: consoleHeaders(),
           body: JSON.stringify({ frozen: next, reason }),
         });
+        if (res.status === 401 || res.status === 503) {
+          setFreeze(prevFreeze); // roll back optimistic
+          setAuthError(
+            res.status === 401
+              ? 'Console key rejected — check the key and try again.'
+              : 'Console key not configured on the server.',
+          );
+          return;
+        }
         const state = (await res.json()) as FreezeState;
         setFreeze(state);
       } catch {
@@ -231,7 +265,7 @@ export function LiveLedger({
         setPending(false);
       }
     },
-    [],
+    [freeze],
   );
 
   return (
@@ -294,6 +328,13 @@ export function LiveLedger({
             {pending ? 'working…' : 'freeze treasury'}
           </button>
         </div>
+      )}
+
+      {/* Inline auth prompt — shown when the console key is missing or rejected. */}
+      {(authError || !hasKey) && (
+        <p className="font-mono text-[11px] text-[var(--color-mute)] -mt-3 mb-6">
+          {authError ?? 'Enter console key (top-right) to freeze the treasury.'}
+        </p>
       )}
 
       {/* Ledger table */}

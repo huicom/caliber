@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
+import { requireConsoleKey } from '@/lib/steward-console-auth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -7,14 +8,16 @@ export const runtime = 'nodejs';
 // Resolve a Steward incident: set status='resolved', stamp resolved_at + a
 // resolved_by source. Used by the console's optimistic resolve button.
 //
-// TODO auth — v0 is unauthenticated on purpose, consistent with the freeze
-// route: the hackathon judges must be able to drive this themselves. Gate
-// before any real funds flow through Steward.
+// AUTH: gated by requireConsoleKey (x-steward-console-key header). Judges drive
+// the demo with the shared console key; anonymous public traffic cannot resolve.
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = requireConsoleKey(req);
+  if (denied) return denied;
+
   const { id } = await params;
   if (!/^\d+$/.test(id)) {
     return NextResponse.json({ error: 'invalid id' }, { status: 400 });
