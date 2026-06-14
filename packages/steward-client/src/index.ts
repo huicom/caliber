@@ -9,10 +9,12 @@
 // (HTTP 4xx with a decision body) throws a typed `StewardRefusal` carrying the
 // decision/stage/reasoning so callers can branch without parsing strings.
 //
-// Near-zero runtime deps — `fetch` (Node 18+ / browsers) plus the workspace
-// @caliber/steward-core for the EIP-712 spec helpers (build/sign a DeliverySpec).
-// Steward still owns the checkbook; steward-core here is only used CLIENT-side so
-// an integrator can build + sign the pre-agreed spec with THEIR own account.
+// Single runtime dep — `viem` (for EIP-712 spec signing). HTTP uses the global
+// `fetch` (Node 18+ / browsers). The EIP-712 helpers are vendored locally in
+// ./eip712 so the published tarball resolves standalone with NO @caliber/*
+// workspace dependency. Steward still owns the checkbook; the spec helpers are
+// used CLIENT-side only so an integrator can build + sign the pre-agreed spec
+// with THEIR own account.
 
 import {
   buildDeliverySpec,
@@ -20,7 +22,7 @@ import {
   caliberDomain,
   type DeliverySpec,
   type DeliverySpecInput,
-} from '@caliber/steward-core';
+} from './eip712.js';
 import type { Hex, LocalAccount } from 'viem';
 
 /** A single Tier-0 conformance violation Steward found post-settle. */
@@ -171,16 +173,32 @@ export async function signSpec(
 }
 
 // Re-export the underlying EIP-712 helpers so an integrator can build/sign/hash
-// specs without depending on @caliber/steward-core directly.
+// specs and verify the evidence Steward signs back — all viem-only, no extra dep.
 export {
   buildDeliverySpec,
   signDeliverySpec,
+  deliverySpecHash,
+  recoverDeliverySpecSigner,
+  verifyDeliverySpecSig,
   caliberDomain,
   sellerUrlHash,
   schemaHashFromExpect,
+  stringToBytes32,
+  CHAIN_ID,
+  ZERO_ADDRESS,
+  verifyEvidence,
+  VERDICT,
+  EVIDENCE_ATTESTATION_TYPES,
+  DELIVERY_SPEC_TYPES,
   type DeliverySpec,
   type DeliverySpecInput,
-} from '@caliber/steward-core';
+  type ConformanceExpect,
+  type VerdictValue,
+  type EvidenceAttestation,
+  type EvidenceEnvelope,
+  type EvidenceCheck,
+  type EvidenceVerifyResult,
+} from './eip712.js';
 
 /** Serialize a signed spec for the JSON body (bigint fields → strings). */
 function specToBody(s: StewardSignedSpec): Record<string, unknown> {

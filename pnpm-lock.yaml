@@ -134,13 +134,6 @@ importers:
         version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
 
   packages/steward-client:
-    dependencies:
-      '@caliber/steward-core':
-        specifier: workspace:*
-        version: link:../steward-core
-      viem:
-        specifier: ^2.27.3
-        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^22.15.2
@@ -148,6 +141,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      viem:
+        specifier: ^2.27.3
+        version: 2.49.3(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.4.3)
 
   packages/steward-core:
     dependencies:

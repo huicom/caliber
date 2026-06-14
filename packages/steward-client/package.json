@@ -1,23 +1,55 @@
 {
   "name": "@caliber/steward-client",
   "version": "0.1.0",
-  "private": true,
-  "description": "The 3-line Steward client. createSteward({baseUrl, apiKey}).pay(url, init) — POSTs the payment intent to Steward, which authorizes, signs, pays, and ledgers. Zero deps.",
+  "description": "The 3-line Steward client — a CFO in front of your agent's x402 payments. createSteward({baseUrl, apiKey}).pay(url, init) POSTs the payment intent to Steward, which authorizes, screens, settles, and ledgers. Single dep (viem) for optional signed-spec EIP-712.",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "x402",
+    "agent",
+    "payments",
+    "stablecoin",
+    "usdc",
+    "caliber",
+    "steward",
+    "eip712"
+  ],
+  "license": "MIT",
+  "author": "PokoBlue / Caliber",
+  "homepage": "https://steward.poko.blue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huicom/caliber.git",
+    "directory": "packages/steward-client"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepublishOnly": "pnpm run build"
   },
-  "dependencies": {
-    "@caliber/steward-core": "workspace:*",
-    "viem": "^2.27.3"
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "viem": "^2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "viem": "^2.27.3"
   }
 }
